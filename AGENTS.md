@@ -36,7 +36,11 @@
 - **Verify what you shipped, up close, in motion.** Before pushing any change
   to an animated or posed object, take headless screenshots (a) zoomed close
   to THAT object, (b) at 3+ different animation phases, and (c) from an angle
-  where the player character isn't blocking it. A wide room shot that happens
+  where the player character isn't blocking it. For anything with an opening
+  or asymmetry (a hair shell, a hood, a partial lathe), verify all FOUR
+  compass angles — a gap can look right from one side and be rotated wrong
+  from another, and never trust a guessed angular convention (lathe phi
+  starts at +z): place it, look, correct. A wide room shot that happens
   to contain the object does not count — that's how the broken cat got
   through. Check every object the change touched, not a sample.
 - The 3D town is the main site (`index.html` + `js/`); `classic.html` is the
