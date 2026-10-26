@@ -34,25 +34,66 @@ function dressPlayer(g) {
   ink(beret, 'fine');
   J.head.add(beret);
 
+  // long hair: loose locks from the back and sides of the skull, over the
+  // shoulders and down the back — each lock one connected tube (never boxes)
+  const hairM = paint(0xc9a06a);
+  const hairG = new THREE.Group();
+  const HC = new THREE.Vector3(0, 0.12, 0.018), R = 0.126;
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const lockSpecs = [];
+  for (let i = 0; i < 9; i++) {                       // round the back of the head
+    const th = Math.PI + (-1.3 + i * 0.325);
+    lockSpecs.push({ th, len: 0.3 + 0.05 * Math.sin(i * 2.7), out: 0.02 + 0.015 * Math.abs(Math.sin(th)) });
+  }
+  lockSpecs.push({ th: 1.72, len: 0.21, out: 0.02, front: true });      // over the shoulders,
+  lockSpecs.push({ th: -1.72, len: 0.21, out: 0.02, front: true });     // framing her face
+  for (const { th, len, out, front } of lockSpecs) {
+    const phi = 0.5;                                   // start high on the skull
+    const start = HC.clone().add(V(Math.sin(th) * Math.cos(phi), Math.sin(phi), Math.cos(th) * Math.cos(phi)).multiplyScalar(R));
+    const sideX = Math.sign(start.x) || 1;
+    const pts = [
+      start,
+      V(start.x * 1.15, 0.06, start.z * (front ? 1.1 : 1.15)),
+      V(start.x * (front ? 1.05 : 1.12) + sideX * out * 0.5, -0.08, start.z + (front ? 0.02 : -0.02)),
+      V(start.x * (front ? 0.96 : 1.05) + sideX * out, -0.08 - len * 0.6, start.z + (front ? 0.035 : -0.035)),
+      V(start.x * (front ? 0.88 : 1.0) + sideX * out * 1.3, -0.08 - len, start.z + (front ? 0.04 : -0.045)),
+    ];
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 14, 0.023, 6), hairM);
+    hairG.add(tube);
+  }
+  ink(hairG, 'fine');
+  J.head.add(hairG);
+
+  // relaxed hands: the rig's fingers ship fully splayed — curl them softly
+  for (const s of ['L', 'R']) {
+    const grip = J['grip' + s];
+    const u = grip?.userData;
+    if (u?.fingers) {
+      u.fingers.forEach((f, i) => { f.rotation.z = -u.s * 0.4 * (1.25 + i * 0.08); });
+      u.thumb.rotation.z = -u.s * (0.35 + 0.5 * 0.35);
+    }
+  }
+
+  // her pack, properly sized (it rode like a toy before)
   const bp = new THREE.Group();
   const mustard = paint(0xe1b95c), flapM = paint(0xd8584a), brass = paint(0xe4b84f);
-  bp.add(new THREE.Mesh(rbox(0.15, 0.19, 0.075, 0.028), mustard));
-  const flap = new THREE.Mesh(rbox(0.145, 0.085, 0.082, 0.022), flapM);
-  flap.position.set(0, 0.062, -0.002);
+  bp.add(new THREE.Mesh(rbox(0.2, 0.26, 0.1, 0.035), mustard));
+  const flap = new THREE.Mesh(rbox(0.195, 0.11, 0.108, 0.028), flapM);
+  flap.position.set(0, 0.085, -0.002);
   bp.add(flap);
-  const clasp = new THREE.Mesh(rbox(0.028, 0.026, 0.012, 0.005), brass);
-  clasp.position.set(0, 0.012, -0.045);
+  const clasp = new THREE.Mesh(rbox(0.034, 0.03, 0.014, 0.006), brass);
+  clasp.position.set(0, 0.018, -0.06);
   bp.add(clasp);
-  const pocket = new THREE.Mesh(rbox(0.09, 0.07, 0.025, 0.012), mustard);
-  pocket.position.set(0, -0.045, -0.05);
+  const pocket = new THREE.Mesh(rbox(0.12, 0.095, 0.032, 0.014), mustard);
+  pocket.position.set(0, -0.062, -0.068);
   bp.add(pocket);
   for (const s of [-1, 1]) {                    // straps hugging over the shoulders to the chest
-    const strap = new THREE.Mesh(rbox(0.024, 0.17, 0.012, 0.005), flapM);
-    strap.position.set(s * 0.055, 0.1, 0.055);
-    strap.rotation.x = -0.28;
+    const strap = new THREE.Mesh(rbox(0.028, 0.19, 0.013, 0.005), flapM);
+    strap.position.set(s * 0.062, 0.11, 0.075);
+    strap.rotation.x = -0.3;
     bp.add(strap);
   }
-  bp.position.set(0, 0.17, -0.148);             // riding her back (torso front is +z)
+  bp.position.set(0, 0.16, -0.165);             // riding her back (torso front is +z)
   bp.rotation.x = 0.1;                          // following the curve of her back
   ink(bp, 'fine');
   J.spine.add(bp);
