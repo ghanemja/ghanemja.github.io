@@ -395,6 +395,94 @@ const SETS = {
     K.g.add(cam.g); ink(cam.g, 'fine');
   },
   gallery(K) {
+    // ── the collection, rehung in a hurry after the heist ──
+    // Janelle's real paintings crowd every wall, frames crooked, two leaning
+    // on the floor, one flat on its back; paint splattered where crates spilled.
+    const AR = { a1: 1.375, a2: 1.236, a3: 1.261, a4: 1.023, a5: 1.279, a6: 1.272, a7: 1.333, a8: 1.81, a9: 2.066, a10: 1.333, a11: 0.75, a12: 0.75 };
+    const gilt = paint(PAL.gold);
+    const artMat = (name) => {
+      const t = _loader.load('artworks/' + name + '.jpg');
+      t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+      return paint(0xffffff, { map: t, hatch: 0, unique: true });
+    };
+    const hang = (name, w, x, y, z, ry = 0, tilt = 0, lean = 0) => {
+      const g = new THREE.Group();
+      g.position.set(x, y, z);
+      g.rotation.order = 'YXZ';                      // face the wall first, then lean/tilt
+      g.rotation.set(lean, ry, tilt);
+      const F = kit(g), h = w / AR[name];
+      F.box(w + 0.08, 0.05, 0.045, gilt, 0, h / 2 + 0.025, 0, 0.012);
+      F.box(w + 0.08, 0.05, 0.045, gilt, 0, -h / 2 - 0.025, 0, 0.012);
+      F.box(0.05, h, 0.045, gilt, -w / 2 - 0.025, 0, 0, 0.012);
+      F.box(0.05, h, 0.045, gilt, w / 2 + 0.025, 0, 0, 0.012);
+      F.flat(w, h, artMat(name), 0, 0, 0.012);
+      K.g.add(g);
+      return g;
+    };
+    const HPI = Math.PI / 2;
+    // back wall, salon-hung around the footage frame
+    hang('a2', 0.9, 2.0, 2.1, -D + 0.56, 0, 0.06);
+    hang('a9', 1.1, 2.65, 1.15, -D + 0.56, 0, -0.04);
+    hang('a11', 0.55, 1.5, 1.05, -D + 0.56, 0, 0.09);
+    hang('a5', 0.85, -1.65, 2.25, -D + 0.56, 0, -0.07);
+    hang('a12', 0.52, -3.55, 2.05, -D + 0.56, 0, 0.05);
+    // the side walls got the overflow
+    hang('a3', 0.95, -W / 2 + 0.06, 1.6, -4.3, HPI, -0.08);
+    hang('a7', 0.8, -W / 2 + 0.06, 1.85, -2.95, HPI, 0.05);
+    hang('a8', 1.0, -W / 2 + 0.06, 0.95, -3.55, HPI, 0.1);
+    hang('a6', 0.9, W / 2 - 0.06, 1.7, -4.2, -HPI, 0.07);
+    hang('a10', 0.85, W / 2 - 0.06, 1.5, -2.9, -HPI, -0.09);
+    // two never made it back up, one is flat on its back
+    hang('a1', 0.9, -3.15, 0.34, -D + 0.66, 0, 0.02, -0.3);
+    hang('a4', 0.78, W / 2 - 0.22, 0.4, -1.75, -HPI, 0.03, -0.3);
+    {   // one fell flat on its face — canvas back and stretcher bars up
+      const g = new THREE.Group(); g.position.set(1.15, 0.03, -2.1); g.rotation.y = 0.5;
+      const F = kit(g), canvas = paint(0xd9c8a8), bar = paint(0xb09a74);
+      F.box(0.66, 0.035, 0.52, canvas, 0, 0, 0, 0.01);
+      F.box(0.66, 0.02, 0.07, bar, 0, 0.025, -0.22); F.box(0.66, 0.02, 0.07, bar, 0, 0.025, 0.22);
+      F.box(0.07, 0.02, 0.5, bar, -0.29, 0.025, 0); F.box(0.07, 0.02, 0.5, bar, 0.29, 0.025, 0);
+      K.g.add(g);
+    }
+    // paint splattered where the crates spilled open
+    const splat = (w, h, x, z, yaw, draw) => {
+      const s = K.flat(w, h, texMat(256, 200, draw), x, 0.013 + Math.random() * 0.004, z, [-HPI, 0, yaw]);
+      s.renderOrder = 2;
+      return s;
+    };
+    const blobby = (c, x, y, r, col) => {
+      c.fillStyle = col; c.beginPath();
+      for (let a = 0; a < 6.4; a += 0.35) { const rr = r * (0.6 + 0.5 * Math.abs(Math.sin(a * 2.7 + x))); c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+      c.closePath(); c.fill();
+      for (let d = 0; d < 7; d++) { const a = d * 0.9 + y; const dd = r * (1.15 + (d % 3) * 0.35); c.beginPath(); c.arc(x + Math.cos(a) * dd, y + Math.sin(a) * dd, r * 0.09 + (d % 2) * 2, 0, 7); c.fill(); }
+    };
+    splat(1.5, 1.2, -1.2, -D + 1.6, 0.4, (c) => { blobby(c, 110, 100, 52, 'rgba(176,58,48,0.85)'); blobby(c, 185, 130, 26, 'rgba(228,184,79,0.85)'); });
+    splat(1.2, 1.0, 2.2, -D + 2.9, -0.8, (c) => { blobby(c, 120, 90, 44, 'rgba(127,179,168,0.85)'); blobby(c, 70, 140, 22, 'rgba(143,122,232,0.8)'); });
+    splat(1.0, 0.9, -2.9, -D + 3.3, 1.7, (c) => { blobby(c, 110, 100, 38, 'rgba(228,184,79,0.85)'); blobby(c, 160, 70, 18, 'rgba(176,58,48,0.8)'); });
+    // one hit the wall and dripped
+    const drip = K.flat(1.0, 1.1, texMat(220, 240, (c, w, h) => {
+      blobby(c, 110, 70, 40, 'rgba(176,58,48,0.9)');
+      c.strokeStyle = 'rgba(176,58,48,0.9)'; c.lineCap = 'round';
+      for (const [dx, len, lw] of [[-22, 90, 7], [2, 130, 9], [26, 70, 6], [44, 100, 5]]) {
+        c.lineWidth = lw; c.beginPath(); c.moveTo(110 + dx, 85); c.lineTo(110 + dx, 85 + len); c.stroke();
+        c.beginPath(); c.arc(110 + dx, 85 + len, lw * 0.8, 0, 7); c.fillStyle = 'rgba(176,58,48,0.9)'; c.fill();
+      }
+    }), 3.1, 0.75, -D + 0.545);
+    drip.renderOrder = 2;
+    // loose sketches scattered underfoot
+    for (const [sx, sz, yaw] of [[0.3, -3.3, 0.5], [0.75, -3.05, -0.9], [-0.5, -1.4, 2.2], [-2.2, -2.5, 1.1], [1.9, -1.6, -0.4]]) {
+      K.flat(0.34, 0.44, texMat(96, 128, (c, w, h) => {
+        c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = 'rgba(42,34,48,0.65)'; c.lineWidth = 2;
+        c.strokeRect(1, 1, w - 2, h - 2);
+        c.beginPath(); c.ellipse(w / 2, h * 0.4, w * 0.26, h * 0.2, 0.4, 0, 7); c.stroke();
+        for (let l = 0; l < 3; l++) { c.beginPath(); c.moveTo(12, h * 0.7 + l * 12); c.lineTo(w - 12 - l * 14, h * 0.7 + l * 12); c.stroke(); }
+      }), sx, 0.02 + Math.random() * 0.004, sz, [-HPI, 0, yaw]).renderOrder = 2;
+    }
+    // a stanchion went over in the scramble
+    const brass2 = paint(PAL.gold);
+    K.put(new THREE.CylinderGeometry(0.11, 0.14, 0.06, 12), brass2, 0.4, 0.05, -D + 2.05, [0, 0, 1.45]);
+    K.box(0.035, 0.85, 0.035, brass2, 0.86, 0.058, -D + 2.1, 0.01, [0, 0.2, HPI]);
+    K.put(new THREE.SphereGeometry(0.055, 10, 8), brass2, 1.3, 0.06, -D + 2.19);
     // the famous empty frame, still missing
     const fr = kit(new THREE.Group()); fr.g.position.set(-2.3, 0, -D + 0.62);
     const gold = paint(PAL.gold);
