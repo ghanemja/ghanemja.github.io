@@ -3,11 +3,64 @@
 // drag-orbit camera. Collides with simple AABBs, clamped to the zone bounds.
 import * as THREE from 'three';
 import { person, pose } from './human.js';
+import { paint, ink } from './style.js';
+import { rbox, lathe } from './props.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+// the player, rebuilt procedurally (the old image-to-mesh critic.glb came out
+// slightly melted): the folk rig from the heist engine, dressed as Janelle —
+// blonde bob, red beret, charcoal sweater, jeans, white sneakers, her pack
+const PLAYER_LOOK = {
+  folk: true, skin: 'fair', hair: 0xc9a06a, hairStyle: 'bob',
+  top: 0x4a4550, bottom: 0x7d9cc0, shoes: 0xe9e4d8, sole: 0xf6f1e6,
+  height: 1.02, build: 0.95,
+  face: { shape: { jaw: 0.2, chin: 0.5, cheeks: 0.45, long: 0.1, skull: 0.55, brow: 0.4 },
+    nose: 'snub', noseSize: 0.72, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
+    brows: 'raised', lashes: true, hair: 'fringe', blush: 0.9 },
+};
+
+// the beret and the little mustard backpack, hung on the rig's own joints
+function dressPlayer(g) {
+  const J = g.userData.human.J;
+  const felt = paint(0xd8584a);
+  const beret = new THREE.Group();
+  beret.add(new THREE.Mesh(lathe([[0.001, 0], [0.092, 0], [0.112, 0.02], [0.1, 0.048], [0.058, 0.075], [0.001, 0.083]], 24), felt));
+  const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.02, 8), felt);
+  stalk.position.y = 0.088;
+  beret.add(stalk);
+  beret.position.set(0, 0.182, 0.008);
+  beret.rotation.set(-0.08, 0, 0.13);           // the classic tilt
+  ink(beret, 'fine');
+  J.head.add(beret);
+
+  const bp = new THREE.Group();
+  const mustard = paint(0xe1b95c), flapM = paint(0xd8584a), brass = paint(0xe4b84f);
+  bp.add(new THREE.Mesh(rbox(0.15, 0.19, 0.075, 0.028), mustard));
+  const flap = new THREE.Mesh(rbox(0.145, 0.085, 0.082, 0.022), flapM);
+  flap.position.set(0, 0.062, -0.002);
+  bp.add(flap);
+  const clasp = new THREE.Mesh(rbox(0.028, 0.026, 0.012, 0.005), brass);
+  clasp.position.set(0, 0.012, -0.045);
+  bp.add(clasp);
+  const pocket = new THREE.Mesh(rbox(0.09, 0.07, 0.025, 0.012), mustard);
+  pocket.position.set(0, -0.045, -0.05);
+  bp.add(pocket);
+  for (const s of [-1, 1]) {                    // straps hugging over the shoulders to the chest
+    const strap = new THREE.Mesh(rbox(0.024, 0.17, 0.012, 0.005), flapM);
+    strap.position.set(s * 0.055, 0.1, 0.055);
+    strap.rotation.x = -0.28;
+    bp.add(strap);
+  }
+  bp.position.set(0, 0.17, -0.148);             // riding her back (torso front is +z)
+  bp.rotation.x = 0.1;                          // following the curve of her back
+  ink(bp, 'fine');
+  J.spine.add(bp);
+}
+
 export function createPlayer(scene, camera, start) {
-  const g = person({});                   // the critic (loads critic.glb, fills in)
+  const g = person(PLAYER_LOOK);          // procedural: ready immediately
+  dressPlayer(g);
   g.position.set(start.x, 0, start.z);
   scene.add(g);
 

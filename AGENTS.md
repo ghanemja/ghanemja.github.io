@@ -22,6 +22,17 @@
 - **A standing rig is not a sitting pose.** Don't reuse a walk-cycle body for
   a sitting/lying character by only moving one limb; pose the whole body
   (pitch the torso, tuck the hind legs) or build the pose separately.
+- **Check the SIDE profile of everything — especially the extremities.**
+  Review every character and creature side-on (and three-quarter), with
+  particular attention to hands, feet, shoes, paws, ears, tails and hats.
+  Front and back views hide the worst faults: side-on is where stub limbs,
+  floating straps, pin-legs on a blob body, and gaps between masses show.
+  A silhouette should read as one connected animal/person — if any part
+  would fall off when traced in one outline, fix it. (The cat shipped with
+  a broken side silhouette because it was only ever checked from behind.)
+- **Build bodies as overlapping masses, not a box with sticks.** Give a
+  creature a chest that blends into the head and a rump the tail grows
+  from, and make limbs emerge from those masses, thick enough to read.
 - **Verify what you shipped, up close, in motion.** Before pushing any change
   to an animated or posed object, take headless screenshots (a) zoomed close
   to THAT object, (b) at 3+ different animation phases, and (c) from an angle

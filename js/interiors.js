@@ -551,22 +551,32 @@ const SETS = {
 function makeCat(colA, colB = colA) {
   const g = new THREE.Group(), C = kit(g);
   const fur = paint(colA, { hatch: 0.4 }), fur2 = paint(colB, { hatch: 0.4 });
-  C.box(0.3, 0.15, 0.15, fur, 0, 0.15, 0, 0.055);
-  C.put(new THREE.SphereGeometry(0.088, 12, 10), fur2, 0, 0.25, 0.16);
-  for (const s of [-1, 1]) C.put(new THREE.ConeGeometry(0.032, 0.065, 6), fur2, s * 0.052, 0.335, 0.15);
+  // the side profile carries the cat: a chest mass blending into the head, a
+  // round rump the tail grows from, and legs that emerge from those masses
+  // instead of hanging off a bare box like pins
+  C.box(0.28, 0.15, 0.14, fur, 0, 0.165, 0, 0.055);
+  C.put(new THREE.SphereGeometry(0.095, 12, 10).scale(1, 0.95, 1), fur, 0, 0.17, 0.09);   // chest/shoulders
+  C.put(new THREE.SphereGeometry(0.09, 12, 10).scale(1, 1, 1.05), fur, 0, 0.17, -0.09);   // haunches
+  C.put(new THREE.SphereGeometry(0.088, 12, 10), fur2, 0, 0.27, 0.16);
+  for (const s of [-1, 1]) C.put(new THREE.ConeGeometry(0.032, 0.065, 6), fur2, s * 0.052, 0.355, 0.15);
   const dark = paint(0x2a2230, { hatch: 0 });
-  for (const s of [-1, 1]) C.put(new THREE.SphereGeometry(0.013, 6, 5), dark, s * 0.036, 0.265, 0.238);
-  C.put(new THREE.SphereGeometry(0.011, 6, 5), paint(0xdc9e9a, { hatch: 0 }), 0, 0.235, 0.245);
+  for (const s of [-1, 1]) C.put(new THREE.SphereGeometry(0.013, 6, 5), dark, s * 0.036, 0.285, 0.238);
+  C.put(new THREE.SphereGeometry(0.011, 6, 5), paint(0xdc9e9a, { hatch: 0 }), 0, 0.255, 0.245);
   const legs = [];
   // legs pivot at the hip/shoulder (geometry hangs below its origin), so a
   // swing or a batting paw hinges where it attaches instead of orbiting its
-  // own middle and tearing off the body
-  const legGeo = rb(0.048, 0.14, 0.048, 0.015);
-  legGeo.translate(0, -0.07, 0);
-  for (const [lx, lz] of [[-0.085, 0.09], [0.085, 0.09], [-0.085, -0.09], [0.085, -0.09]])
-    legs.push(C.put(legGeo, fur, lx, 0.14, lz));
+  // own middle and tearing off the body; a paw at the foot grounds the profile
+  const legGeo = rb(0.06, 0.15, 0.06, 0.02);
+  legGeo.translate(0, -0.075, 0);
+  const pawGeo = rb(0.065, 0.045, 0.08, 0.018);
+  pawGeo.translate(0, -0.128, 0.012);
+  for (const [lx, lz] of [[-0.08, 0.09], [0.08, 0.09], [-0.08, -0.09], [0.08, -0.09]]) {
+    const leg = C.put(legGeo, fur, lx, 0.15, lz);
+    leg.add(new THREE.Mesh(pawGeo, fur2));
+    legs.push(leg);
+  }
   // one connected curved tail (jointed boxes read as broken-off sticks)
-  const tailG = new THREE.Group(); tailG.position.set(0, 0.17, -0.13);
+  const tailG = new THREE.Group(); tailG.position.set(0, 0.2, -0.15);
   const tailCurve = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0, 0, 0.02), new THREE.Vector3(0, 0.03, -0.1),
     new THREE.Vector3(0.015, 0.14, -0.17), new THREE.Vector3(0.02, 0.26, -0.15),
@@ -653,7 +663,7 @@ const EXTRA = {
     LIVE.push((t) => {
       const x = Math.sin(t * 0.9) * 2.7, dx = Math.cos(t * 0.9);
       catMove(biscuit, x, -0.9 + Math.sin(t * 1.8) * 0.2, dx, Math.cos(t * 1.8) * 0.2, t, 13);
-      biscuit.g.scale.x = 1 + Math.abs(dx) * 0.12;        // stretch at full sprint
+      biscuit.g.scale.z = 1 + Math.abs(dx) * 0.12;        // stretch along her OWN length (local z is her nose-to-tail axis)
     });
   },
 

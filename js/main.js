@@ -7,7 +7,7 @@ import { PAL, styleTick, paint, ink } from './style.js';
 import { buildTown } from './town.js';
 import { buildInteriors, tickInteriors } from './interiors.js';
 import { createPlayer } from './player.js';
-import { person, pose, LOOKS, loadHuman } from './human.js';
+import { person, pose, LOOKS } from './human.js';
 import { PLACES, APPS } from './apps.js';
 
 const $ = (s) => document.querySelector(s);
@@ -39,7 +39,7 @@ let lastDoor = { x: -10.5, z: 0.6 };
 let tracked = null;
 
 const fontsReady = (document.fonts?.ready ?? Promise.resolve()).catch(() => {});
-Promise.all([fontsReady, loadHuman().catch(() => null)]).then(() => {
+Promise.all([fontsReady]).then(() => {
   town = buildTown(scene);
   rooms = buildInteriors(scene);
   player = createPlayer(scene, camera, { x: -10.5, z: 0.6, yaw: -Math.PI / 2 });
