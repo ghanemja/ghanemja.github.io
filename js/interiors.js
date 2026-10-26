@@ -44,14 +44,49 @@ function fitLine(c, text, px, font, maxW) {
 const css = (hex) => '#' + new THREE.Color(hex).getHexString();
 
 const _loader = new THREE.TextureLoader();
-function shotMat(url) {
+// every framed screen drifts gently (a slow Ken Burns pan) so it reads as a
+// living picture, not a poster; frames with a recorded clip play real footage
+const ANIM = [];
+export function tickInteriors(t) {
+  for (const a of ANIM) {
+    const tex = a.mat.map;
+    if (!tex) continue;
+    if (tex.isVideoTexture) continue;                  // footage moves by itself
+    const z = 1 - 0.045 * (0.5 + 0.5 * Math.sin(t * 0.21 + a.ph));
+    tex.repeat.set(z, z);
+    tex.offset.set(
+      (1 - z) * (0.5 + 0.28 * Math.sin(t * 0.13 + a.ph * 2)),
+      (1 - z) * (0.5 + 0.28 * Math.cos(t * 0.17 + a.ph)),
+    );
+  }
+}
+function shotMat(url, clip) {
   const t = _loader.load(url);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  return paint(0xffffff, { map: t, hatch: 0 });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  const m = paint(0xffffff, { map: t, hatch: 0, unique: true });
+  ANIM.push({ mat: m, ph: ANIM.length * 2.4 });
+  if (clip) {
+    const v = document.createElement('video');
+    v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
+    v.src = clip; v.crossOrigin = 'anonymous';
+    const swap = () => {
+      const vt = new THREE.VideoTexture(v);
+      vt.colorSpace = THREE.SRGBColorSpace;
+      m.map = vt; m.needsUpdate = true;
+    };
+    v.addEventListener('playing', swap, { once: true });
+    v.play().catch(() => {
+      // autoplay refused: start on the first interaction instead
+      addEventListener('pointerdown', () => v.play().catch(() => {}), { once: true });
+      addEventListener('keydown', () => v.play().catch(() => {}), { once: true });
+    });
+  }
+  return m;
 }
 
 // a gilt-framed picture: the app's screenshot behind glass glints
-function framedShot(K, url, w, h, x, y, z, rot) {
+function framedShot(K, url, w, h, x, y, z, rot, clip) {
   const fr = paint(PAL.gold);
   const grp = new THREE.Group(); grp.position.set(x, y, z); if (rot) grp.rotation.set(...rot);
   const F = kit(grp);
@@ -59,7 +94,7 @@ function framedShot(K, url, w, h, x, y, z, rot) {
   F.box(w + 0.14, 0.07, 0.06, fr, 0, -h / 2 - 0.035, 0);
   F.box(0.07, h, 0.06, fr, -w / 2 - 0.035, 0, 0);
   F.box(0.07, h, 0.06, fr, w / 2 + 0.035, 0, 0);
-  F.flat(w, h, shotMat(url), 0, 0, 0.012);
+  F.flat(w, h, shotMat(url, clip), 0, 0, 0.012);
   K.g.add(grp);
   return grp;
 }
@@ -436,7 +471,7 @@ export function buildInteriors(scene) {
     const K = kit(g);
     roomShell(K, ROOM_WALL[place.id] ?? 0xe8ddc2, place);
     if (place.id !== 'deckgpt' && place.id !== 'library' && place.shot)
-      framedShot(K, place.shot, 1.9, 1.19, 0, 1.45, -D + 0.6);
+      framedShot(K, place.shot, 1.9, 1.19, 0, 1.45, -D + 0.6, null, place.clip);
     plaque(K, -1.25, -D + 2.1);
     counter(K, 1.6, -D + 2.3, 0);
     SETS[place.id]?.(K);

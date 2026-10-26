@@ -378,7 +378,7 @@ export function pose(inst, dt, k, { talk = 0, run = 0 } = {}) {
   const s = Math.sin(inst.wc), c = Math.cos(inst.wc);
   for (const n of BONES) if (inst.bones[n]) inst.bones[n].quaternion.copy(inst.bind[n]);
   const { fwd, up, side } = AX;
-  const leg = (0.48 + 0.18 * run) * k, arm = (0.42 + 0.2 * run) * k;
+  const leg = (0.48 + 0.18 * run) * k, arm = (0.52 + 0.22 * run) * k;
   // legs swing forward/back about the side axis; the knee folds on the way through
   turn(inst, 'upperlegL', side, leg * s);
   turn(inst, 'upperlegR', side, -leg * s);
@@ -391,10 +391,17 @@ export function pose(inst, dt, k, { talk = 0, run = 0 } = {}) {
   // arms counter-swing, elbows soft and a touch forward, hands in from the hips
   turn(inst, 'upperarmL', side, -arm * s);
   turn(inst, 'upperarmR', side, arm * s);
-  turn(inst, 'lowerarmL', side, 0.22 + 0.25 * k + 0.1 * run);
-  turn(inst, 'lowerarmR', side, 0.22 + 0.25 * k + 0.1 * run);
-  turn(inst, 'upperarmL', fwd, -0.07);
-  turn(inst, 'upperarmR', fwd, 0.07);
+  turn(inst, 'lowerarmL', side, 0.2 + 0.1 * k + 0.1 * run);
+  turn(inst, 'lowerarmR', side, 0.2 + 0.1 * k + 0.1 * run);
+  // arms lift away from the body while walking (glued-to-the-sides reads stiff).
+  // The baggy sweater is skinned mostly to the torso, so the shoulder lift alone
+  // barely shows: the elbows have to open outward too, where the sleeve really moves.
+  const out = 0.08 + 0.22 * k + 0.04 * Math.sin(inst.wc * 2);
+  turn(inst, 'upperarmL', fwd, -out);
+  turn(inst, 'upperarmR', fwd, out);
+  const elbowOut = 0.05 + 0.16 * k;
+  turn(inst, 'lowerarmL', fwd, -elbowOut);
+  turn(inst, 'lowerarmR', fwd, elbowOut);
   // the body: hips twist with the stride, shoulders against them; a lean when running
   turn(inst, 'hips', up, 0.09 * s * k);
   turn(inst, 'spine2', up, -0.12 * s * k);

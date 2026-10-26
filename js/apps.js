@@ -45,7 +45,7 @@ export const APPS = [
   {
     id: 'borrowed-eyes', title: 'Borrowed Eyes', trade: 'Optics & Menagerie',
     url: 'https://github.com/ghanemja/borrowed_eyes', repo: 'https://github.com/ghanemja/borrowed_eyes',
-    shot: 'screenshots/borrowed-eyes.jpg',
+    shot: 'screenshots/borrowed-eyes.jpg', clip: 'clips/borrowed-eyes.mp4',
     desc: 'A browser game about how other animals see. Photograph 14 hidden animals and borrow their eyes.',
     how: 'One HTML file, three.js, zero asset files: terrain, animals and all are generated in code. Each frame renders color + UV + heat passes blended per animal.',
     note: 'Bee ultraviolet, snake heat pits, bat echolocation, owl night eyes — approximated from published research.',
@@ -53,7 +53,7 @@ export const APPS = [
   {
     id: 'gallery', title: 'The Vanishing Gallery', trade: 'An Art Heist',
     url: 'https://art-heist.netlify.app', repo: 'https://art-heist.netlify.app',
-    shot: 'screenshots/vanishing-gallery.webp',
+    shot: 'screenshots/vanishing-gallery.webp', clip: 'clips/vanishing-gallery.mp4',
     desc: 'A hand-drawn detective game on a tiny planet. A painting is gone; question the suspects, drive the streets, name the thief.',
     how: 'three.js with a gouache-and-ink look: cel shading, paper grain, boiling grease-pencil outlines. This very town borrows its engine.',
     note: 'The stolen paintings are Janelle’s real ones. This street is drawn with the same pen.',

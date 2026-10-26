@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { PAL, styleTick, paint, ink } from './style.js';
 import { buildTown } from './town.js';
-import { buildInteriors } from './interiors.js';
+import { buildInteriors, tickInteriors } from './interiors.js';
 import { createPlayer } from './player.js';
 import { person, pose, LOOKS, loadHuman } from './human.js';
 import { PLACES, APPS } from './apps.js';
@@ -257,6 +257,7 @@ function loop() {
     else pr.classList.add('hide');
     tickWaypoint();
   }
+  tickInteriors(t);
   styleTick(t, renderer.domElement.width, renderer.domElement.height);
   renderer.render(scene, camera);
 }
