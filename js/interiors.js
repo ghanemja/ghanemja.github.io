@@ -47,7 +47,9 @@ const _loader = new THREE.TextureLoader();
 // every framed screen drifts gently (a slow Ken Burns pan) so it reads as a
 // living picture, not a poster; frames with a recorded clip play real footage
 const ANIM = [];
+const LIVE = [];                            // per-frame animations: f(t), local room coords
 export function tickInteriors(t) {
+  for (const f of LIVE) f(t);
   for (const a of ANIM) {
     const tex = a.mat.map;
     if (!tex) continue;
@@ -539,10 +541,397 @@ const SETS = {
       K.box(0.22, 0.2, 0.03, paint(0xa07850), 2.46 + cI * 0.28, 0.2 + r * 0.26, -D + 2.43, 0.008);
       K.put(new THREE.SphereGeometry(0.02, 8, 6), paint(PAL.gold), 2.46 + cI * 0.28, 0.2 + r * 0.26, -D + 2.46);
     }
-    const lad = kit(new THREE.Group()); lad.g.position.set(-1.4, 0, -D + 1.05); lad.g.rotation.z = 0.18;
-    for (const s of [-1, 1]) lad.box(0.05, 2.3, 0.05, wood, s * 0.2, 1.15, 0, 0.012);
-    for (let r = 0; r < 6; r++) lad.box(0.4, 0.04, 0.04, wood, 0, 0.3 + r * 0.36, 0, 0.01);
-    K.g.add(lad.g); ink(lad.g, 'fine');
+  },
+};
+
+// ─── THE FUN LAYER: every room gets life ────────────────────────────────────
+// Small looping animations in room-local coordinates, registered in LIVE.
+
+// a little toon cat, facing +z. Returns the pieces the animations drive.
+function makeCat(colA, colB = colA) {
+  const g = new THREE.Group(), C = kit(g);
+  const fur = paint(colA, { hatch: 0.4 }), fur2 = paint(colB, { hatch: 0.4 });
+  C.box(0.3, 0.15, 0.15, fur, 0, 0.15, 0, 0.055);
+  C.put(new THREE.SphereGeometry(0.088, 12, 10), fur2, 0, 0.25, 0.16);
+  for (const s of [-1, 1]) C.put(new THREE.ConeGeometry(0.032, 0.065, 6), fur2, s * 0.052, 0.335, 0.15);
+  const dark = paint(0x2a2230, { hatch: 0 });
+  for (const s of [-1, 1]) C.put(new THREE.SphereGeometry(0.013, 6, 5), dark, s * 0.036, 0.265, 0.238);
+  C.put(new THREE.SphereGeometry(0.011, 6, 5), paint(0xdc9e9a, { hatch: 0 }), 0, 0.235, 0.245);
+  const legs = [];
+  for (const [lx, lz] of [[-0.085, 0.09], [0.085, 0.09], [-0.085, -0.09], [0.085, -0.09]])
+    legs.push(C.box(0.048, 0.11, 0.048, fur, lx, 0.055, lz, 0.015));
+  const tailG = new THREE.Group(); tailG.position.set(0, 0.2, -0.14);
+  const T = kit(tailG);
+  T.box(0.035, 0.035, 0.2, fur2, 0, 0.02, -0.09, 0.012, [-0.5, 0, 0]);
+  T.box(0.03, 0.03, 0.1, fur2, 0, 0.1, -0.2, 0.01, [-1.4, 0, 0]);
+  g.add(tailG);
+  ink(g, 'fine');
+  g.add(blobShadow(0.15));
+  return { g, legs, tail: tailG };
+}
+// drive a cat along a position + heading, legs trotting
+function catMove(cat, x, z, dx, dz, t, pace = 9) {
+  cat.g.position.set(x, Math.abs(Math.sin(t * pace)) * 0.025, z);
+  cat.g.rotation.y = Math.atan2(dx, dz);
+  cat.legs.forEach((l, i) => { l.rotation.x = Math.sin(t * pace + (i % 2) * Math.PI + Math.floor(i / 2) * 1.3) * 0.55; });
+  cat.tail.rotation.y = Math.sin(t * 2.7) * 0.35;
+  cat.tail.rotation.x = Math.sin(t * 1.9) * 0.15;
+}
+
+const EXTRA = {
+  yarnflow(K) {
+    // ── yarn EVERYWHERE ──
+    const cols = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0xb7a3c6, 0xdc9e9a, 0x8f7ae8, 0xa8b994, 0x93abc0];
+    const spots = [[-3.2, -1.1], [-2.2, -2.9], [-0.9, -4.3], [2.1, -1.2], [3.1, -3.2], [-1.6, -0.7], [3.4, -4.6], [0.6, -4.8], [-3.5, -4.6], [2.8, -0.6]];
+    spots.forEach(([x, z], i) => {
+      const r = 0.1 + (i % 3) * 0.03;
+      K.put(new THREE.SphereGeometry(r, 10, 8), paint(cols[i % cols.length]), x, r, z);
+      const w = K.put(new THREE.TorusGeometry(r, 0.014, 6, 16), paint(cols[(i + 3) % cols.length]), x, r, z, [0.6 + i, i * 0.8, 0]);
+      w.userData.noInk = true;
+    });
+    // loose strands trailing across the floor between the balls
+    for (let s = 0; s < 4; s++) {
+      const pts = [spots[s], spots[s + 3], spots[s + 6 < spots.length ? s + 6 : s + 1]].map(([x, z], j) =>
+        new THREE.Vector3(x, 0.02, z).add(new THREE.Vector3(Math.sin(s * 3 + j) * 0.4, 0, Math.cos(s * 5 + j) * 0.4)));
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.013, 5), paint(cols[(s * 2 + 1) % cols.length]));
+      tube.userData.noInk = true;
+      K.g.add(tube);
+    }
+    // ── the cats ──
+    // Pickle chases a runaway ball round the room
+    const pickle = makeCat(0xe09a52, 0xd98a40);
+    const ball = K.put(new THREE.SphereGeometry(0.11, 10, 8), paint(0xe8604c), 0, 0.11, -2);
+    const bw = K.put(new THREE.TorusGeometry(0.11, 0.015, 6, 16), paint(0xe4b84f), 0, 0.11, -2);
+    bw.userData.noInk = true;
+    K.g.add(pickle.g);
+    const orbit = (tt) => { const a = tt * 0.62; return [Math.cos(a) * 2.1, -2.1 + Math.sin(a) * 1.15, a]; };
+    LIVE.push((t) => {
+      const [bx, bz, a] = orbit(t);
+      ball.position.set(bx, 0.11, bz); bw.position.set(bx, 0.11, bz);
+      ball.rotation.z -= 0.08; bw.rotation.y = a;
+      const [cx, cz] = orbit(t - 0.55), [nx, nz] = orbit(t - 0.5);
+      catMove(pickle, cx, cz, nx - cx, nz - cz, t);
+    });
+    // Mochi bats at a strand hanging off the shelf
+    const mochi = makeCat(0x9a9490, 0xb8b2ac);
+    mochi.g.position.set(-2.0, 0, -4.1); mochi.g.rotation.y = -Math.PI / 2 + 0.4;
+    K.g.add(mochi.g);
+    const strandG = new THREE.Group(); strandG.position.set(-2.35, 1.3, -4.4);
+    const strand = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.03, -0.45, 0.05), new THREE.Vector3(-0.02, -0.9, 0.02),
+    ]), 12, 0.013, 5), paint(0x8f7ae8));
+    strand.userData.noInk = true;
+    strandG.add(strand);
+    const strandBall = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 7), paint(0x8f7ae8));
+    strandBall.position.set(-0.02, -0.95, 0.02);
+    strandG.add(strandBall);
+    K.g.add(strandG);
+    LIVE.push((t) => {
+      strandG.rotation.z = Math.sin(t * 2.3) * 0.3;
+      strandG.rotation.x = Math.cos(t * 1.7) * 0.15;
+      const paw = mochi.legs[1];
+      paw.rotation.x = -Math.max(0, Math.sin(t * 2.3 + 0.6)) * 1.1;
+      mochi.tail.rotation.y = Math.sin(t * 3.1) * 0.5;
+      mochi.g.position.y = 0;
+    });
+    // Biscuit does zoomies along the front of the room
+    const biscuit = makeCat(0x2a2230, 0x3a3240);
+    K.g.add(biscuit.g);
+    LIVE.push((t) => {
+      const x = Math.sin(t * 0.9) * 2.7, dx = Math.cos(t * 0.9);
+      catMove(biscuit, x, -0.9 + Math.sin(t * 1.8) * 0.2, dx, Math.cos(t * 1.8) * 0.2, t, 13);
+      biscuit.g.scale.x = 1 + Math.abs(dx) * 0.12;        // stretch at full sprint
+    });
+  },
+
+  charterscope(K) {
+    // a painted sea for the toy fleet, charts taped to the walls
+    const sea = K.flat(2.6, 1.8, texMat(256, 180, (c, w, h) => {
+      c.fillStyle = '#8fc3c9'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 3;
+      for (let y = 20; y < h; y += 26) { c.beginPath(); for (let x = 0; x <= w; x += 16) c.lineTo(x, y + Math.sin(x / 14 + y) * 4); c.stroke(); }
+    }), 1.9, 0.016, -1.6, [-Math.PI / 2, 0, 0.3]);
+    sea.renderOrder = 1;
+    const shipG = new THREE.Group(); K.g.add(shipG);
+    const S = kit(shipG);
+    S.box(0.5, 0.12, 0.18, paint(0xc23f36), 0, 0.1, 0, 0.03);
+    S.box(0.26, 0.1, 0.14, paint(0xf6eedb), 0.02, 0.2, 0, 0.02);
+    S.put(new THREE.CylinderGeometry(0.03, 0.035, 0.12, 8), paint(0x2a2230), -0.08, 0.3, 0);
+    S.box(0.2, 0.02, 0.1, paint(0x8a6448), 0.16, 0.17, 0, 0.006);
+    ink(shipG, 'fine');
+    LIVE.push((t) => {
+      const a = t * 0.5;
+      shipG.position.set(1.9 + Math.cos(a) * 0.85, 0.02 + Math.sin(t * 2.2) * 0.015, -1.6 + Math.sin(a) * 0.5);
+      shipG.rotation.y = -a + Math.PI / 2;
+      shipG.rotation.z = Math.sin(t * 1.8) * 0.06;
+    });
+    // flagged clause memos taped to the side walls
+    for (const [x, y, z, ry, tilt] of [[-W / 2 + 0.06, 1.7, -2.2, Math.PI / 2, 0.08], [-W / 2 + 0.06, 1.3, -1.5, Math.PI / 2, -0.06], [W / 2 - 0.06, 1.8, -3.4, -Math.PI / 2, 0.1]]) {
+      const memo = K.flat(0.5, 0.62, texMat(128, 160, (c, w, h) => {
+        c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = '#b9b2a4'; c.lineWidth = 2;
+        for (let l = 0; l < 7; l++) { c.beginPath(); c.moveTo(12, 34 + l * 16); c.lineTo(w - 12, 34 + l * 16); c.stroke(); }
+        c.strokeStyle = '#e8604c'; c.lineWidth = 5;
+        c.beginPath(); c.ellipse(w / 2, h * 0.45, w * 0.33, h * 0.18, 0.2, 0, 7); c.stroke();
+        c.fillStyle = '#e8604c'; c.font = `700 20px ${SCRIPT}`; c.textAlign = 'center';
+        c.fillText('flag!', w / 2, h * 0.88);
+      }), x, y, z, [0, ry, tilt]);
+      memo.renderOrder = 1;
+    }
+  },
+
+  'inbox-zero'(K) {
+    // letters on the wing: a relay of envelopes flying chute → out-basket
+    const basket = kit(new THREE.Group()); basket.g.position.set(-0.6, 0, -4.4);
+    basket.put(new THREE.CylinderGeometry(0.3, 0.24, 0.3, 12, 1, true), paint(0xc8a47c, { side: THREE.DoubleSide }), 0, 0.16, 0);
+    for (let i = 0; i < 4; i++) basket.box(0.26, 0.02, 0.18, paint(0xf6eedb), (i % 2) * 0.06 - 0.03, 0.3 + i * 0.022, 0, 0.006, [0, i * 0.8, 0.06]);
+    K.g.add(basket.g); ink(basket.g, 'fine');
+    const from = new THREE.Vector3(3.4, 2.1, -4.9), to = new THREE.Vector3(-0.6, 0.45, -4.4);
+    const env = () => {
+      const g = new THREE.Group(), E = kit(g);
+      E.box(0.3, 0.2, 0.02, paint(0xf6eedb), 0, 0, 0, 0.006);
+      const fl = new THREE.Shape([[-0.14, 0.09], [0.14, 0.09], [0, -0.02]].map(([a, b2]) => new THREE.Vector2(a, b2)));
+      E.put(new THREE.ExtrudeGeometry(fl, { depth: 0.004, bevelEnabled: false }), paint(0xe6d9bc), 0, 0, 0.012);
+      E.put(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 10), paint(PAL.accent), 0, 0, 0.02, [Math.PI / 2, 0, 0]);
+      ink(g, 'fine');
+      K.g.add(g);
+      return g;
+    };
+    const flyers = [env(), env(), env()];
+    LIVE.push((t) => {
+      flyers.forEach((g, i) => {
+        const s = ((t * 0.3 + i / 3) % 1);
+        g.position.lerpVectors(from, to, s);
+        g.position.y += Math.sin(s * Math.PI) * 1.1;        // a nice lob
+        g.rotation.set(s * 7 + i, i * 2.1, Math.sin(t * 3 + i) * 0.4);
+        g.visible = s > 0.02 && s < 0.97;
+      });
+    });
+    // a drift of unsorted post on the floor
+    for (let i = 0; i < 9; i++) {
+      const x = -3.3 + (i * 0.73) % 2.2, z = -4.9 + (i * 1.17) % 1.3;
+      K.box(0.28, 0.015, 0.19, paint(i % 3 ? 0xf6eedb : 0xefe4cc), x, 0.012 + (i % 3) * 0.013, z, 0.005, [0, i * 1.3, 0]);
+    }
+    // the mailroom clock, running fast (deadline energy)
+    const clockG = new THREE.Group(); clockG.position.set(W / 2 - 0.06, 2.1, -3.2); clockG.rotation.y = -Math.PI / 2;
+    const CK = kit(clockG);
+    CK.put(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 20), paint(0xf6eedb), 0, 0, 0, [Math.PI / 2, 0, 0]);
+    CK.put(new THREE.TorusGeometry(0.3, 0.028, 8, 24), paint(0xc23f36), 0, 0, 0);
+    const hourH = CK.box(0.035, 0.15, 0.015, paint(0x2a2230, { hatch: 0 }), 0, 0.06, 0.028, 0.005);
+    const minH = CK.box(0.025, 0.24, 0.015, paint(0x2a2230, { hatch: 0 }), 0, 0.1, 0.032, 0.005);
+    hourH.geometry = hourH.geometry.clone(); hourH.geometry.translate(0, -0.06, 0); hourH.position.y = 0;
+    minH.geometry = minH.geometry.clone(); minH.geometry.translate(0, -0.1, 0); minH.position.y = 0;
+    ink(clockG, 'fine');
+    K.g.add(clockG);
+    LIVE.push((t) => { minH.rotation.z = -t * 0.9; hourH.rotation.z = -t * 0.075; });
+  },
+
+  deckgpt(K) {
+    // the projector beam, flickering like real celluloid
+    const beam = new THREE.Mesh(
+      new THREE.ConeGeometry(0.85, 3.6, 18, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    beam.userData.noInk = true;
+    beam.position.set(1.35, 1.25, -4.05);
+    beam.lookAt(new THREE.Vector3(0, 1.35, -5.4));
+    beam.rotateX(-Math.PI / 2);
+    K.g.add(beam);
+    LIVE.push((t) => { beam.material.opacity = 0.08 + 0.035 * Math.sin(t * 17) * Math.sin(t * 5.1); });
+    // slides mid-generation, spiralling up into the screen
+    const cards = [];
+    for (let i = 0; i < 4; i++) {
+      const card = K.flat(0.3, 0.2, texMat(96, 64, (c, w, h) => {
+        c.fillStyle = '#fffaf0'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = '#2a2230'; c.lineWidth = 3; c.strokeRect(2, 2, w - 4, h - 4);
+        c.fillStyle = ['#e8604c', '#7fb3a8', '#e4b84f', '#8f7ae8'][i]; c.fillRect(8, 8, w - 16, 14);
+        c.strokeStyle = '#b9b2a4'; c.lineWidth = 2;
+        for (let l = 0; l < 2; l++) { c.beginPath(); c.moveTo(10, 36 + l * 10); c.lineTo(w - 10 - l * 20, 36 + l * 10); c.stroke(); }
+      }), 0, 0, 0);
+      cards.push(card);
+    }
+    LIVE.push((t) => {
+      cards.forEach((card, i) => {
+        const s = ((t * 0.22 + i / 4) % 1);
+        const a = s * Math.PI * 4 + i;
+        card.position.set(2.6 + Math.cos(a) * (0.5 - s * 0.3) - s * 2.6, 1.5 + s * 0.9, -2.6 + Math.sin(a) * (0.4 - s * 0.25) - s * 2.5);
+        card.rotation.set(Math.sin(a) * 0.4, a * 0.5, Math.cos(a) * 0.3);
+        const f = Math.min(1, (1 - s) * 6);
+        card.scale.setScalar(Math.max(0.001, f));
+      });
+    });
+    // popcorn: a tub on a seat, pieces everywhere
+    const tub = kit(new THREE.Group()); tub.g.position.set(0.65, 0.42, -3.7);
+    tub.put(new THREE.CylinderGeometry(0.11, 0.08, 0.2, 12), paint(0xffffff, { map: canvasTex(64, 64, (c, w, h) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#c23f36' : '#f6eedb'; c.fillRect(i * 8, 0, 8, h); } }), hatch: 0 }), 0, 0, 0);
+    for (let i = 0; i < 5; i++) tub.put(new THREE.SphereGeometry(0.035, 7, 6), paint(0xf3e3b8), Math.sin(i * 2.4) * 0.05, 0.11 + (i % 2) * 0.02, Math.cos(i * 2.4) * 0.05);
+    ink(tub.g, 'fine');
+    K.g.add(tub.g);
+    for (let i = 0; i < 14; i++) {
+      const p = K.put(new THREE.SphereGeometry(0.028, 6, 5), paint(0xf3e3b8), -1.4 + (i * 0.67) % 3.1, 0.03, -1.9 - (i * 0.41) % 1.6);
+      p.userData.noInk = true;
+    }
+  },
+
+  splatform(K) {
+    // paint EVERYWHERE: wall splats, a tipped can mid-spill, a busy brush
+    const blobby2 = (c, x, y, r, col) => {
+      c.fillStyle = col; c.beginPath();
+      for (let a = 0; a < 6.4; a += 0.4) { const rr = r * (0.65 + 0.45 * Math.abs(Math.sin(a * 3.1 + x))); c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+      c.closePath(); c.fill();
+      for (let d = 0; d < 6; d++) { const a = d * 1.1 + y; c.beginPath(); c.arc(x + Math.cos(a) * r * 1.4, y + Math.sin(a) * r * 1.4, 2 + (d % 3) * 2, 0, 7); c.fill(); }
+    };
+    const wallSplat = (x, y, z, ry, draw) => {
+      const s = K.flat(0.9, 0.8, texMat(200, 180, draw), x, y, z, [0, ry, 0]);
+      s.renderOrder = 2;
+    };
+    wallSplat(-2.2, 1.6, -D + 0.545, 0, (c) => blobby2(c, 100, 90, 42, 'rgba(143,122,232,0.85)'));
+    wallSplat(-W / 2 + 0.055, 1.3, -3.2, Math.PI / 2, (c) => { blobby2(c, 90, 80, 36, 'rgba(232,96,76,0.85)'); blobby2(c, 150, 120, 20, 'rgba(228,184,79,0.85)'); });
+    wallSplat(W / 2 - 0.055, 1.8, -2.4, -Math.PI / 2, (c) => blobby2(c, 100, 90, 38, 'rgba(127,179,168,0.85)'));
+    // the tipped can and its puddle
+    K.put(new THREE.CylinderGeometry(0.13, 0.12, 0.24, 14), paint(0xc9ccd6), -1.3, 0.12, -2.3, [0, 0.4, Math.PI / 2 - 0.08]);
+    const puddle = K.flat(1.0, 0.7, texMat(200, 140, (c) => blobby2(c, 100, 70, 44, 'rgba(143,122,232,0.9)')), -1.75, 0.014, -2.35, [-Math.PI / 2, 0, 0.5]);
+    puddle.renderOrder = 2;
+    // a brush hard at work over the middle easel, never quite done
+    const brushG = new THREE.Group(); K.g.add(brushG);
+    const B = kit(brushG);
+    B.put(new THREE.CylinderGeometry(0.02, 0.025, 0.3, 8), paint(0x8a6448), 0, 0.15, 0);
+    B.put(new THREE.CylinderGeometry(0.028, 0.02, 0.06, 8), paint(0xc9ccd6), 0, -0.02, 0);
+    B.put(new THREE.ConeGeometry(0.03, 0.09, 8), paint(0xe8604c), 0, -0.09, 0, [Math.PI, 0, 0]);
+    ink(brushG, 'fine');
+    LIVE.push((t) => {
+      const s = Math.sin(t * 1.4);
+      brushG.position.set(-0.5 + s * 0.28, 1.12 + Math.abs(Math.cos(t * 2.8)) * 0.06, -D + 2.0);
+      brushG.rotation.z = 0.5 + s * 0.3;
+      brushG.rotation.x = -0.25;
+    });
+    // paint drops hopping between the cans
+    const drop = K.put(new THREE.SphereGeometry(0.045, 8, 7), paint(0xe4b84f), 2.9, 0.3, -3.4);
+    LIVE.push((t) => {
+      const s = (t * 0.7) % 1;
+      drop.position.set(2.9 - s * 0.68, 0.28 + Math.sin(s * Math.PI) * 0.5, -3.4 + s * 0.3);
+      drop.scale.y = 1 - Math.sin(s * Math.PI) * 0.25;
+    });
+  },
+
+  'borrowed-eyes'(K) {
+    // the menagerie is IN: frog, bee, goldfish, and a bat on the rail
+    // the frog, hopping a lazy circuit
+    const frogG = new THREE.Group(); K.g.add(frogG);
+    const F = kit(frogG), green = paint(0x6f9a4c, { hatch: 0.4 });
+    F.put(new THREE.SphereGeometry(0.1, 10, 8).scale(1.15, 0.8, 1.3), green, 0, 0.09, 0);
+    for (const s of [-1, 1]) {
+      F.put(new THREE.SphereGeometry(0.035, 8, 6), green, s * 0.055, 0.17, 0.06);
+      F.put(new THREE.SphereGeometry(0.016, 6, 5), paint(0x2a2230, { hatch: 0 }), s * 0.055, 0.18, 0.085);
+      F.put(new THREE.SphereGeometry(0.045, 7, 6).scale(1.4, 0.6, 1), green, s * 0.1, 0.045, -0.04);
+    }
+    ink(frogG, 'fine');
+    frogG.add(blobShadow(0.12));
+    LIVE.push((t) => {
+      const s = (t * 0.35) % 1, a = Math.floor(t * 0.35) * 1.3;
+      const hop = Math.max(0, Math.sin(s * Math.PI * 3)) * 0.22;
+      frogG.position.set(-1.6 + Math.cos(a) * 1.1 + Math.cos(a + 1.3) * s * 0.9, hop, -2.1 + Math.sin(a) * 0.9 + Math.sin(a + 1.3) * s * 0.7);
+      frogG.rotation.y = a + 1.3 + Math.PI / 2;
+      frogG.scale.y = 1 - (hop > 0.01 ? 0 : Math.abs(Math.sin(t * 6)) * 0.1);
+    });
+    // the bee, figure-eighting round the room
+    const beeG = new THREE.Group(); K.g.add(beeG);
+    const BB = kit(beeG);
+    BB.put(new THREE.SphereGeometry(0.05, 8, 7).scale(1.4, 1, 1), paint(0xe4b84f, { hatch: 0 }), 0, 0, 0);
+    BB.box(0.02, 0.09, 0.09, paint(0x2a2230, { hatch: 0 }), 0.01, 0, 0, 0.006);
+    BB.box(0.02, 0.09, 0.09, paint(0x2a2230, { hatch: 0 }), -0.035, 0, 0, 0.006);
+    const wingL = BB.put(new THREE.CircleGeometry(0.05, 8), paint(0xffffff, { hatch: 0, opacity: 0.6 }), 0, 0.05, 0.03, [0.5, 0, 0]);
+    const wingR = BB.put(new THREE.CircleGeometry(0.05, 8), paint(0xffffff, { hatch: 0, opacity: 0.6 }), 0, 0.05, -0.03, [-0.5, 0, 0]);
+    wingL.userData.noInk = wingR.userData.noInk = true;
+    ink(beeG, 'fine');
+    LIVE.push((t) => {
+      const a = t * 0.8;
+      beeG.position.set(Math.sin(a) * 2.4, 1.3 + Math.sin(t * 2.3) * 0.25, -2.6 + Math.sin(a * 2) * 1.3);
+      beeG.rotation.y = Math.atan2(Math.cos(a) * 2.4, Math.cos(a * 2) * 2.6) + Math.PI / 2;
+      wingL.rotation.x = 0.5 + Math.sin(t * 40) * 0.5;
+      wingR.rotation.x = -0.5 - Math.sin(t * 40) * 0.5;
+    });
+    // the goldfish bowl on its own stand
+    const standG = kit(new THREE.Group()); standG.g.position.set(-3.2, 0, -1.3);
+    standG.put(new THREE.CylinderGeometry(0.12, 0.16, 0.8, 10), paint(PAL.bark), 0, 0.4, 0);
+    standG.put(new THREE.SphereGeometry(0.3, 16, 12, 0, Math.PI * 2, 0.6, Math.PI - 0.6).scale(1, 0.9, 1), paint(0xcfe6ef, { opacity: 0.4, hatch: 0 }), 0, 1.05, 0).userData.noInk = true;
+    standG.put(new THREE.CylinderGeometry(0.26, 0.26, 0.02, 16), paint(0x8fc3c9, { opacity: 0.75, hatch: 0 }), 0, 1.1, 0).userData.noInk = true;
+    ink(standG.g, 'fine');
+    K.g.add(standG.g);
+    const fish = kit(new THREE.Group());
+    fish.put(new THREE.SphereGeometry(0.05, 8, 7).scale(1.5, 1, 0.8), paint(0xf0a040, { hatch: 0 }), 0, 0, 0);
+    fish.put(new THREE.ConeGeometry(0.035, 0.07, 6), paint(0xe8604c, { hatch: 0 }), -0.09, 0, 0, [0, 0, Math.PI / 2]);
+    ink(fish.g, 'fine');
+    K.g.add(fish.g);
+    LIVE.push((t) => {
+      const a = t * 1.6;
+      fish.g.position.set(-3.2 + Math.cos(a) * 0.14, 1.03 + Math.sin(t * 2.7) * 0.04, -1.3 + Math.sin(a) * 0.14);
+      fish.g.rotation.y = -a;
+    });
+    // the bat, asleep on the picture rail (it stretches now and then)
+    const batG = new THREE.Group(); batG.position.set(2.2, 2.05, -D + 0.6);
+    const BT = kit(batG);
+    BT.put(new THREE.SphereGeometry(0.07, 8, 7).scale(0.9, 1.3, 0.9), paint(0x4a4258, { hatch: 0.4 }), 0, -0.1, 0);
+    for (const s of [-1, 1]) BT.put(new THREE.ConeGeometry(0.02, 0.05, 5), paint(0x4a4258), s * 0.03, -0.2, 0, [Math.PI, 0, 0]);
+    const wings = [];
+    for (const s of [-1, 1]) {
+      const wg = BT.box(0.12, 0.16, 0.015, paint(0x3a3448, { hatch: 0.4 }), s * 0.085, -0.08, 0, 0.005, [0, 0, s * 0.5]);
+      wings.push([wg, s]);
+    }
+    ink(batG, 'fine');
+    K.g.add(batG);
+    LIVE.push((t) => {
+      const stretch = Math.max(0, Math.sin(t * 0.4) - 0.92) * 12;
+      for (const [wg, s] of wings) wg.rotation.z = s * (0.5 - stretch * 0.45);
+      batG.scale.y = 1 + Math.sin(t * 1.1) * 0.02;        // breathing
+    });
+  },
+
+  library(K) {
+    // the stacks overflow: book piles, an open book, the shop cat asleep
+    const tagCols2 = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0xb7a3c6, 0x93abc0, 0xa8b994];
+    for (const [px, pz, n] of [[-3.3, -2.0, 5], [3.3, -3.3, 4], [0.5, -1.1, 3]]) {
+      for (let i = 0; i < n; i++)
+        K.box(0.34 - i * 0.02, 0.07, 0.26, paint(tagCols2[(i + Math.abs(Math.round(px * 3))) % tagCols2.length]), px + Math.sin(i * 9 + px) * 0.03, 0.035 + i * 0.072, pz, 0.012, [0, i * 0.4 - 0.4, 0]);
+    }
+    // an open book, face up mid-read
+    for (const s of [-1, 1]) K.box(0.2, 0.015, 0.3, paint(0xfbf6ea), -0.6 + s * 0.1, 0.03, -2.6, 0.005, [0, 0.9, s * 0.12]);
+    K.box(0.42, 0.012, 0.32, paint(0x8e2f3a), -0.6, 0.016, -2.6, 0.005, [0, 0.9, 0]);
+    // the library cat, curled on the middle shelf, fast asleep
+    const catG = new THREE.Group(); catG.position.set(0.55, 1.12, -D + 0.75);
+    const LC = kit(catG), fur = paint(0xe09a52, { hatch: 0.4 });
+    LC.put(new THREE.SphereGeometry(0.13, 12, 10).scale(1.25, 0.65, 1.1), fur, 0, 0.08, 0);
+    LC.put(new THREE.SphereGeometry(0.075, 10, 8), paint(0xd98a40, { hatch: 0.4 }), 0.12, 0.1, 0.05);
+    for (const s of [-1, 1]) LC.put(new THREE.ConeGeometry(0.025, 0.05, 6), paint(0xd98a40), 0.12 + s * 0.04, 0.17, 0.04);
+    const tail2 = LC.put(new THREE.TorusGeometry(0.1, 0.022, 6, 14, Math.PI * 1.3), paint(0xd98a40, { hatch: 0.4 }), -0.05, 0.03, 0.06, [Math.PI / 2, 0, 0.5]);
+    ink(catG, 'fine');
+    K.g.add(catG);
+    // zzz rising off the cat
+    const zs = [];
+    for (let i = 0; i < 3; i++) {
+      const z = K.flat(0.1 + i * 0.03, 0.1 + i * 0.03, texMat(48, 48, (c, w, h) => {
+        c.strokeStyle = '#5a4e5e'; c.lineWidth = 6; c.lineJoin = 'round';
+        c.beginPath(); c.moveTo(8, 10); c.lineTo(w - 8, 10); c.lineTo(8, h - 10); c.lineTo(w - 8, h - 10); c.stroke();
+      }), 0, 0, 0);
+      zs.push(z);
+    }
+    LIVE.push((t) => {
+      catG.scale.y = 1 + Math.sin(t * 1.3) * 0.03;
+      zs.forEach((z, i) => {
+        const s = ((t * 0.25 + i / 3) % 1);
+        z.position.set(0.75 + s * 0.25, 1.35 + s * 0.55, -D + 0.85);
+        z.material.opacity = 1 - s;
+        z.material.transparent = true;
+        z.rotation.z = Math.sin(t + i) * 0.2;
+      });
+    });
+    // the rolling ladder actually rolls now — rebuilt here so it can move
+    const lad2 = kit(new THREE.Group()); lad2.g.rotation.z = 0.18;
+    const wood2 = paint(0x8a6448);
+    for (const s of [-1, 1]) lad2.box(0.05, 2.3, 0.05, wood2, s * 0.2, 1.15, 0, 0.012);
+    for (let r = 0; r < 6; r++) lad2.box(0.4, 0.04, 0.04, wood2, 0, 0.3 + r * 0.36, 0, 0.01);
+    ink(lad2.g, 'fine');
+    K.g.add(lad2.g);
+    LIVE.push((t) => { lad2.g.position.set(-1.4 + Math.sin(t * 0.22) * 1.7, 0, -D + 1.05); });
   },
 };
 
@@ -558,6 +947,7 @@ export function buildInteriors(scene) {
     const g = new THREE.Group(); g.position.set(ox, 0, oz);
     const K = kit(g);
     roomShell(K, ROOM_WALL[place.id] ?? 0xe8ddc2, place);
+    EXTRA[place.id]?.(K);
     if (place.id !== 'deckgpt' && place.id !== 'library' && place.shot)
       framedShot(K, place.shot, 1.9, 1.19, 0, 1.45, -D + 0.6, null, place.clip);
     plaque(K, -1.25, -D + 2.1);
