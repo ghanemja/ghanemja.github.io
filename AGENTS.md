@@ -8,5 +8,25 @@
   If a harness assigns you a session branch, still merge your work into `main`
   (fast-forward is fine) before calling the task done.
 - Bump the cache token `js/main.js?cb=NN` in `index.html` whenever you edit `js/`.
+
+## 3D characters & animation (learned the hard way — the broken-cat incident)
+
+- **Pivot at the joint, never the center.** Before rotating any limb or part
+  (a leg, a paw, a wing, a hand), translate its geometry so the origin sits at
+  the attachment point (`geo.translate(...)` to put the hip/shoulder at 0),
+  then position the mesh at that joint. Rotating a part about its own middle
+  swings it out of its socket and it reads as torn off the body.
+- **Connected parts, not jointed sticks.** A tail, rope, or strand made of
+  separate angled boxes shows gaps and reads as broken debris — model it as
+  one `TubeGeometry` along a curve.
+- **A standing rig is not a sitting pose.** Don't reuse a walk-cycle body for
+  a sitting/lying character by only moving one limb; pose the whole body
+  (pitch the torso, tuck the hind legs) or build the pose separately.
+- **Verify what you shipped, up close, in motion.** Before pushing any change
+  to an animated or posed object, take headless screenshots (a) zoomed close
+  to THAT object, (b) at 3+ different animation phases, and (c) from an angle
+  where the player character isn't blocking it. A wide room shot that happens
+  to contain the object does not count — that's how the broken cat got
+  through. Check every object the change touched, not a sample.
 - The 3D town is the main site (`index.html` + `js/`); `classic.html` is the
   plain card grid. `README.md` explains how to add a new shop/app.

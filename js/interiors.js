@@ -558,12 +558,20 @@ function makeCat(colA, colB = colA) {
   for (const s of [-1, 1]) C.put(new THREE.SphereGeometry(0.013, 6, 5), dark, s * 0.036, 0.265, 0.238);
   C.put(new THREE.SphereGeometry(0.011, 6, 5), paint(0xdc9e9a, { hatch: 0 }), 0, 0.235, 0.245);
   const legs = [];
+  // legs pivot at the hip/shoulder (geometry hangs below its origin), so a
+  // swing or a batting paw hinges where it attaches instead of orbiting its
+  // own middle and tearing off the body
+  const legGeo = rb(0.048, 0.14, 0.048, 0.015);
+  legGeo.translate(0, -0.07, 0);
   for (const [lx, lz] of [[-0.085, 0.09], [0.085, 0.09], [-0.085, -0.09], [0.085, -0.09]])
-    legs.push(C.box(0.048, 0.11, 0.048, fur, lx, 0.055, lz, 0.015));
-  const tailG = new THREE.Group(); tailG.position.set(0, 0.2, -0.14);
-  const T = kit(tailG);
-  T.box(0.035, 0.035, 0.2, fur2, 0, 0.02, -0.09, 0.012, [-0.5, 0, 0]);
-  T.box(0.03, 0.03, 0.1, fur2, 0, 0.1, -0.2, 0.01, [-1.4, 0, 0]);
+    legs.push(C.put(legGeo, fur, lx, 0.14, lz));
+  // one connected curved tail (jointed boxes read as broken-off sticks)
+  const tailG = new THREE.Group(); tailG.position.set(0, 0.17, -0.13);
+  const tailCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, 0.02), new THREE.Vector3(0, 0.03, -0.1),
+    new THREE.Vector3(0.015, 0.14, -0.17), new THREE.Vector3(0.02, 0.26, -0.15),
+  ]);
+  tailG.add(new THREE.Mesh(new THREE.TubeGeometry(tailCurve, 12, 0.02, 6), fur2));
   g.add(tailG);
   ink(g, 'fine');
   g.add(blobShadow(0.15));
@@ -612,9 +620,15 @@ const EXTRA = {
       const [cx, cz] = orbit(t - 0.55), [nx, nz] = orbit(t - 0.5);
       catMove(pickle, cx, cz, nx - cx, nz - cz, t);
     });
-    // Mochi bats at a strand hanging off the shelf
+    // Mochi sits on her haunches under the shelf, batting at a strand
     const mochi = makeCat(0x9a9490, 0xb8b2ac);
-    mochi.g.position.set(-2.0, 0, -4.1); mochi.g.rotation.y = -Math.PI / 2 + 0.4;
+    mochi.g.position.set(-2.0, 0.03, -4.05);
+    mochi.g.rotation.order = 'YXZ';
+    mochi.g.rotation.y = -2.3;                 // facing the hanging strand
+    mochi.g.rotation.x = -0.5;                 // up on her haunches, nose to the toy
+    mochi.legs[0].rotation.x = 0.5;            // front legs stay planted under her
+    mochi.legs[2].rotation.x = 0.95;           // hind legs tucked beneath
+    mochi.legs[3].rotation.x = 0.95;
     K.g.add(mochi.g);
     const strandG = new THREE.Group(); strandG.position.set(-2.35, 1.3, -4.4);
     const strand = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
@@ -629,10 +643,9 @@ const EXTRA = {
     LIVE.push((t) => {
       strandG.rotation.z = Math.sin(t * 2.3) * 0.3;
       strandG.rotation.x = Math.cos(t * 1.7) * 0.15;
-      const paw = mochi.legs[1];
-      paw.rotation.x = -Math.max(0, Math.sin(t * 2.3 + 0.6)) * 1.1;
+      // the batting paw hinges at the shoulder: planted (0.5) up to a raised swipe
+      mochi.legs[1].rotation.x = 0.5 - Math.max(0, Math.sin(t * 2.3 + 0.6)) * 1.3;
       mochi.tail.rotation.y = Math.sin(t * 3.1) * 0.5;
-      mochi.g.position.y = 0;
     });
     // Biscuit does zoomies along the front of the room
     const biscuit = makeCat(0x2a2230, 0x3a3240);
