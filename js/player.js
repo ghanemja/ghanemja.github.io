@@ -24,45 +24,50 @@ const PLAYER_LOOK = {
 // the beret and the little mustard backpack, hung on the rig's own joints
 function dressPlayer(g) {
   const J = g.userData.human.J;
-  const felt = paint(0xd8584a);
-  const beret = new THREE.Group();
-  beret.add(new THREE.Mesh(lathe([[0.001, 0], [0.092, 0], [0.112, 0.02], [0.1, 0.048], [0.058, 0.075], [0.001, 0.083]], 24), felt));
-  const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.02, 8), felt);
-  stalk.position.y = 0.088;
-  beret.add(stalk);
-  beret.position.set(0, 0.182, 0.008);
-  beret.rotation.set(-0.08, 0, 0.13);           // the classic tilt
-  ink(beret, 'fine');
-  J.head.add(beret);
 
-  // chin-length bob: ONE solid lathe shell grown from the skull (so it is
-  // visibly attached — no curtain of separate tubes), open at the front for
-  // her face, flicking out slightly at the chin, plus two short face-framing
-  // locks at the opening's edges
+  // chin-length bob: ONE lathe shell that HUGS the skull (centre ≈ (0, 0.12,
+  // 0.018), radius ≈ 0.123) — closed at the crown so there is no open rim to
+  // poke up beside the hat, following the skull's curve down past the ears,
+  // flaring only below jaw level into the chin-length flick. Open across the
+  // face; two short locks frame the cheeks.
   const hairM = paint(0xc9a06a, { side: THREE.DoubleSide });
   const hairG = new THREE.Group();
   const V = (x, y) => new THREE.Vector2(x, y);
-  // profile (radius, height) in head space, crown → chin, hugging the skull
-  // (centre ≈ (0, 0.12, 0.018), radius ≈ 0.118) then flaring past it
   const shell = new THREE.Mesh(
     new THREE.LatheGeometry(
-      [V(0.045, 0.225), V(0.1, 0.205), V(0.13, 0.16), V(0.142, 0.1), V(0.143, 0.04), V(0.148, -0.005), V(0.156, -0.028), V(0.126, -0.02), V(0.118, 0.02)],
-      28, 0, Math.PI * 2 * 0.555,                      // the gap clears her face past the ears, so the profile reads side-on
+      [V(0.001, 0.252), V(0.05, 0.247), V(0.085, 0.233), V(0.108, 0.206), V(0.122, 0.165),
+        V(0.128, 0.105), V(0.126, 0.04), V(0.132, -0.005), V(0.142, -0.028), V(0.112, -0.02)],
+      28, 0, Math.PI * 2 * 0.555,                      // the gap clears her face past the ears
     ),
     hairM,
   );
-  shell.rotation.y = Math.PI - (Math.PI * 2 * 0.555) / 2;      // lathe phi starts at +z: spin the shell so it is centred on the BACK, gap on her face
+  shell.rotation.y = Math.PI - (Math.PI * 2 * 0.555) / 2;      // lathe phi starts at +z: shell centred on the BACK, gap on her face
   shell.position.z = 0.018;
   hairG.add(shell);
-  for (const s of [-1, 1]) {                           // the framing locks, to the chin
+  for (const s of [-1, 1]) {                           // the framing locks, from ear height to the chin
     const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
-      new THREE.Vector3(s * 0.105, 0.2, 0.03), new THREE.Vector3(s * 0.14, 0.1, 0.035),
-      new THREE.Vector3(s * 0.14, 0.02, 0.03), new THREE.Vector3(s * 0.13, -0.03, 0.028),
-    ]), 10, 0.024, 7), hairM);
+      new THREE.Vector3(s * 0.095, 0.165, 0.05), new THREE.Vector3(s * 0.127, 0.09, 0.052),
+      new THREE.Vector3(s * 0.13, 0.02, 0.046), new THREE.Vector3(s * 0.122, -0.028, 0.04),
+    ]), 10, 0.021, 7), hairM);
     hairG.add(tube);
   }
   ink(hairG, 'fine');
   J.head.add(hairG);
+
+  // the beret: bigger than the hair at its rim, so it wraps OVER the bob the
+  // way felt actually drapes — never sunken into it with scalp showing round
+  // the edge. Rim turned slightly down, a wide slouched bulge, the stalk.
+  const felt = paint(0xd8584a);
+  const beret = new THREE.Group();
+  beret.add(new THREE.Mesh(lathe([[0.001, -0.012], [0.125, -0.008], [0.134, 0.004], [0.163, 0.036],
+    [0.15, 0.064], [0.088, 0.092], [0.001, 0.1]], 26), felt));
+  const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.022, 8), felt);
+  stalk.position.y = 0.106;
+  beret.add(stalk);
+  beret.position.set(0, 0.19, 0.012);
+  beret.rotation.set(-0.06, 0, 0.09);           // the classic tilt, gentler so it never digs in
+  ink(beret, 'fine');
+  J.head.add(beret);
 
   // relaxed hands: the rig's fingers ship fully splayed — curl them most of
   // the way to a loose fist (so from any angle they read as one hand, not
