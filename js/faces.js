@@ -23,7 +23,7 @@ export function headShapeFor(P = {}) {
     const lo = Math.max(0, -y), front = Math.max(0, z), ax = Math.abs(x);
     // (profile pass: a fuller cranium, a gentler forehead and less forward
     // swell low on the face — the old numbers read as a muzzle side-on)
-    if (z < 0) z *= 1.16 + 0.18 * skull - 0.55 * lo;              // the skull swells back; the nape tucks in
+    if (z < 0) z *= 1.1 + 0.18 * skull - 0.55 * lo;              // the skull swells back; the nape tucks in
     else z *= 0.84 + 0.12 * lo * lo;                                // a flatter face; the chin comes forward a little
     if (y > 0.25 && z > 0) z -= 0.09 * (y - 0.25);                  // forehead slopes back, gently
     z += front * ((0.015 + 0.035 * brow) * bump(0.3, 0.09, y) * bump(0.3, 0.3, ax)     // brow ridge
@@ -226,7 +226,7 @@ export function buildHead(J, S, F, mats) {
     b.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0, 0.006)); add(b);
     const br = new THREE.Mesh(new THREE.CapsuleGeometry(0.009 * ns, 0.02, 4, 8), skin); br.position.copy(pt(0, 0.02)).add(new THREE.Vector3(0, 0, -0.001)); add(br);
   } else {
-    const n = new THREE.Mesh(noseGeo(F.nose || 'straight', 1.7 * ns), skin); n.position.copy(pt(0, -0.07)).add(new THREE.Vector3(0, 0, -0.008)); add(n);
+    const n = new THREE.Mesh(noseGeo(F.nose || 'straight', 1.45 * ns), skin); n.position.copy(pt(0, -0.07)).add(new THREE.Vector3(0, 0, -0.008)); add(n);
     for (const sx of [-1, 1]) { const a = new THREE.Mesh(new THREE.SphereGeometry(0.0105 * ns, 10, 8), skin); a.scale.set(1, 0.85, 0.9); a.position.copy(n.position).add(new THREE.Vector3(sx * 0.016 * ns, -0.026 * ns, 0.012 * ns)); add(a); }
   }
   // mouth: an expression, not a stamp

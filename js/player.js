@@ -17,7 +17,7 @@ const PLAYER_LOOK = {
   shoes: 0xf0ece2, sole: 0xc9a87c,                // white sneakers on a gum sole — the contrast makes the shoe shape read
   height: 1.02, build: 0.95,
   face: { shape: { jaw: 0.28, chin: 0.62, cheeks: 0.45, long: 0.12, skull: 0.55, brow: 0.4 },
-    nose: 'snub', noseSize: 1.0, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
+    nose: 'straight', noseSize: 0.8, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
     brows: 'raised', lashes: true, hair: 'fringe', blush: 0.9 },
 };
 
@@ -60,6 +60,7 @@ function dressPlayer(g) {
     ]), 10, 0.021, 7), hairM);
     hairG.add(tube);
   }
+  hairG.scale.set(0.95, 1.05, 0.95);          // taller than deep: heads are upright ovals
   ink(hairG, 'fine');
   J.head.add(hairG);
 
