@@ -17,7 +17,7 @@ const PLAYER_LOOK = {
   shoes: 0xf0ece2, sole: 0xc9a87c,                // white sneakers on a gum sole — the contrast makes the shoe shape read
   height: 1.02, build: 0.95,
   face: { shape: { jaw: 0.28, chin: 0.62, cheeks: 0.45, long: 0.12, skull: 0.55, brow: 0.4 },
-    nose: 'snub', noseSize: 0.72, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
+    nose: 'snub', noseSize: 1.0, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
     brows: 'raised', lashes: true, hair: 'fringe', blush: 0.9 },
 };
 
@@ -44,6 +44,15 @@ function dressPlayer(g) {
   shell.rotation.y = Math.PI - (Math.PI * 2 * 0.555) / 2;      // lathe phi starts at +z: shell centred on the BACK, gap on her face
   shell.position.z = 0.018;
   hairG.add(shell);
+  // solid bangs filling the shell's front gap between beret and brow — the
+  // painted scalp strands alone read as a bald patch
+  const bangs = new THREE.Mesh(new THREE.LatheGeometry(
+    [V(0.102, 0.215), V(0.118, 0.188), V(0.124, 0.16), V(0.12, 0.142), V(0.106, 0.15)],
+    18, 0, Math.PI * 2 * 0.445,
+  ), hairM);
+  bangs.rotation.y = -(Math.PI * 2 * 0.445) / 2;       // phi starts at +z: centre the band on her forehead
+  bangs.position.z = 0.018;
+  hairG.add(bangs);
   for (const s of [-1, 1]) {                           // the framing locks, from ear height to the chin
     const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
       new THREE.Vector3(s * 0.095, 0.165, 0.05), new THREE.Vector3(s * 0.127, 0.09, 0.052),
@@ -243,7 +252,9 @@ export function createPlayer(scene, camera, start) {
         const bob = pose(inst, dt, k, { run: S.run && k > 0 ? 1 : 0 });
         if (turn) turn.position.y = -(bob || 0);
       }
-      // camera: orbit behind, eased
+      // camera: orbit behind, eased; never inside a building — walk the
+      // head→camera segment and stop at the first collider footprint (the
+      // awnings overhang the fronts, so pad generously)
       const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
       _t.set(g.position.x, 1.02, g.position.z);
       _c.set(
@@ -251,6 +262,18 @@ export function createPlayer(scene, camera, start) {
         _t.y + sp * S.dist,
         _t.z + Math.cos(S.yaw) * cp * S.dist,
       );
+      {
+        const P = 0.45, N = 24;
+        let tc = 1;
+        outer: for (let i = 3; i <= N; i++) {
+          const f = i / N;
+          const x = _t.x + (_c.x - _t.x) * f, z = _t.z + (_c.z - _t.z) * f;
+          for (const c of S.zone.colliders) {
+            if (x > c.x0 - P && x < c.x1 + P && z > c.z0 - P && z < c.z1 + P) { tc = Math.max(0.18, (i - 1) / N); break outer; }
+          }
+        }
+        if (tc < 1) _c.lerpVectors(_t, _c, tc);
+      }
       if (_c.y < 0.25) _c.y = 0.25;
       if (camSnap) { camera.position.copy(_c); camSnap = false; }
       else camera.position.lerp(_c, 1 - Math.exp(-9 * dt));

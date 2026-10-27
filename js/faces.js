@@ -21,12 +21,14 @@ export function headShapeFor(P = {}) {
   return function shape(v, out = new THREE.Vector3()) {
     let { x, y, z } = v;
     const lo = Math.max(0, -y), front = Math.max(0, z), ax = Math.abs(x);
-    if (z < 0) z *= 1.1 + 0.18 * skull - 0.6 * lo;                // the skull swells back; the nape tucks in
-    else z *= 0.84 + 0.22 * lo * lo;                                // a flatter face; the chin comes forward
-    if (y > 0.25 && z > 0) z -= 0.14 * (y - 0.25);                  // forehead slopes back
+    // (profile pass: a fuller cranium, a gentler forehead and less forward
+    // swell low on the face — the old numbers read as a muzzle side-on)
+    if (z < 0) z *= 1.16 + 0.18 * skull - 0.55 * lo;              // the skull swells back; the nape tucks in
+    else z *= 0.84 + 0.12 * lo * lo;                                // a flatter face; the chin comes forward a little
+    if (y > 0.25 && z > 0) z -= 0.09 * (y - 0.25);                  // forehead slopes back, gently
     z += front * ((0.015 + 0.035 * brow) * bump(0.3, 0.09, y) * bump(0.3, 0.3, ax)     // brow ridge
                - 0.04 * bump(0.12, 0.1, y) * bump(0.36, 0.14, ax)                   // eye sockets
-               + 0.06 * bump(-0.42, 0.17, y) * bump(0, 0.4, ax)                     // lips sit forward
+               + 0.045 * bump(-0.42, 0.17, y) * bump(0, 0.4, ax)                    // lips sit forward
                + (0.03 + 0.1 * chin) * bump(-0.8, 0.12, y) * bump(0, 0.26, ax));    // the chin
     const ch = cheeks * bump(-0.15, 0.25, y) * bump(0.55, 0.25, ax) * (z > -0.2 ? 1 : 0);
     x *= 1 + 0.09 * ch; z += 0.035 * ch * front;                    // full cheeks

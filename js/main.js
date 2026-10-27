@@ -58,7 +58,7 @@ Promise.all([fontsReady]).then(() => {
     walkers.push({ g, ...w, t: Math.random() });
   }
   const vivi = person(LOOKS.vivi);          // the director, checking on her gallery
-  vivi.position.set(2.2, 0, 2.2);
+  vivi.position.set(1.05, 0, 2.45);   // clear of the bench (she was standing in it)
   vivi.userData.turn.rotation.y = Math.PI * 0.8;
   scene.add(vivi);
   walkers.push({ g: vivi, still: true });
