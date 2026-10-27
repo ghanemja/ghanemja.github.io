@@ -15,7 +15,7 @@ const PLAYER_LOOK = {
   folk: true, skin: 'fair', hair: 0xc9a06a, hairStyle: 'bob',
   top: 0x4a4550, bottom: 0x7d9cc0,
   shoes: 0xf0ece2, sole: 0xc9a87c,                // white sneakers on a gum sole — the contrast makes the shoe shape read
-  height: 1.02, build: 0.95,
+  height: 1.02, build: 1.0,
   face: { shape: { jaw: 0.28, chin: 0.62, cheeks: 0.45, long: 0.12, skull: 0.55, brow: 0.4 },
     nose: 'straight', noseSize: 0.8, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
     brows: 'raised', lashes: true, hair: 'fringe', blush: 0.9 },
@@ -24,6 +24,8 @@ const PLAYER_LOOK = {
 // the beret and the little mustard backpack, hung on the rig's own joints
 function dressPlayer(g) {
   const J = g.userData.human.J;
+  J.head.scale.set(0.88, 1.04, 0.96);          // human heads are upright: ~3/4 as wide as tall
+
 
   // chin-length bob: ONE lathe shell that HUGS the skull (centre ≈ (0, 0.12,
   // 0.018), radius ≈ 0.123) — closed at the crown so there is no open rim to
@@ -37,20 +39,20 @@ function dressPlayer(g) {
     new THREE.LatheGeometry(
       [V(0.001, 0.252), V(0.05, 0.247), V(0.085, 0.233), V(0.108, 0.206), V(0.122, 0.165),
         V(0.128, 0.105), V(0.126, 0.04), V(0.132, -0.005), V(0.142, -0.028), V(0.112, -0.02)],
-      28, 0, Math.PI * 2 * 0.555,                      // the gap clears her face past the ears
+      28, 0, Math.PI * 2 * 0.52,                       // the gap clears her face past the ears (the head's x-squash narrows it visually)
     ),
     hairM,
   );
-  shell.rotation.y = Math.PI - (Math.PI * 2 * 0.555) / 2;      // lathe phi starts at +z: shell centred on the BACK, gap on her face
+  shell.rotation.y = Math.PI - (Math.PI * 2 * 0.52) / 2;      // lathe phi starts at +z: shell centred on the BACK, gap on her face
   shell.position.z = 0.018;
   hairG.add(shell);
   // solid bangs filling the shell's front gap between beret and brow — the
   // painted scalp strands alone read as a bald patch
   const bangs = new THREE.Mesh(new THREE.LatheGeometry(
-    [V(0.102, 0.215), V(0.118, 0.188), V(0.124, 0.16), V(0.12, 0.142), V(0.106, 0.15)],
-    18, 0, Math.PI * 2 * 0.445,
+    [V(0.102, 0.215), V(0.118, 0.19), V(0.124, 0.168), V(0.12, 0.152), V(0.106, 0.16)],
+    18, 0, Math.PI * 2 * 0.48,
   ), hairM);
-  bangs.rotation.y = -(Math.PI * 2 * 0.445) / 2;       // phi starts at +z: centre the band on her forehead
+  bangs.rotation.y = -(Math.PI * 2 * 0.48) / 2;       // phi starts at +z: centre the band on her forehead
   bangs.position.z = 0.018;
   hairG.add(bangs);
   for (const s of [-1, 1]) {                           // the framing locks, from ear height to the chin
@@ -69,8 +71,8 @@ function dressPlayer(g) {
   // the edge. Rim turned slightly down, a wide slouched bulge, the stalk.
   const felt = paint(0xd8584a);
   const beret = new THREE.Group();
-  beret.add(new THREE.Mesh(lathe([[0.001, -0.012], [0.125, -0.008], [0.134, 0.004], [0.163, 0.036],
-    [0.15, 0.064], [0.088, 0.092], [0.001, 0.1]], 26), felt));
+  beret.add(new THREE.Mesh(lathe([[0.001, -0.012], [0.108, -0.01], [0.126, -0.002], [0.142, 0.012],
+    [0.154, 0.03], [0.156, 0.046], [0.146, 0.062], [0.122, 0.078], [0.088, 0.09], [0.048, 0.098], [0.001, 0.102]], 48), felt));
   const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.022, 8), felt);
   stalk.position.y = 0.106;
   beret.add(stalk);
@@ -86,11 +88,11 @@ function dressPlayer(g) {
     const grip = J['grip' + s], hand = J['hand' + s];
     const u = grip?.userData;
     if (u?.fingers) {
-      u.fingers.forEach((f, i) => { f.rotation.z = -u.s * 0.62 * (1.25 + i * 0.08); });
-      u.fingers.forEach((f) => { f.rotation.x = 0.1; });
-      u.thumb.rotation.z = -u.s * 0.72;
+      u.fingers.forEach((f, i) => { f.rotation.z = -u.s * 0.5 * (1.25 + i * 0.08); });
+      u.thumb.rotation.z = -u.s * 0.6;
     }
-    if (hand) { hand.rotation.y = (s === 'L' ? 1 : -1) * 0.25; hand.rotation.x = -0.08; }
+    if (grip) grip.scale.setScalar(1.12);        // the rig's hands run large
+    if (hand) hand.rotation.x = -0.06;
   }
 
   // her sneakers ran a couple of sizes big: shrink them about the ankle
@@ -125,8 +127,8 @@ function dressPlayer(g) {
   handle.position.set(0, 0.148, -0.01);
   bp.add(handle);
   for (const s of [-1, 1]) {                    // straps hugging over the shoulders to the chest
-    const strap = new THREE.Mesh(rbox(0.028, 0.19, 0.013, 0.005), flapM);
-    strap.position.set(s * 0.062, 0.11, 0.075);
+    const strap = new THREE.Mesh(rbox(0.028, 0.16, 0.013, 0.005), flapM);
+    strap.position.set(s * 0.062, 0.08, 0.07);
     strap.rotation.x = -0.3;
     bp.add(strap);
   }
