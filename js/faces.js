@@ -28,10 +28,14 @@ export function headShapeFor(P = {}) {
     if (y > 0.25 && z > 0) z -= 0.09 * (y - 0.25);                  // forehead slopes back, gently
     z += front * ((0.015 + 0.035 * brow) * bump(0.3, 0.09, y) * bump(0.3, 0.3, ax)     // brow ridge
                - 0.04 * bump(0.12, 0.1, y) * bump(0.36, 0.14, ax)                   // eye sockets
-               + 0.045 * bump(-0.42, 0.17, y) * bump(0, 0.4, ax)                    // lips sit forward
-               + (0.03 + 0.1 * chin) * bump(-0.8, 0.12, y) * bump(0, 0.26, ax));    // the chin
+               + 0.055 * bump(-0.42, 0.17, y) * bump(0, 0.4, ax)                    // lips sit forward
+               - 0.028 * bump(-0.62, 0.09, y) * bump(0, 0.3, ax)                    // the crease under the lip
+               + (0.05 + 0.1 * chin) * bump(-0.8, 0.12, y) * bump(0, 0.26, ax));    // the chin
+    // full cheeks widen the face, they do NOT push forward: in side view the
+    // silhouette must come from the centreline (brow→nose→lips→chin), and a
+    // forward cheek swallows the whole profile into one ball
     const ch = cheeks * bump(-0.15, 0.25, y) * bump(0.55, 0.25, ax) * (z > -0.2 ? 1 : 0);
-    x *= 1 + 0.09 * ch; z += 0.035 * ch * front;                    // full cheeks
+    x *= 1 + 0.11 * ch; z += 0.008 * ch * front;
     const narrow = (0.46 - 0.26 * jaw) * Math.pow(lo, 1.5 + 1.6 * jaw);
     x *= 1 - narrow - 0.05 * front;                                 // jaw narrows to the chin (a square jaw, late)
     if (y < -0.25 && z < 0.4) { const k = Math.min(1, (-0.25 - y) / 0.5); x *= 1 - (0.15 - 0.07 * jaw) * k; z = z * (1 - 0.18 * k) - 0.05 * k * (z < 0 ? 1 : 0.3); }
@@ -222,7 +226,7 @@ export function buildHead(J, S, F, mats) {
     b.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0, 0.006)); add(b);
     const br = new THREE.Mesh(new THREE.CapsuleGeometry(0.009 * ns, 0.02, 4, 8), skin); br.position.copy(pt(0, 0.02)).add(new THREE.Vector3(0, 0, -0.001)); add(br);
   } else {
-    const n = new THREE.Mesh(noseGeo(F.nose || 'straight', 1.35 * ns), skin); n.position.copy(pt(0, -0.07)).add(new THREE.Vector3(0, 0, -0.008)); add(n);
+    const n = new THREE.Mesh(noseGeo(F.nose || 'straight', 1.7 * ns), skin); n.position.copy(pt(0, -0.07)).add(new THREE.Vector3(0, 0, -0.008)); add(n);
     for (const sx of [-1, 1]) { const a = new THREE.Mesh(new THREE.SphereGeometry(0.0105 * ns, 10, 8), skin); a.scale.set(1, 0.85, 0.9); a.position.copy(n.position).add(new THREE.Vector3(sx * 0.016 * ns, -0.026 * ns, 0.012 * ns)); add(a); }
   }
   // mouth: an expression, not a stamp
