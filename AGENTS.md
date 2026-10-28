@@ -9,6 +9,14 @@
   (fast-forward is fine) before calling the task done.
 - Bump the cache token `js/main.js?cb=NN` in `index.html` whenever you edit `js/`.
 
+## People are always clothed
+
+- **Never render, screenshot or ship an unclothed body**, not even a debug or
+  test render, not for a single frame. Every person is built dressed: the skin
+  mesh only contains the parts clothes don't cover (face, neck, hands), so a
+  missing garment shows as a hole, never as a body. Hair and clothes go on
+  before the first render.
+
 ## 3D characters & animation (learned the hard way — the broken-cat incident)
 
 Building or fixing a person or animal? Use the `human-3d-mesh` skill

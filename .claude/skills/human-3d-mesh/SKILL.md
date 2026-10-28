@@ -1,6 +1,6 @@
 ---
 name: human-3d-mesh
-description: Build, fix or review a procedural 3D human (or any character/creature) in three.js — body, head and face, hair, hands, shoes, hats, clothing, rigging and walk/idle animation, plus the lighting, materials and textures that make it read. Use whenever a task touches a person or animal model (js/folk.js, js/faces.js, js/human.js, js/player.js, cats in js/interiors.js), when a character "looks wrong", or before shipping any posed or animated figure. Distilled from the portfolio town, The Vanishing Gallery (art-heist) and the crochet studio's yarn and hand work.
+description: Make, stylize, fix or review a 3D person (or creature) in three.js. People start from the parametric anatomical human (js/anatomy.js + js/people.js, built on MakeHuman's CC0 base mesh, rig and shape targets) and this skill is mainly about STYLIZING them — head-to-body ratio, eyes, hands, feet, softening, expression, clothes, hair, toon paint and ink — without breaking anatomy. Also covers the town's older procedural rig (js/folk.js, js/faces.js, js/human.js, js/player.js, js/hands.js), lighting and materials, and verification. Use whenever a task touches a person or animal model, a character "looks wrong", or before shipping a posed or animated figure.
 ---
 
 # Human 3D mesh generation
@@ -10,7 +10,25 @@ least once before it became a rule. Most were invisible from the one angle the
 author happened to check. So the workflow is: **build from overlapping masses →
 check every angle up close → fix the cause, not the symptom → check again.**
 
-## Workflow
+## The approach: anatomy first, then style
+
+Don't hand-build a person from primitives and tune it until it looks human. That loop
+produced every bad hand and head in this repo's history. Start from the **parametric
+human**, which is physically accurate by construction, and **stylize** it on purpose:
+
+```js
+import { makePerson } from './js/people.js';
+const p = await makePerson({ style: 'town', body: { sex: 0, weight: 0.42 }, stature: 1.2 });
+scene.add(p.group);            // dressed, haired, rigged, posed, toon-painted and inked
+```
+Parameters, style knobs, dressing, hair, posing and known pitfalls are all in
+[references/stylizing.md](references/stylizing.md). Look at both styles side by side in
+`tools/human-lab.html?styles=real,town` (`&yaw=90`, `&focus=head|hands|feet`).
+
+The town's current cast (player, Vivi, Otto, Pia, Rex) still uses the older procedural rig
+below until they're moved over. The anatomy rules in references/anatomy.md apply to both.
+
+## Workflow (procedural rig)
 
 1. **Read the existing rig first.** In this repo: `js/folk.js` (`makeFolk(spec)`,
    `limb()`, `makeHand`, `gripHand`, `STANCES`, `ikArm`, `poseFolk`), `js/faces.js`
@@ -32,6 +50,10 @@ check every angle up close → fix the cause, not the symptom → check again.**
 
 ## The rules that matter most
 
+- **Always clothed. Never render or screenshot a naked body**, not even for a quick
+  check of the base mesh or the rig. Build people dressed by construction: skin is
+  only the uncovered parts (face, neck, hands), and clothes and hair are in place
+  before the first frame. Check a rig's deformation through the clothes.
 - **Overlapping masses, not a box with sticks.** Torso, chest, rump and head blend
   into each other; limbs grow *out of* those masses, thick enough to read. Trace the
   silhouette in one outline — anything that would fall off is wrong.

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Human lab</title>
+<style>html,body{margin:0;height:100%;background:#f3ead7;overflow:hidden}</style>
+</head>
+<body>
+<!--
+  The parametric human (js/people.js), dressed, under the town's own lights.
+  ?styles=real,town (side by side)  &yaw=<deg, 0 = facing camera>  &pitch=<deg>
+  &focus=full|head|hands|feet  &sex=0..1 &muscle &weight &height
+  Sets window.__ready once drawn.
+-->
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { styleTick, blobShadow } from '../js/style.js';
+import { makePerson } from '../js/people.js';
+
+const q = new URLSearchParams(location.search);
+const styles = (q.get('styles') || 'real,town').split(',');
+const yaw = THREE.MathUtils.degToRad(+(q.get('yaw') ?? 0)), pitch = THREE.MathUtils.degToRad(+(q.get('pitch') ?? 6));
+const focus = q.get('focus') || 'full';
+const body = {}; for (const k of ['sex', 'muscle', 'weight', 'height', 'proportions']) if (q.has(k)) body[k] = +q.get(k);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf3ead7);
+const sun = new THREE.DirectionalLight(0xfff2d8, 1.6); sun.position.set(14, 22, 10);
+scene.add(new THREE.HemisphereLight(0xfff6e8, 0xd8c8b0, 1.35), sun);
+
+const H = 1.7, gap = 0.75;
+const t0 = performance.now();
+const people = await Promise.all(styles.map(s => makePerson({ style: s, body, stature: H, showHair: q.get('hair') !== '0' })));
+console.log('LOG built', styles.length, 'in', Math.round(performance.now() - t0), 'ms');
+people.forEach((p, i) => {
+  p.group.position.x = (i - (people.length - 1) / 2) * gap;
+  p.group.add(blobShadow(0.3)); scene.add(p.group);
+});
+scene.updateMatrixWorld(true);
+let tris = 0; scene.traverse(o => { if (o.isMesh && o.geometry.index) tris += o.geometry.index.count / 3; });
+console.log('LOG tris per person incl ink', Math.round(tris / people.length));
+
+const FOCI = { full: [0.5, H * 1.15], head: [0.91, H * 0.2], hands: [0.47, H * 0.28], feet: [0.04, H * 0.22] };
+const [fy, span] = FOCI[focus] || FOCI.full;
+const w = focus === 'full' ? Math.max(span, gap * people.length * 0.9) : span;
+const target = new THREE.Vector3(focus === 'full' ? 0 : people[0].group.position.x, H * fy, 0);
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.01, 50);
+const dist = w / 2 / Math.tan(THREE.MathUtils.degToRad(15));
+camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist);
+camera.lookAt(target);
+styleTick(1.0, renderer.domElement.width, renderer.domElement.height);
+renderer.render(scene, camera);
+window.__lab = { scene, camera, renderer, people, render: () => renderer.render(scene, camera) };
+window.__ready = true;
+</script>
+</body>
+</html>

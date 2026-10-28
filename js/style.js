@@ -145,7 +145,10 @@ export function ink(root, weight = 'mid') {
     if (o.isSkinnedMesh) {                       // a skinned hull must skin too
       // (a geometry with an `inkW` attribute fades its stroke per vertex — limbs use it so
       // no line is drawn where an arm or leg grows out of the body)
-      const sk = new THREE.SkinnedMesh(o.geometry, skinnedInk(weight, !!o.geometry.attributes.inkW));
+      // (userData.inkGeometry: draw the outline from a subset of the mesh — e.g. a face
+      // without the inside of its eye sockets, which would show through as black)
+      const hull = o.userData.inkGeometry || o.geometry;
+      const sk = new THREE.SkinnedMesh(hull, skinnedInk(weight, !!hull.attributes.inkW));
       sk.bind(o.skeleton, o.bindMatrix);
       sk.userData.isInk = true; sk.raycast = () => {}; sk.frustumCulled = false;
       o.parent.add(sk);
