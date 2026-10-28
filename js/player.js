@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { person, pose } from './human.js';
 import { paint, ink } from './style.js';
 import { rbox, lathe } from './props.js';
+import { headShapeFor, sculpt, HC } from './faces.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -16,9 +17,10 @@ const PLAYER_LOOK = {
   top: 0x4a4550, bottom: 0x7d9cc0,
   shoes: 0xf0ece2, sole: 0xc9a87c,                // white sneakers on a gum sole — the contrast makes the shoe shape read
   height: 1.02, build: 1.0,
+  cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { jaw: 0.28, chin: 0.62, cheeks: 0.45, long: 0.12, skull: 0.55, brow: 0.4 },
     nose: 'straight', noseSize: 0.8, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
-    brows: 'raised', lashes: true, hair: 'fringe', blush: 0.9 },
+    brows: 'raised', lashes: true, blush: 0.9 },
 };
 
 // the beret and the little mustard backpack, hung on the rig's own joints
@@ -27,42 +29,107 @@ function dressPlayer(g) {
   J.head.scale.set(0.88, 1.04, 0.96);          // human heads are upright: ~3/4 as wide as tall
 
 
-  // chin-length bob: ONE lathe shell that HUGS the skull (centre ≈ (0, 0.12,
-  // 0.018), radius ≈ 0.123) — closed at the crown so there is no open rim to
-  // poke up beside the hat, following the skull's curve down past the ears,
-  // flaring only below jaw level into the chin-length flick. Open across the
-  // face; two short locks frame the cheeks.
-  const hairM = paint(0xc9a06a, { side: THREE.DoubleSide });
-  const hairG = new THREE.Group();
-  const V = (x, y) => new THREE.Vector2(x, y);
-  const shell = new THREE.Mesh(
-    new THREE.LatheGeometry(
-      [V(0.001, 0.252), V(0.05, 0.247), V(0.085, 0.233), V(0.108, 0.206), V(0.122, 0.165),
-        V(0.128, 0.105), V(0.126, 0.04), V(0.132, -0.005), V(0.142, -0.028), V(0.112, -0.02)],
-      28, 0, Math.PI * 2 * 0.52,                       // the gap clears her face past the ears (the head's x-squash narrows it visually)
-    ),
-    hairM,
+  // ── her hair: a chin-length bob with a side part, sculpted ON her own skull
+  // surface (the same shape the face is built from) and then lifted off it
+  // for volume. Strand grooves and colour flow away from the part; the
+  // fringe sweeps diagonally from the part across her forehead; below the
+  // ears the bob hangs straight instead of following the jaw, and its ends
+  // flick out at the chin.
+  const ssm = THREE.MathUtils.smoothstep;
+  const shape = headShapeFor(PLAYER_LOOK.face.shape);
+  const PART_X = 0.3;                                  // the side part, on her right
+  const flow = new THREE.Vector3(PART_X, 1, 0.12).normalize();
+  const _pp = new THREE.Vector3(), _ax = new THREE.Vector3(), _bx = new THREE.Vector3();
+  const strandAt = (d) => {
+    _pp.copy(d).addScaledVector(flow, -d.dot(flow));
+    _ax.set(1, 0, 0).addScaledVector(flow, -flow.x).normalize();
+    _bx.crossVectors(flow, _ax);
+    const a = Math.atan2(_pp.dot(_ax), _pp.dot(_bx));
+    return Math.sin(a * 15) * 0.65 + Math.sin(a * 15 * 2.3 + 1.7) * 0.35;
+  };
+  const azi = (d) => Math.abs(Math.atan2(d.x, d.z)) / Math.PI;      // 0 face … 1 back
+  // > 0 where hair grows: everything but the face; the fringe edge is high
+  // at the part and sweeps down to just above the brow on the far side
+  const hairMask = (d) => Math.max(d.y - (0.47 + 0.25 * d.x), (azi(d) - 0.36) * 3);
+  const inflate = (d) => 1.1 + 0.03 * Math.max(0, -d.z) + 0.02 * strandAt(d);
+  const chinY = HC.y - 0.12;
+  // the bob's silhouette below the ears, by height above its cut line:
+  // fullest at ear level, rounding in, the ends turned under — a bell, not a bucket
+  const BOB = [[0, 0.108], [0.012, 0.122], [0.026, 0.134], [0.05, 0.143], [0.09, 0.146]];
+  const bobR = (h) => {
+    if (h <= 0) return BOB[0][1];
+    for (let i = 1; i < BOB.length; i++) if (h <= BOB[i][0]) {
+      const [h0, r0] = BOB[i - 1], [h1, r1] = BOB[i], t = (h - h0) / (h1 - h0);
+      return r0 + (r1 - r0) * t * t * (3 - 2 * t);
+    }
+    return BOB[BOB.length - 1][1];
+  };
+  const hang = (o, d) => {
+    const th = Math.atan2(d.x, d.z), side = ssm(Math.abs(th) / Math.PI, 0.35, 0.41);
+    const back = Math.max(0, -Math.cos(th));
+    const edgeY = chinY + 0.006 + 0.03 * back;                      // A-line: shorter at the nape
+    const hx = o.x - HC.x, hz = o.z - HC.z, rh = Math.hypot(hx, hz) || 1e-4;
+    let target, w;
+    if (o.y < edgeY) {
+      // below the cut, at every azimuth, the sculpt sphere goes to the centre
+      // of the skull: the triangles from the cut edge inward read as the
+      // underside of the bob, and everything else is hidden inside the head
+      // (folding these vertices anywhere outside left a fan of slivers)
+      o.copy(HC); return;
+    } else {
+      if (side <= 0) return;
+      const h = o.y - edgeY;
+      target = bobR(h) * (1 + 0.06 * back); w = side * (1 - ssm(h, 0.05, 0.13));
+    }
+    const k = 1 + (target / rh - 1) * w;
+    o.x = HC.x + hx * k; o.z = HC.z + hz * k;
+  };
+  const base = new THREE.Color(0xc9a06a), root = base.clone().multiplyScalar(0.74),
+    shine = base.clone().lerp(new THREE.Color(0xfff1d6), 0.45);
+  const colour = (d, out) => {
+    const r = strandAt(d);
+    const band = Math.exp(-((d.dot(flow) - 0.5) ** 2) / 0.02) * THREE.MathUtils.clamp(0.5 + 0.6 * r, 0, 1);
+    return out.copy(base).lerp(root, 0.45 * Math.max(0, -r)).lerp(shine, 0.6 * band);
+  };
+  const hairMesh = new THREE.Mesh(
+    sculpt(shape, 96, 72, { mask: hairMask, inflate, color: colour, post: hang }),
+    paint(0xffffff, { vertexColors: true, soft: true, hatch: 0.3 }),
   );
-  shell.rotation.y = Math.PI - (Math.PI * 2 * 0.52) / 2;      // lathe phi starts at +z: shell centred on the BACK, gap on her face
-  shell.position.z = 0.018;
-  hairG.add(shell);
-  // solid bangs filling the shell's front gap between beret and brow — the
-  // painted scalp strands alone read as a bald patch
-  const bangs = new THREE.Mesh(new THREE.LatheGeometry(
-    [V(0.102, 0.215), V(0.118, 0.19), V(0.124, 0.168), V(0.12, 0.152), V(0.106, 0.16)],
-    18, 0, Math.PI * 2 * 0.48,
-  ), hairM);
-  bangs.rotation.y = -(Math.PI * 2 * 0.48) / 2;       // phi starts at +z: centre the band on her forehead
-  bangs.position.z = 0.018;
-  hairG.add(bangs);
-  for (const s of [-1, 1]) {                           // the framing locks, from ear height to the chin
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
-      new THREE.Vector3(s * 0.095, 0.165, 0.05), new THREE.Vector3(s * 0.127, 0.09, 0.052),
-      new THREE.Vector3(s * 0.13, 0.02, 0.046), new THREE.Vector3(s * 0.122, -0.028, 0.04),
-    ]), 10, 0.021, 7), hairM);
-    hairG.add(tube);
+  const hairG = new THREE.Group();
+  hairG.add(hairMesh);
+  // three loose locks laid over the swept fringe, so the sweep from the part
+  // reads as hair, not a cap edge
+  const onHead = (u, v, out) => {
+    const d = new THREE.Vector3(u, v, Math.sqrt(Math.max(0, 1 - u * u - v * v))).normalize();
+    const pt = shape(d); return pt.sub(HC).multiplyScalar(out).add(HC);
+  };
+  const lockM = paint(0xc9a06a, { soft: true, hatch: 0.3 });
+  for (const [x0, x1, y1] of [[0.26, -0.3, 0.42], [0.2, -0.58, 0.36], [0.32, 0.56, 0.4]]) {
+    const pts = [0, 0.33, 0.66, 1].map(t => onHead(
+      x0 + (x1 - x0) * t,
+      0.66 + (y1 - 0.66) * t - 0.06 * Math.sin(Math.PI * t),
+      1.105 + 0.018 * Math.sin(Math.PI * t)));
+    const lock = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 14, 0.0095, 6), lockM);
+    hairG.add(lock);
   }
-  hairG.scale.set(0.95, 1.05, 0.95);          // taller than deep: heads are upright ovals
+  // a few drawn strands riding the finished hair surface (same pipeline as the
+  // sculpt, lifted a hair's breadth), sweeping down and away from the part
+  const hairPt = (d) => {
+    const o = shape(d);
+    const k = THREE.MathUtils.lerp(0.9, inflate(d), ssm(hairMask(d), -0.07, 0.07));
+    o.sub(HC).multiplyScalar(k).add(HC); hang(o, d);
+    return o.sub(HC).multiplyScalar(1.004).add(HC);
+  };
+  const dirAt = (phi, el) => new THREE.Vector3(Math.sin(phi) * Math.cos(el), Math.sin(el), Math.cos(phi) * Math.cos(el));
+  const strandM = paint(0xb68c58, { soft: true, hatch: 0 });
+  for (const end of [0.56, 0.7, 0.84, 1.0, 1.16, 1.3, 1.44].map(f => f * Math.PI)) {
+    const pts = [];
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10;
+      pts.push(hairPt(dirAt(end - 0.38 * Math.pow(1 - t, 1.5), 0.5 - 1.18 * t)));   // stops above the turned-under ends
+    }
+    hairG.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 30, 0.0045, 5), strandM));
+  }
   ink(hairG, 'fine');
   J.head.add(hairG);
 
@@ -76,23 +143,39 @@ function dressPlayer(g) {
   const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.022, 8), felt);
   stalk.position.y = 0.106;
   beret.add(stalk);
-  beret.position.set(0, 0.19, 0.012);
-  beret.rotation.set(-0.06, 0, 0.09);           // the classic tilt, gentler so it never digs in
+  beret.position.set(0, 0.2, -0.004);
+  beret.rotation.set(-0.2, 0, 0.1);             // tipped back off the forehead, raised over the part
   ink(beret, 'fine');
   J.head.add(beret);
 
-  // relaxed hands: the rig's fingers ship fully splayed — curl them most of
-  // the way to a loose fist (so from any angle they read as one hand, not
-  // four separate nubs) and turn the wrists slightly in toward the thighs
-  for (const s of ['L', 'R']) {
-    const grip = J['grip' + s], hand = J['hand' + s];
-    const u = grip?.userData;
-    if (u?.fingers) {
-      u.fingers.forEach((f, i) => { f.rotation.z = -u.s * 0.5 * (1.25 + i * 0.08); });
-      u.thumb.rotation.z = -u.s * 0.6;
+  // her hands, built properly: a palm, four fingers that are each their own
+  // inked shape with a small gap between them (the rig's packed capsules
+  // fused into a mitten), a relaxed curl toward the thigh, and a thumb on the
+  // front edge. Hangs from the wrist (−y); +z is forward; inward is −s·x.
+  for (const k of ['L', 'R']) {
+    const s = k === 'L' ? -1 : 1, inw = -s;
+    const grip = J['grip' + k], hand = J['hand' + k];
+    if (!grip || !hand) continue;
+    const skinM = grip.children.find(c => c.isMesh)?.material ?? paint(0xefc3a2);
+    grip.visible = false;
+    const H = new THREE.Group();
+    const palm = new THREE.Mesh(rbox(0.017, 0.036, 0.034, 0.008), skinM);
+    palm.position.set(0, -0.019, 0);
+    H.add(palm);
+    const digit = (pts, r) => {
+      const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)));
+      H.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 10, r, 7), skinM));
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), skinM);
+      tip.position.copy(curve.getPoint(1)); H.add(tip);
+    };
+    for (const [z, len] of [[0.0125, 0.026], [0.0042, 0.03], [-0.0042, 0.028], [-0.0125, 0.022]]) {
+      digit([[0, -0.032, z], [inw * 0.003, -0.033 - len * 0.5, z * 1.06], [inw * 0.01, -0.033 - len, z * 1.1]], 0.0037);
     }
-    if (grip) grip.scale.setScalar(1.12);        // the rig's hands run large
-    if (hand) hand.rotation.x = -0.06;
+    digit([[inw * 0.003, -0.012, 0.015], [inw * 0.007, -0.027, 0.024], [inw * 0.011, -0.04, 0.021]], 0.0044);
+    H.scale.setScalar(1.25);
+    ink(H, 'fine');
+    hand.add(H);
+    hand.rotation.x = -0.06;
   }
 
   // her sneakers ran a couple of sizes big: shrink them about the ankle

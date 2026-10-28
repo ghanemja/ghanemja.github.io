@@ -385,11 +385,11 @@ export function makeFolk(spec) {
     const sh = J['arm' + k] = bone(J.spine, x, y, 0);
     const fa = J['fore' + k] = bone(sh, 0, -0.16, 0);
     const hd = J['hand' + k] = bone(fa, 0, -0.15, 0);
-    const cuff = S.sleeve === 'short' ? 0.085 : 0.285;
+    const cuff = S.cuff ?? (S.sleeve === 'short' ? 0.085 : 0.285);   // depth down the arm where the sleeve ends
     limbs.push(limb(J.spine, x, y, [sh, fa, hd], 0.16, 0.15, [
       [-0.04, 0.001], [-0.025, 0.038 * rB], [0, 0.046 * rB], [0.07, 0.044 * rB], [0.15, 0.036], [0.17, 0.035],
       [0.22, 0.035], [0.28, 0.028], [0.3, 0.026], [0.312, 0.001]], (d) => d < cuff ? S.top : skinHex,
-      { hem: cuff, inkFrom: 0.03, inkTo: 0.1 }));
+      { hem: cuff < 0.3 ? cuff : null, inkFrom: 0.03, inkTo: 0.1 }));   // a sleeve to the hand has no hem lip to draw
     J['hand' + k].add(J['grip' + k] = makeHand(s, skin));
   }
   // bind the limbs in this rest pose
