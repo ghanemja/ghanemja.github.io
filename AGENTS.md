@@ -11,6 +11,11 @@
 
 ## 3D characters & animation (learned the hard way — the broken-cat incident)
 
+Building or fixing a person or animal? Use the `human-3d-mesh` skill
+(`.claude/skills/human-3d-mesh/`): the full rulebook for bodies, heads, hair,
+hands, shoes, lighting and materials, and `node tools/turntable.mjs <who>` for
+the every-angle check sheet. The short version:
+
 - **Pivot at the joint, never the center.** Before rotating any limb or part
   (a leg, a paw, a wing, a hand), translate its geometry so the origin sits at
   the attachment point (`geo.translate(...)` to put the hip/shoulder at 0),

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Character turntable</title>
+<style>html,body{margin:0;height:100%;background:#f3ead7;overflow:hidden}</style>
+</head>
+<body>
+<!--
+  One character, alone, under the town's own lights — for close-up checks.
+  ?who=player|vivi|otto|pia|rex|critic  &yaw=<deg, 0 = facing camera>  &pitch=<deg, + = camera above>
+  &focus=full|head|hands|feet  &walk=<cycle phase 0..1, omit = idle>  &t=<idle seconds>
+  Sets window.__ready = true once the frame is drawn. Driven by tools/turntable.mjs.
+-->
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { styleTick } from '../js/style.js';
+import { person, pose, LOOKS } from '../js/human.js';
+import { createPlayer } from '../js/player.js';
+
+const q = new URLSearchParams(location.search);
+const who = q.get('who') || 'player';
+const yaw = THREE.MathUtils.degToRad(+(q.get('yaw') ?? 0));
+const pitch = THREE.MathUtils.degToRad(+(q.get('pitch') ?? 8));
+const focus = q.get('focus') || 'full';
+const walk = q.has('walk') ? +q.get('walk') : null;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf3ead7);
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.01, 50);
+// same lights as js/main.js — judge the character under the light it ships in
+const sun = new THREE.DirectionalLight(0xfff2d8, 1.6); sun.position.set(14, 22, 10);
+scene.add(new THREE.HemisphereLight(0xfff6e8, 0xd8c8b0, 1.35), sun);
+
+let g;
+if (who === 'player') g = createPlayer(scene, camera, { x: 0, z: 0, yaw: 0 }).group;
+else { g = person(LOOKS[who]); scene.add(g); }
+g.position.set(0, 0, 0);
+g.userData.turn.rotation.y = 0;                 // faces +z, toward a yaw-0 camera
+
+// wait for the rig (the GLB critic loads async), then pose and frame it
+const t0 = performance.now();
+while (!g.userData.human && performance.now() - t0 < 8000) await new Promise(r => setTimeout(r, 50));
+const inst = g.userData.human;
+if (walk != null) {
+  // step the walk to the requested phase of one cycle (wc advances ≈ dt·(5.6..6.5)·k)
+  for (let i = 0; i < 40; i++) pose(inst, 0.03, 1);
+  inst.wc = walk * Math.PI * 2;
+  pose(inst, 0.0001, 1);
+} else {
+  const idle = +(q.get('t') ?? 1.5);
+  for (let s = 0; s < idle; s += 1 / 30) pose(inst, 1 / 30, 0);
+}
+g.updateMatrixWorld(true);
+
+const box = new THREE.Box3().setFromObject(inst.rig);
+const H = box.max.y - box.min.y;
+const FOCI = {                                   // [look-at height as a fraction of the body, frame height]
+  full: [0.5, H * 1.25], head: [0.85, H * 0.36], hands: [0.42, H * 0.42], feet: [0.05, H * 0.3],
+};
+const [fy, span] = FOCI[focus] || FOCI.full;
+const target = new THREE.Vector3(0, box.min.y + H * fy, 0);
+const dist = span / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+camera.position.set(Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist);
+camera.lookAt(target);
+
+styleTick(1.0, renderer.domElement.width, renderer.domElement.height);
+renderer.render(scene, camera);
+window.__ready = true;
+</script>
+</body>
+</html>
