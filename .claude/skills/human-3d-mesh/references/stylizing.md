@@ -23,8 +23,9 @@ hand-made any more.
 tools/human/bake.mjs        MakeHuman (pinned commit) → models/human/makehuman.json
 js/anatomy.js               loadAnatomy · buildBody(params) · regionWeight · buildSkeleton
 js/stylize.js               STYLES.real / STYLES.town · stylize(body, style)
-js/people.js                makePerson(spec): body → style → dress → hair & face → rig → pose
-tools/human-lab.html        both styles side by side: ?styles=real,town&yaw=&pitch=&focus=full|head|hands|feet
+js/people.js                makePerson(spec): body → style → dress → hair & face → rig → pose → motion
+js/motion.js                person.motion.pose('walk'|'run'|'sit'|'bike'|'idle', t) · makeBike(person)
+tools/human-lab.html        styles side by side: ?styles=real,town&yaw=&pitch=&focus=full|head|hands|feet&action=walk&phase=0.25
 ```
 `makePerson` is the only way to make a person. Never render `buildBody` output directly.
 
@@ -36,20 +37,35 @@ All 0..1, 0.5 = average adult: `sex` (0 female … 1 male), `muscle`, `weight`, 
 height in scene units. Vary people with these, not by editing meshes.
 
 ## Style knobs
-| knob | what it does | real | town |
-|---|---|---|---|
-| `headsTall` | stature ÷ head height (vertex→chin); scales the head about the top of the neck | ≈7.3 (natural) | 5.4 |
-| `hands` / `feet` | size about the wrist / ankle | 1 | 1.12 / 1.06 |
-| `eyes` | eyeball + socket about each eye centre | 1 | 1.35 |
-| `soften` | Taubin smoothing passes (rounds off small anatomical detail) | 0 | 3 |
-| `expression` | facial units the style adds | none | eyes open a touch |
+| knob | what it does | real | town | storybook* | chibi* |
+|---|---|---|---|---|---|
+| `headsTall` | stature ÷ head height (vertex→chin); scales the head about the top of the neck | natural (≈7.3–7.8) | 6.8 | 5.4 | 3.6 |
+| `hands` / `feet` | size about the wrist / ankle | 1 | 1.02 / 1 | 1.12 / 1.06 | 1.25 / 1.15 |
+| `eyes` | eyeball + socket about each eye centre | 1 | 1.08 | 1.35 | 1.6 |
+| `soften` | Taubin smoothing passes (rounds off small anatomical detail) | 0 | 3 | 3 | 4 |
+| `expression` | facial units the style adds | none | none | eyes open a touch | eyes open a touch |
+\* exaggerated styles: only used when someone asks for that look by name.
+
 Every transform is blended by the skin weights (`regionWeight`), so it flows into the
 neighbouring body exactly the way the skin bends. No seams and no hinges.
+
+## The proportion rules (enforced in code)
+- **People have human proportions unless a style is explicitly exaggerated.** The head
+  must not be much bigger than the body just because a style was being tuned.
+- Ordinary styles are held to `HUMAN_RANGE` in js/stylize.js: `headsTall` 6.6–8,
+  `hands` 0.95–1.08, `feet` 0.95–1.06, `eyes` 0.95–1.15. `checkStyle()` clamps anything
+  outside it and warns.
+- Only a style that declares `exaggerated: true` (storybook, chibi) may leave the range.
+  Don't add `exaggerated` to make a number "work". Use it only when the brief asks for
+  that look.
+- The town's default style is `town`: a real person, painted, with the head only a touch
+  larger than life.
 
 ## Rules for stylizing
 - **Rescale real parts; never invent or disconnect them.** A bigger head is the real head
   scaled about the real neck joint, not a new head on a stick.
-- **Bigger head → slightly bigger hands and feet**, or they read as tiny at that scale.
+- **In an exaggerated style, a bigger head needs slightly bigger hands and feet**, or they
+  read as tiny at that scale.
 - **Change one knob at a time and compare against `real`** side by side in the lab.
 - **Expressions are subtle.** A smile at 0.55; eyes "opened-up" past ~0.25 reads as startled.
 - **Real iris ≈29° from the eye's axis** (11.5 mm across a 24 mm eyeball), pupil ≈3–4 mm.
@@ -81,7 +97,8 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
   the outline's back faces show through the eye openings as black.
 
 ## Posing
-Bones keep world-aligned rest frames. Pose with world-space directions (`turnTo(bone,
+Motion (walk, run, sit, bike, idle) is in [motion.md](motion.md). The relaxed stand:
+bones keep world-aligned rest frames. Pose with world-space directions (`turnTo(bone,
 from, to)` in people.js): arms hang about 0.2 out from vertical so the hands clear the
 thighs; the forearm turns so the palm faces the thigh; fingers first close the base mesh's
 splay toward the middle finger, then curl in a cascade (more toward the pinky); the thumb

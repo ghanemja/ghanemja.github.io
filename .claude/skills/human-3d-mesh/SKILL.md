@@ -22,7 +22,13 @@ const p = await makePerson({ style: 'town', body: { sex: 0, weight: 0.42 }, stat
 scene.add(p.group);            // dressed, haired, rigged, posed, toon-painted and inked
 ```
 Parameters, style knobs, dressing, hair, posing and known pitfalls are all in
-[references/stylizing.md](references/stylizing.md). Look at both styles side by side in
+[references/stylizing.md](references/stylizing.md). Motion (walk, run, sit, bike, idle)
+comes with every person automatically; see [references/motion.md](references/motion.md).
+
+**Proportions are human unless a style is explicitly exaggerated.** The head must not
+be much bigger than the body. `checkStyle()` clamps ordinary styles to `HUMAN_RANGE`
+(6.6–8 heads tall), and only a style that declares `exaggerated: true` (storybook,
+chibi) may leave it, and only when that look was asked for. Look at both styles side by side in
 `tools/human-lab.html?styles=real,town` (`&yaw=90`, `&focus=head|hands|feet`).
 
 The town's current cast (player, Vivi, Otto, Pia, Rex) still uses the older procedural rig

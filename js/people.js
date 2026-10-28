@@ -1,7 +1,7 @@
 // ─── PEOPLE: an anatomical human, stylized, and ALWAYS DRESSED ───────────────
 // makePerson(spec) is the only way to make a person from the parametric body:
 //
-//   body (js/anatomy.js) → style (js/stylize.js) → dress → hair & face → rig → pose
+//   body (js/anatomy.js) → style (js/stylize.js) → dress → hair & face → rig → pose → motion (js/motion.js)
 //
 // Dressed by construction: every triangle of the body is assigned to exactly one
 // of face+neck, hands, top, bottoms or shoes. Only face, neck and hands become
@@ -16,6 +16,7 @@ import { loadAnatomy, buildBody, buildSkeleton, regionWeight } from './anatomy.j
 import { stylize, STYLES, smoothSurface, eyeCentres, headHeight } from './stylize.js';
 import { paint, ink } from './style.js';
 import { shoeGeo } from './folk.js';
+import { relaxedPose, makeMotion } from './motion.js';
 
 export const LOOK_JANELLE = {
   body: { sex: 0, muscle: 0.45, weight: 0.42, height: 0.5, proportions: 0.6 },
@@ -260,7 +261,7 @@ function bobHair(body, H, color) {
 // ≈11.5 mm across a 24 mm eye (≈29° from the axis), the pupil ≈3–4 mm; the
 // storybook style opens the iris up.
 function eyes(body, look) {
-  const out = new THREE.Group(), cs = eyeCentres(body), big = !!body.style.headsTall;
+  const out = new THREE.Group(), cs = eyeCentres(body), big = !!body.style.exaggerated;
   const irisCos = big ? 0.83 : 0.875, pupilCos = big ? 0.95 : 0.97;
   const iris = new THREE.Color(look.eyes), dark = new THREE.Color(0x1d1416), white = new THREE.Color(0xf6f1ea);
   ['helper-l-eye', 'helper-r-eye'].forEach((gname, side) => {
@@ -312,7 +313,7 @@ function skinColours(body, look) {
     if (p.z > mouth.z - E * 0.5) {
       const m = Math.hypot((p.x - mouth.x) / (E * 0.42), (p.y - mouth.y) / (E * 0.13));
       c.lerp(lips, 0.55 * (1 - THREE.MathUtils.smoothstep(m, 0.6, 1)));
-      if (body.style.headsTall) for (const e of [l, r]) {
+      if (body.style.soften) for (const e of [l, r]) {       // a painted style gets a little blush
         const b = Math.hypot((p.x - e.x * 1.15) / (E * 0.3), (p.y - (e.y - E * 0.55)) / (E * 0.2));
         c.lerp(blush, 0.4 * (1 - THREE.MathUtils.smoothstep(b, 0.3, 1)));
       }
@@ -320,73 +321,6 @@ function skinColours(body, look) {
     col.set([c.r, c.g, c.b], i * 3);
   }
   return col;
-}
-
-// ── posing: a relaxed stand, set through world-space directions ──
-const _wq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _lq = new THREE.Quaternion();
-function turnTo(bone, from, to) {                         // rotate a bone so world dir `from` points along `to`
-  _wq.setFromUnitVectors(from.clone().normalize(), to.clone().normalize());
-  bone.parent.getWorldQuaternion(_pq);
-  _lq.copy(_pq).invert().multiply(_wq).multiply(_pq);
-  bone.quaternion.premultiply(_lq);
-  bone.updateMatrixWorld(true);
-}
-const wp = (b) => b.getWorldPosition(new THREE.Vector3());
-
-function relaxedPose(sk, body) {
-  const B = sk.byName;
-  sk.root.updateMatrixWorld(true);
-  // stand with the feet under the hips (the base mesh stands in an A with them apart), soles flat
-  const ankle0 = wp(B['foot.L']).y;
-  for (const k of ['L', 'R']) {
-    const s = k === 'L' ? 1 : -1;
-    turnTo(B['upperleg01.' + k], wp(B['lowerleg01.' + k]).sub(wp(B['upperleg01.' + k])), new THREE.Vector3(s * 0.035, -1, 0.0));
-    turnTo(B['lowerleg01.' + k], wp(B['foot.' + k]).sub(wp(B['lowerleg01.' + k])), new THREE.Vector3(s * 0.01, -1, -0.01));
-    B['foot.' + k].parent.getWorldQuaternion(_pq); B['foot.' + k].quaternion.copy(_pq.invert()); B['foot.' + k].updateMatrixWorld(true);
-  }
-  sk.root.position.y += ankle0 - wp(B['foot.L']).y;
-  sk.root.updateMatrixWorld(true);
-  for (const k of ['L', 'R']) {
-    const s = k === 'L' ? 1 : -1;
-    // arms hang a touch off the body, elbows soft
-    turnTo(B['upperarm01.' + k], wp(B['lowerarm01.' + k]).sub(wp(B['upperarm01.' + k])), new THREE.Vector3(s * 0.2, -1, 0.0));
-    turnTo(B['lowerarm01.' + k], wp(B['wrist.' + k]).sub(wp(B['lowerarm01.' + k])), new THREE.Vector3(s * 0.1, -1, 0.1));
-    // turn the forearm so the palm faces the thigh
-    const axis = wp(B['wrist.' + k]).sub(wp(B['lowerarm01.' + k])).normalize();
-    const palmN = () => {
-      const w = wp(B['wrist.' + k]), along = wp(B['finger3-1.' + k]).sub(w), across = wp(B['finger2-1.' + k]).sub(wp(B['finger5-1.' + k]));
-      return along.cross(across).multiplyScalar(s).normalize();     // the palm side
-    };
-    const want = new THREE.Vector3(-s, 0, 0.15), n = palmN();
-    const pr = (v) => v.clone().addScaledVector(axis, -v.dot(axis)).normalize();
-    turnTo(B['lowerarm02.' + k], pr(n), pr(want));
-    // close the base mesh's splay: each finger turns (in the palm's plane) most of the way
-    // toward the middle finger's line, leaving the small natural fan of a relaxed hand
-    const N = palmN(), midDir = wp(B['finger3-2.' + k]).sub(wp(B['finger3-1.' + k])).normalize();
-    for (const [f, keep] of [[2, 0.12], [4, 0.15], [5, 0.25]]) {
-      const b = B[`finger${f}-1.` + k], dir = wp(B[`finger${f}-2.` + k]).sub(wp(b)).normalize();
-      const inPlane = (v) => v.clone().addScaledVector(N, -v.dot(N)).normalize();
-      const a = inPlane(dir), m = inPlane(midDir), to = a.clone().lerp(m, 1 - keep).normalize();
-      turnTo(b, a, to);
-    }
-    // the thumb rests alongside the index: swing it in toward the palm
-    { const b = B['finger1-1.' + k], dir = wp(B['finger1-2.' + k]).sub(wp(b)).normalize();
-      turnTo(b, dir, dir.clone().lerp(midDir, 0.35).addScaledVector(N, 0.25).normalize()); }
-    // a relaxed cascade: each finger curls a little more than the last, toward the palm
-    [[2, [14, 26, 14]], [3, [18, 32, 16]], [4, [22, 38, 18]], [5, [28, 44, 20]]].forEach(([f, ang]) => {
-      for (let j = 1; j <= 3; j++) {
-        const b = B[`finger${f}-${j}.` + k], nx = B[`finger${f}-${j + 1}.` + k];
-        const dir = nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent)), a = THREE.MathUtils.degToRad(ang[j - 1]);
-        const to = dir.clone().normalize().multiplyScalar(Math.cos(a)).addScaledVector(N, Math.sin(a));
-        turnTo(b, dir, to);
-      }
-    });
-    for (let j = 1; j <= 3; j++) {
-      const b = B[`finger1-${j}.` + k], nx = B[`finger1-${j + 1}.` + k];
-      const dir = nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent));
-      turnTo(b, dir, dir.clone().normalize().addScaledVector(N, 0.18));
-    }
-  }
 }
 
 // shoes: the town's S-profile sneaker, fitted to this foot and riding the foot bone
@@ -462,7 +396,9 @@ export async function makePerson(spec = {}) {
   if (spec.showHair !== false) atHead.add(bobHair(body, H, look.hair));   // (showHair: false only for checking the face)
   sk.byName.head.add(atHead);
 
-  relaxedPose(sk, body);
+  relaxedPose(sk);
   ink(group, 'fine');
-  return { group, rig, sk, body, look };
+  const person = { group, rig, sk, body, look };
+  person.motion = makeMotion(person);     // every person comes rigged for idle, walk, run, sit and bike
+  return person;
 }
