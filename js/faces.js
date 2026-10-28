@@ -221,7 +221,14 @@ export function buildHead(J, S, F, mats) {
   }
   // nose (with nostril wings), or a round button
   const ns = F.noseSize ?? 1;
-  if (F.nose === 'button') {
+  if (F.nose === 'cute') {           // a small soft button, half sunk into the face so only the tip rounds out, slightly upturned
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.0118 * ns, 18, 14), skin);
+    tip.scale.set(1.25, 0.9, 0.85); tip.rotation.x = -0.3;
+    tip.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0.002, -0.002)); add(tip);
+    const bridge = new THREE.Mesh(new THREE.CapsuleGeometry(0.0055 * ns, 0.018, 4, 8), skin);
+    bridge.rotation.x = 0.35;
+    bridge.position.copy(pt(0, -0.02)).add(new THREE.Vector3(0, 0, -0.004)); add(bridge);
+  } else if (F.nose === 'button') {
     const b = new THREE.Mesh(new THREE.SphereGeometry(0.019 * ns, 16, 12), skin); b.scale.set(1.05, 0.95, 0.85);
     b.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0, 0.006)); add(b);
     const br = new THREE.Mesh(new THREE.CapsuleGeometry(0.009 * ns, 0.02, 4, 8), skin); br.position.copy(pt(0, 0.02)).add(new THREE.Vector3(0, 0, -0.001)); add(br);

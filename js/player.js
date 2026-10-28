@@ -19,7 +19,7 @@ const PLAYER_LOOK = {
   height: 1.02, build: 1.0,
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { jaw: 0.28, chin: 0.62, cheeks: 0.45, long: 0.12, skull: 0.55, brow: 0.4 },
-    nose: 'straight', noseSize: 0.8, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
+    nose: 'cute', noseSize: 1.0, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
     brows: 'raised', lashes: true, blush: 0.9 },
 };
 
@@ -148,10 +148,28 @@ function dressPlayer(g) {
   ink(beret, 'fine');
   J.head.add(beret);
 
-  // her hands, built properly: a palm, four fingers that are each their own
-  // inked shape with a small gap between them (the rig's packed capsules
-  // fused into a mitten), a relaxed curl toward the thigh, and a thumb on the
-  // front edge. Hangs from the wrist (−y); +z is forward; inward is −s·x.
+  // her hands: soft, not blocky — a rounded palm (a squashed sphere, no box
+  // corners), four tapered fingers fanned a little and curled gently toward
+  // the thigh, and a tapered thumb on the front edge. The fingers start
+  // inside the palm so they grow out of it. Hangs from the wrist (−y); +z
+  // is forward; inward is −s·x.
+  const taper = (pts, r0, r1, mat) => {
+    const curve = new THREE.CatmullRomCurve3(pts.map(q => new THREE.Vector3(...q)));
+    const T = 12, Rr = 8, g = new THREE.TubeGeometry(curve, T, 1, Rr, false);
+    const pos = g.attributes.position, c = new THREE.Vector3(), q = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      const t = Math.floor(i / (Rr + 1)) / T;
+      curve.getPointAt(Math.min(1, t), c);
+      q.fromBufferAttribute(pos, i).sub(c).multiplyScalar(r0 + (r1 - r0) * t);
+      pos.setXYZ(i, c.x + q.x, c.y + q.y, c.z + q.z);
+    }
+    g.computeVertexNormals();
+    const grp = new THREE.Group();
+    grp.add(new THREE.Mesh(g, mat));
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(r1, 10, 8), mat);
+    tip.position.copy(curve.getPoint(1)); grp.add(tip);
+    return grp;
+  };
   for (const k of ['L', 'R']) {
     const s = k === 'L' ? -1 : 1, inw = -s;
     const grip = J['grip' + k], hand = J['hand' + k];
@@ -159,19 +177,21 @@ function dressPlayer(g) {
     const skinM = grip.children.find(c => c.isMesh)?.material ?? paint(0xefc3a2);
     grip.visible = false;
     const H = new THREE.Group();
-    const palm = new THREE.Mesh(rbox(0.017, 0.036, 0.034, 0.008), skinM);
-    palm.position.set(0, -0.019, 0);
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.02, 18, 14), skinM);
+    palm.scale.set(0.52, 1.0, 0.92);
+    palm.position.set(inw * 0.001, -0.019, 0.001);
     H.add(palm);
-    const digit = (pts, r) => {
-      const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)));
-      H.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 10, r, 7), skinM));
-      const tip = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), skinM);
-      tip.position.copy(curve.getPoint(1)); H.add(tip);
-    };
-    for (const [z, len] of [[0.0125, 0.026], [0.0042, 0.03], [-0.0042, 0.028], [-0.0125, 0.022]]) {
-      digit([[0, -0.032, z], [inw * 0.003, -0.033 - len * 0.5, z * 1.06], [inw * 0.01, -0.033 - len, z * 1.1]], 0.0037);
+    // [z at the knuckle, length, splay]: index … pinky
+    for (const [z, len, sp] of [[0.0115, 0.025, 0.12], [0.004, 0.028, 0.04], [-0.0035, 0.026, -0.04], [-0.0105, 0.021, -0.12]]) {
+      const y0 = -0.031, bend = 0.5;                                  // a relaxed curl
+      const pts = [];
+      for (let i = 0; i <= 3; i++) {
+        const t = i / 3, a = bend * t * t;
+        pts.push([inw * len * 0.55 * Math.sin(a) * t, y0 - len * t * Math.cos(a * 0.6), z + sp * len * t]);
+      }
+      H.add(taper(pts, 0.0046, 0.0031, skinM));
     }
-    digit([[inw * 0.003, -0.012, 0.015], [inw * 0.007, -0.027, 0.024], [inw * 0.011, -0.04, 0.021]], 0.0044);
+    H.add(taper([[inw * 0.002, -0.012, 0.012], [inw * 0.006, -0.022, 0.02], [inw * 0.01, -0.032, 0.021]], 0.0055, 0.0036, skinM));
     H.scale.setScalar(1.25);
     ink(H, 'fine');
     hand.add(H);
