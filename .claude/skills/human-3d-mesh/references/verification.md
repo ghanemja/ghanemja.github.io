@@ -8,15 +8,18 @@ only showed when the foot was tracked. Check like the next reviewer will.
 
 ```bash
 node tools/turntable.mjs <who> /tmp/tt      # who: player | vivi | otto | pia | rex | critic
-# → /tmp/tt/<who>-sheet.png (20 labelled tiles) + one PNG per tile
+# → /tmp/tt/<who>-sheet.png (22 labelled tiles) + one PNG per tile
 ```
 
 `tools/turntable.html` renders the figure alone under the town's own lights, so nothing
 blocks it. The sheet has front, back, both sides, both three-quarters, high ¾, low;
-head front / side / back / top; hands side / ¾; feet side / ¾; and four walk phases.
+head front / side / back / top; tight hand close-ups (outside, front, the other hand,
+from below); feet side / ¾; and four walk phases.
 Open the sheet with the Read tool and look at every tile. Single views by URL:
 `tools/turntable.html?who=pia&yaw=90&focus=head&walk=0.25` (yaw 0 = facing camera,
-`pitch` in degrees, `focus` = full | head | hands | feet, `t` = idle seconds).
+`pitch` in degrees, `focus` = full | head | hands | feet | handL | handR, `t` = idle
+seconds). The right hand (`handR`) is on +x, so `yaw=90` sees its outside, `yaw=-90` the
+left hand's.
 For a new kind of figure (an animal, a prop-holding pose), add a `who` branch to the page.
 A non-zero exit means the page logged errors — fix those first.
 

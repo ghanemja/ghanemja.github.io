@@ -55,20 +55,48 @@ Each rule names the bug that taught it. Numbers are this repo's units (a person 
   the jeans mesh) without opening a hole.
 
 ## Hands
-Hands went through more rounds than anything else: balls → mittens → splayed paddles →
-stubs → boxy robot hands → soft hands. What finally worked:
-- A palm that is a squashed sphere, not a box.
-- Four **separate** tapered fingers with round tips and gaps between them, fanned slightly,
-  each inked on its own. Packed capsules ink as one mitten with a stub.
-- Fingers start *inside* the palm so they grow out of it. Thumb tapers the same way, forward.
-- Relaxed curl toward the thigh by default (never fully splayed, never a hard fist
-  unless gripping). Wrists turned toward the thighs; no odd wrist twist.
-- Size ≈ face length, matched to the wrist. Skin-coloured from exactly the cuff down.
-- Holding something: fingers curl round the prop (`gripHand`), the prop goes in `hold`.
-  Precise work (writing) uses two-bone IK (`ikArm`) so the hand lands on the target.
-- For an organic close-up hand (crochet's `tools/make_hand.mjs`): a marching-cubes
-  isosurface over metaball capsules laid along a finger skeleton, with the grip baked
-  in. Higher subdivision keeps fingers separate.
+Hands went through more rounds than anything else: balls, then mittens, splayed
+paddles, stubs, boxy "robot" hands, then a sphere palm with four tube fingers.
+Every one of those was a palm with sticks attached, and every one was rejected as
+"not a real hand". What worked was **building from the skeleton, with human
+proportions, as one surface**. `js/hands.js` (`makeHandGeometry`) does exactly this;
+use it, don't rebuild hands from primitives.
+
+**Method:** each bone is a tapered capsule (signed-distance round cone). The palm's
+four metacarpals, the wrist and the soft pads are smooth-unioned into one mass; each
+finger is smooth-unioned **into the palm but hard-min'd against the other fingers**,
+so the webs form between knuckles but fingers never fuse into a mitten. Polygonize
+with marching cubes (three's `MarchingCubes`, write the field directly as −distance,
+`isolation = 0`). Grid 68³ over the hand gives ≈8k tris and ≈120 ms per hand. Cache
+the geometry per side and curl.
+
+**Proportions** (HL = hand length, wrist crease → middle fingertip):
+| part | value |
+|---|---|
+| hand length | ≈0.74 × forearm (elbow→wrist), ≈0.108 × stature; fingertips reach mid-thigh |
+| palm length (wrist → middle knuckle) | ≈0.50 HL |
+| breadth across the knuckles | ≈0.45 HL; wrist ≈0.3 HL wide, ≈0.2 HL thick (an oval) |
+| middle finger (knuckle → tip) | ≈0.50 HL; index ≈0.9, ring ≈0.95, pinky ≈0.75 of it |
+| phalanges, proximal : middle : distal | ≈0.50 : 0.29 : 0.21 of the finger |
+| finger radius at the base | ≈0.05 HL, tapering to ≈0.7 of that at the tip |
+| knuckle line | an arc: middle highest, index and ring a little back, pinky clearly back (≈0.06 HL) |
+| thumb | 3 bones (metacarpal ≈0.23, proximal ≈0.15, distal ≈0.13 HL), radius ≈0.06 HL; base deep in the heel of the palm |
+
+**Relaxed pose** (a hand hanging at the side): palm toward the thigh, fingers curled in
+a cascade, more toward the pinky (MCP/PIP/DIP ≈ 16/32/18° index … 30/50/24° pinky),
+fanned a few degrees apart, the thumb lying forward of the index with its pad turned
+toward the fingers. **Never splay the fingers straight, and never let the thumb jut out**:
+a thumb that sticks forward reads as a hook (that was the first anatomical draft).
+**Grip:** add ≈55/60/35° per joint and fold the thumb across.
+
+**Pads give it life**: thenar (the ball of the thumb), hypothenar (the heel under the
+pinky), the centre of the palm, and the ridge under the knuckles. Without them the palm
+is a flat board.
+
+**Check:** outside, front (thumb side), underneath, and both hands, as tight close-ups
+(`focus=handR` / `handL` in the turntable). A close-up of the leg with a hand in the
+corner doesn't count. Props in the hand still use folk.js's jointed `makeHand` /
+`gripHand`, which needs the same treatment.
 
 ## Feet and shoes
 - Every person has shoes: a rounded upper on a separate sole, contrasting with the

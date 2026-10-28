@@ -36,7 +36,8 @@ const SHOTS = [
   ['high-3q', { yaw: 35, pitch: 50 }], ['low', { yaw: 20, pitch: -12 }],
   ['head-front', { yaw: 0, focus: 'head' }], ['head-side', { yaw: 90, focus: 'head' }],
   ['head-back', { yaw: 180, focus: 'head' }], ['head-top', { yaw: 30, pitch: 70, focus: 'head' }],
-  ['hands-side', { yaw: 90, focus: 'hands' }], ['hands-3q', { yaw: 35, focus: 'hands' }],
+  ['handR-out', { yaw: 90, focus: 'handR' }], ['handR-front', { yaw: 20, focus: 'handR' }],
+  ['handL-out', { yaw: -90, focus: 'handL' }], ['handR-under', { yaw: -60, pitch: -50, focus: 'handR' }],
   ['feet-side', { yaw: 90, focus: 'feet', pitch: 4 }], ['feet-3q', { yaw: 40, focus: 'feet', pitch: 20 }],
   ['walk-0.00', { yaw: 90, walk: 0 }], ['walk-0.25', { yaw: 90, walk: 0.25 }],
   ['walk-0.50', { yaw: 90, walk: 0.5 }], ['walk-0.75', { yaw: 60, walk: 0.75 }],
@@ -62,7 +63,7 @@ server.close();
 
 const sheet = join(out, `${who}-sheet.png`);
 try {
-  execFileSync('montage', [...files.flatMap(([f, n]) => ['-label', n, f]), '-tile', '5x', '-geometry', '240x300+4+4', '-pointsize', '14', sheet]);
+  execFileSync('montage', [...files.flatMap(([f, n]) => ['-label', n, f]), '-tile', '6x', '-geometry', '220x275+4+4', '-pointsize', '14', sheet]);
   console.log(`sheet: ${sheet}`);
 } catch { console.log(`(no montage) shots in ${out}`); }
 if (errors.length) { console.log('page errors:\n  ' + [...new Set(errors)].join('\n  ')); process.exitCode = 1; }

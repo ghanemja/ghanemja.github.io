@@ -16,6 +16,7 @@ check every angle up close → fix the cause, not the symptom → check again.**
    `limb()`, `makeHand`, `gripHand`, `STANCES`, `ikArm`, `poseFolk`), `js/faces.js`
    (`headShapeFor`, `sculpt`, `buildHead`, `NOSES`, `HAIR`), `js/human.js`
    (`LOOKS`, `person()`, `pose()`), `js/player.js` (`PLAYER_LOOK`, `dressPlayer`),
+   `js/hands.js` (`makeHandGeometry`),
    `js/style.js` (`paint`, `ink`, `RAMP_SOFT`). Extend these; don't start a parallel rig.
 2. **Build** following the rules in [references/anatomy.md](references/anatomy.md)
    (body, head/face, hair, hands, feet, clothes, hats, animals, rigging).
@@ -26,7 +27,7 @@ check every angle up close → fix the cause, not the symptom → check again.**
    ```bash
    node tools/turntable.mjs player /tmp/tt     # or vivi | otto | pia | rex | critic
    ```
-   Open the sheet image and actually look at all 20 tiles. Then check it in the town
+   Open the sheet image and actually look at all 22 tiles. Then check it in the town
    at game distance. Bump `js/main.js?cb=NN` in `index.html`, merge to `main`, push.
 
 ## The rules that matter most
@@ -45,9 +46,13 @@ check every angle up close → fix the cause, not the symptom → check again.**
   angled boxes (they show gaps and read as broken debris).
 - **Pose the whole body.** A sitting/lying figure is its own pose (pitched torso,
   tucked legs), not a standing rig with one limb bent.
-- **Real hands and real shoes.** Hands: soft palm, four separate tapered fingers with
-  gaps, a thumb, relaxed curl, about face-length, palm toward the thigh. Shoes: an S
-  profile on a sole with toe spring, sitting exactly on the floor.
+- **Hands are built from a hand skeleton in human proportion, as one surface.** Use
+  `js/hands.js` (`makeHandGeometry`). Three bones per finger, an arched knuckle line,
+  palm pads, an opposed thumb, a relaxed cascade curl; ≈0.74 × the forearm. A palm
+  with sticks attached is never right, however it's tuned.
+- **Real shoes.** An S profile on a sole with toe spring, sitting exactly on the floor.
+- **Use real anatomy numbers, not eyeballed ones.** Look up the proportion (anatomy.md
+  has the tables for hands) and check the result against it.
 - **Heads are upright ovals, not balls.** Skull swells back and tucks at the nape,
   flat face, jaw narrowing to a chin, neck joining *behind* the jaw.
 - **Hair and hats are fitted to the skull they sit on.** Sculpt from the head's own

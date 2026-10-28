@@ -10,7 +10,7 @@
 <!--
   One character, alone, under the town's own lights — for close-up checks.
   ?who=player|vivi|otto|pia|rex|critic  &yaw=<deg, 0 = facing camera>  &pitch=<deg, + = camera above>
-  &focus=full|head|hands|feet  &walk=<cycle phase 0..1, omit = idle>  &t=<idle seconds>
+  &focus=full|head|hands|feet|handL|handR  &walk=<cycle phase 0..1, omit = idle>  &t=<idle seconds>
   Sets window.__ready = true once the frame is drawn. Driven by tools/turntable.mjs.
 -->
 <script type="importmap">
@@ -70,9 +70,15 @@ const FOCI = {                                   // [look-at height as a fractio
   full: [0.5, H * 1.25], head: [0.85, H * 0.36], hands: [0.42, H * 0.42], feet: [0.05, H * 0.3],
 };
 const [fy, span] = FOCI[focus] || FOCI.full;
-const target = new THREE.Vector3(0, box.min.y + H * fy, 0);
-const dist = span / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-camera.position.set(Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist);
+let target = new THREE.Vector3(0, box.min.y + H * fy, 0), frame = span;
+// handL / handR: a tight close-up centred on that hand (folk rigs only)
+const hb = /^hand[LR]$/.test(focus) && inst.J?.[focus];
+if (hb) {
+  const hbox = new THREE.Box3().setFromObject(hb);
+  target = hbox.getCenter(new THREE.Vector3()); frame = H * 0.14;
+}
+const dist = frame / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
 camera.lookAt(target);
 
 styleTick(1.0, renderer.domElement.width, renderer.domElement.height);

@@ -6,6 +6,7 @@ import { person, pose } from './human.js';
 import { paint, ink } from './style.js';
 import { rbox, lathe } from './props.js';
 import { headShapeFor, sculpt, HC } from './faces.js';
+import { makeHandGeometry } from './hands.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -148,51 +149,19 @@ function dressPlayer(g) {
   ink(beret, 'fine');
   J.head.add(beret);
 
-  // her hands: soft, not blocky — a rounded palm (a squashed sphere, no box
-  // corners), four tapered fingers fanned a little and curled gently toward
-  // the thigh, and a tapered thumb on the front edge. The fingers start
-  // inside the palm so they grow out of it. Hangs from the wrist (−y); +z
-  // is forward; inward is −s·x.
-  const taper = (pts, r0, r1, mat) => {
-    const curve = new THREE.CatmullRomCurve3(pts.map(q => new THREE.Vector3(...q)));
-    const T = 12, Rr = 8, g = new THREE.TubeGeometry(curve, T, 1, Rr, false);
-    const pos = g.attributes.position, c = new THREE.Vector3(), q = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i++) {
-      const t = Math.floor(i / (Rr + 1)) / T;
-      curve.getPointAt(Math.min(1, t), c);
-      q.fromBufferAttribute(pos, i).sub(c).multiplyScalar(r0 + (r1 - r0) * t);
-      pos.setXYZ(i, c.x + q.x, c.y + q.y, c.z + q.z);
-    }
-    g.computeVertexNormals();
-    const grp = new THREE.Group();
-    grp.add(new THREE.Mesh(g, mat));
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(r1, 10, 8), mat);
-    tip.position.copy(curve.getPoint(1)); grp.add(tip);
-    return grp;
-  };
+  // her hands: anatomical (js/hands.js) — one continuous surface grown from a real
+  // hand skeleton: a palm with its thenar and heel pads, three-boned fingers in
+  // human proportion with the knuckle line arched and the pinky set back, each
+  // finger melting into the palm but not into its neighbour, and an opposed thumb
+  // that hangs forward of the index. Sized to her forearm (a hand is ≈0.74 of it).
   for (const k of ['L', 'R']) {
-    const s = k === 'L' ? -1 : 1, inw = -s;
+    const s = k === 'L' ? -1 : 1;
     const grip = J['grip' + k], hand = J['hand' + k];
     if (!grip || !hand) continue;
     const skinM = grip.children.find(c => c.isMesh)?.material ?? paint(0xefc3a2);
     grip.visible = false;
     const H = new THREE.Group();
-    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.02, 18, 14), skinM);
-    palm.scale.set(0.52, 1.0, 0.92);
-    palm.position.set(inw * 0.001, -0.019, 0.001);
-    H.add(palm);
-    // [z at the knuckle, length, splay]: index … pinky
-    for (const [z, len, sp] of [[0.0115, 0.025, 0.12], [0.004, 0.028, 0.04], [-0.0035, 0.026, -0.04], [-0.0105, 0.021, -0.12]]) {
-      const y0 = -0.031, bend = 0.5;                                  // a relaxed curl
-      const pts = [];
-      for (let i = 0; i <= 3; i++) {
-        const t = i / 3, a = bend * t * t;
-        pts.push([inw * len * 0.55 * Math.sin(a) * t, y0 - len * t * Math.cos(a * 0.6), z + sp * len * t]);
-      }
-      H.add(taper(pts, 0.0046, 0.0031, skinM));
-    }
-    H.add(taper([[inw * 0.002, -0.012, 0.012], [inw * 0.006, -0.022, 0.02], [inw * 0.01, -0.032, 0.021]], 0.0055, 0.0036, skinM));
-    H.scale.setScalar(1.25);
+    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.112 }), skinM));
     ink(H, 'fine');
     hand.add(H);
     hand.rotation.x = -0.06;
