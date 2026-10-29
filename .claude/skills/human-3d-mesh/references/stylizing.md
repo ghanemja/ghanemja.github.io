@@ -43,6 +43,20 @@ All 0..1, 0.5 = average adult: `sex` (0 female … 1 male), `muscle`, `weight`, 
 height in scene units; leave it out and it comes from `statureFor(age, sex, height)`.
 Vary people with these, not by editing meshes.
 
+## Body types
+People are not one body scaled. `body.shape` picks a body type (`BODY_TYPES` in
+js/anatomy.js): straight, hourglass, curvy, pear, round, diamond, broad shoulders,
+athletic, lean. Each is MakeHuman's measured silhouette for that type (`bodyshapes`,
+separate female and male sculpts; a missing one borrows the nearest) **plus a girth
+recipe**, because the silhouettes alone move a girth only 2–4 cm and every type read as
+the same. Girths are their own parameters too, −1..1: `bust`, `waist`, `hips`,
+`shoulders`, `belly` (MakeHuman's "pregnant" target, kept to half), `seat`. Body types
+fade in through the teens; children don't have them.
+- Batches deal body types from a deck (men from the types that occur in men) and spread
+  `build` and `muscle` over almost the whole range, two-dice rather than three. With a
+  three-dice bell everyone came out near average and the crowd looked cloned.
+- Check a new type in the lab: `?shape=pear&weight=0.7&top=tee&bottom=skirt`, front AND side.
+
 ## Age
 `body.age` is in years, 1–90 (default 25). MakeHuman's age axis is not linear in years
 (1 yr = 0, 11 = 0.1875, 25 = 0.5, 90 = 1); `ageWeights()` converts it and blends its
@@ -111,9 +125,18 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
   MakeHuman's helper-skirt surface cut at the knee, lifted 1.2 cm, with its waistband
   tucked up under the top's hem, and it always has shorts under it (sitting and biking
   show them, never a body). Short options add only `legs` / forearm skin.
-- **No top in a skin colour.** From across the plaza a tan top on tan skin reads as no
-  top. `TOP_COLOURS` (js/citizens.js) leaves out anything near a skin tone, and
-  generated people never get a top within reach of their own skin.
+- **Arms clear the clothes.** After the relaxed pose, `clearHips()` swings each arm out
+  just far enough that the hand hangs a finger's width off whatever is worn at the hips.
+  At a fixed angle, the hands of a pear-shaped body went straight into her skirt.
+- **A skirt falls from the hips.** It goes through `hang()` (faded in below the waistband,
+  which stays fitted), so it drops straight from the widest point of hips and seat. Cut
+  from the body surface alone it ballooned and then tucked back in at the hem like a sack.
+- **Shorts are cut on a level plane above the knee**, not along the knee's weight field,
+  whose iso-line wandered into a ragged hem.
+- **No clothes in a skin colour.** From across the plaza a tan top on tan skin reads as no
+  top, and tan shorts on brown legs read as bare legs all the way up. Tan and brown are out
+  of the swatches (`TOP_COLOURS`, js/citizens.js), and a generated person never gets a top
+  or bottoms close to their own skin (cream on the fairest skin, charcoal on the deepest).
 - Shoes are the town's S-profile sneaker fitted to the real foot's measured length and
   width, riding the foot bone. The bare foot is never kept.
 
@@ -152,10 +175,14 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
 |---|---|---|---|
 | gouache | cel bands, paper grain (style.js `paint`) | wobbling hand-drawn | flat |
 | anime | MeshToon, two hard tones | crisp, even width | flat |
-| clay | matte MeshStandard | none | RoomEnvironment, ACES |
+| clay | matte MeshStandard (skin and hair through a warm multiplier) | none | RoomEnvironment, ACES |
 | lowpoly | flat-shaded Lambert on vertex-clustered geometry (finer cells for face, hands, brows) | none | flat |
 | pixel | MeshToon, three tones | thin | drawn at 0.3 pixel ratio, `image-rendering: pixelated`; faces keep only their silhouette |
 | realistic | MeshPhysical skin, cloth and hair sheen, clearcoat eyes | none | environment, ACES, soft shadows |
+- **Filmic tone mapping greys skin out.** Skin and hair are vertex-coloured over a white
+  material, so the lit styles give them a warm multiplier colour (warming the material
+  colour of a vertex-coloured mesh does nothing). Anime faces get a softer ramp than
+  clothes: two hard tones across a face read as blotches.
 - Meshes are tagged with `userData.role` (skin / cloth / hair / eye / glint / brow / shoe
   / sole / prop) and keep their base colour in `userData.base`, so `recolor()` and style
   swaps work both ways. Props (bench, bike, ground) go through `applyRenderStyle` too.
@@ -191,7 +218,18 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   - *Sphere-and-mask hair* (the old approach) left ragged edges, and its hidden inner
     shell showed through the eye openings.
 - Eyes are smooth spheres at the anatomical eyeball's centre and radius, painted
-  sclera / iris / pupil, plus a catchlight placed low on the eye (not above the lid).
+  sclera / iris (with a dark limbal ring at its rim) / pupil, plus a catchlight inside the
+  iris, upper left. **The sphere's pole looks forward**, so the iris and pupil are rings of
+  the mesh: with the pole up, the iris edge crossed the rows and came out blocky and dark.
+- **Don't squint them.** The smile's `eye-*-slit` above ~0.05 (plus the base lids) left
+  narrow dark slots that read as a grimace at plaza distance. Brows sit on the brow ridge
+  (≈0.27 × eye spacing above the eye centres), not up on the forehead.
+- **Short hair ends on a real hairline** (`hairline()` in js/hair.js): across the forehead,
+  a little higher at the temples, straight down in front of the ear as a sideburn, arched
+  over the ear, then down to the nape. Blending the fringe line straight into the side
+  length cut a diagonal across the temple and left it bald. Taper the edge to just off the
+  scalp (+0.025 R), never flush: flush, it z-fights the skin into a ragged edge. No
+  "choppy" noise on cut lines: it reads as messy, not textured.
 - The face's outline skips triangles inside the eye sockets (`userData.inkGeometry`), or
   the outline's back faces show through the eye openings as black.
 

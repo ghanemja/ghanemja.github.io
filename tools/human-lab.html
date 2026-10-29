@@ -35,6 +35,8 @@ const styles = (q.get('styles') || 'real,town').split(',');
 const yaw = THREE.MathUtils.degToRad(+(q.get('yaw') ?? 0)), pitch = THREE.MathUtils.degToRad(+(q.get('pitch') ?? 6));
 const focus = q.get('focus') || 'full';
 const body = {}; for (const k of ['sex', 'age', 'muscle', 'weight', 'height', 'proportions']) if (q.has(k)) body[k] = +q.get(k);
+if (q.has('shape')) body.shape = q.get('shape');
+for (const k of ['shapeAmount', 'bust', 'waist', 'hips', 'shoulders', 'belly', 'seat']) if (q.has(k)) body[k] = +q.get(k);
 const render = q.get('render') || 'gouache';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });

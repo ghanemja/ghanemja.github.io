@@ -74,3 +74,15 @@ seated and hung next to the handlebar instead of holding it. Now `hand(k, contac
   views, both styles. Look for planted feet, knees and elbows bending the right way, hands
   actually on what they hold, hips on the seat, and clothes following the joints
   (`tools/human-lab.html?action=bike&phase=0.6&yaw=-90`).
+
+## Lessons
+- **A run lands on the forefoot.** Each gait has its own `strike` (the foot's pitch at
+  contact: − toe up for a walk's heel strike, + toe down for a run) and `heel` (how far the
+  heel stays up through stance). Reusing the walk's heel strike made the runner look like
+  she was running on her heels.
+- **On the bike, the hand carries on the forearm's line.** Fingers aimed dead ahead while
+  the forearm sloped down to the bars cocked every wrist upward. The grip direction blends
+  70% toward shoulder → grip.
+- In the Citizen Maker a bike is `{ group, spec, … }`, not an Object3D: remove its `group`.
+  `prop.parent` was undefined, so the bike stayed on screen after switching actions.
+

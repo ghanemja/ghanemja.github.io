@@ -27,12 +27,11 @@ export const HAIRSTYLES = {
   lob:      { label: 'Long bob', th: 0.1, vol: 0.14, fringe: [0.55, 0.15], face: 0.88, curtain: { cut: 1.45, aline: 0.1, bell: 0.08, tuck: 0.03 } },
   ponytail: { label: 'Ponytail', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.75, extra: 'ponytail', taper: true },
   bun:      { label: 'Bun', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.75, extra: 'bun', taper: true },
-  curly:    { label: 'Curls', th: 0.26, vol: 0.18, fringe: [0.45, 0.1], face: 0.95, curtain: { cut: 0.55, aline: 0.1, bell: 0.22, tuck: 0.1 }, curl: 0.07 },
+  curly:    { label: 'Curls', th: 0.24, vol: 0.2, fringe: [0.5, 0.06], face: 0.98, curtain: { cut: 0.5, aline: 0.12, bell: 0.2, tuck: 0.12 }, curl: 0.04 },
 };
 
 const ss = THREE.MathUtils.smoothstep;
 const dirAt = (th, e) => { const c = Math.sqrt(Math.max(0, 1 - e * e)); return new THREE.Vector3(Math.sin(th) * c, e, Math.cos(th) * c); };
-const hash = (x) => { const s = Math.sin(x * 127.1) * 43758.5453; return s - Math.floor(s); };
 
 export function makeHair(H, { chin }, styleName, colour) {
   const S = HAIRSTYLES[styleName] ?? HAIRSTYLES.bob, { C, R } = H, g = new THREE.Group();
@@ -51,14 +50,26 @@ export function makeHair(H, { chin }, styleName, colour) {
     const p = d.clone().multiplyScalar(r).add(C); return p.addScaledVector(d, curlN(p));   // (clone: multiplyScalar mutates d)
   };
   const faceW = (th) => 1 - ss(Math.abs(th), S.face, S.face + 0.32);                   // 1 across the face … 0 behind the temples
-  const fringeE = (th) => S.fringe[0] + S.fringe[1] * Math.sin(th) + 0.012 * Math.sin(th * 17);   // a side-swept fringe, a little choppy
+  const fringeE = (th) => S.fringe[0] + S.fringe[1] * Math.sin(th);                     // a side-swept fringe (a clean line: "choppy" read as messy)
+  // where short hair ends, all the way round: across the forehead, a little higher at the
+  // temples, straight DOWN in front of the ear as a sideburn, up and over the ear, then down
+  // behind it to the nape. (Blending the fringe straight into the side length cut a diagonal
+  // across the temple and left it bald.)
+  const hairline = (th) => {
+    const a = Math.abs(th), f = fringeE(th), ear = S.side, burn = S.burn ?? THREE.MathUtils.clamp(ear - 0.12, -0.14, -0.02);
+    // (over the ear it arches round the top of it, not a flat ledge)
+    const K = [[0, f], [0.62, f + 0.02], [0.86, f + 0.06], [1.06, burn], [1.2, burn], [1.4, ear + 0.04], [1.62, ear + 0.1], [1.9, ear + 0.03], [2.45, ear + (S.back - ear) * 0.65], [Math.PI, S.back]];
+    let k = 1; while (k < K.length - 1 && K[k][0] < a) k++;
+    const [a0, e0] = K[k - 1], [a1, e1] = K[k];
+    return e0 + (e1 - e0) * ss(a, a0, a1);
+  };
   const back = (th) => (1 - Math.cos(th)) / 2;                                          // 0 front … 1 back
 
   // one column: the path from the crown down, as points, and where it ends (index)
   const column = (th) => {
     const pts = [], hang = !!S.curtain;
     // on the head: from the crown down to ear level (curtains) or to this column's end
-    const endE = hang ? -0.08 : THREE.MathUtils.lerp(S.side, S.back, ss(back(th), 0.5, 1));
+    const endE = hang ? -0.08 : hairline(th);
     for (let i = 0; i <= SAMPLES; i++) {
       const e = 1 - (1 - endE) * (i / SAMPLES);
       pts.push(onHead(th, Math.min(0.999, e)));
@@ -78,7 +89,7 @@ export function makeHair(H, { chin }, styleName, colour) {
     // arclength, and where the fringe would end this column
     const L = [0]; for (let i = 1; i < pts.length; i++) L.push(L[i - 1] + pts[i].distanceTo(pts[i - 1]));
     const fe = fringeE(th), fi = Math.min(SAMPLES, Math.round((1 - fe) / (1 - (hang ? -0.08 : endE)) * SAMPLES));
-    const end = THREE.MathUtils.lerp(L[L.length - 1], L[Math.max(1, fi)], faceW(th));
+    const end = hang ? THREE.MathUtils.lerp(L[L.length - 1], L[Math.max(1, fi)], faceW(th)) : L[L.length - 1];
     return { pts, L, end };
   };
   const at = (col, s) => {                                                              // point at arclength s along a column
@@ -91,11 +102,12 @@ export function makeHair(H, { chin }, styleName, colour) {
   const cols = [];
   for (let j = 0; j < NT; j++) cols.push(column(-Math.PI + (j / NT) * Math.PI * 2));
   for (let j = 0; j < NT; j++) {
-    const th = -Math.PI + (j / NT) * Math.PI * 2, col = cols[j], len = col.end * (1 - 0.03 * hash(j) * (S.curtain ? 1 : 0));   // a slightly uneven cut
+    const th = -Math.PI + (j / NT) * Math.PI * 2, col = cols[j], len = col.end;
     for (let i = 0; i <= NR; i++) {
       const u = i / NR, p = at(col, len * u);
       if (S.taper) {                                                                    // short hair thins out to the hairline at the sides and nape
-        const d = p.clone().sub(C), r0 = H.radius(d.clone().normalize()) * 1.004, k = (1 - faceW(th)) * ss(u, 0.6, 1);
+        // (to just OFF the skin: flush with it, the two z-fought into a ragged hairline)
+        const d = p.clone().sub(C), r0 = H.scalp(d.clone().normalize()) + 0.025 * R, k = ss(u, 0.55, 1);
         p.copy(C).addScaledVector(d, THREE.MathUtils.lerp(d.length(), r0, k * 0.85) / d.length());
       }
       P.push(p.x, p.y, p.z);
@@ -128,14 +140,14 @@ export function makeHair(H, { chin }, styleName, colour) {
   const tailMat = paint(base.getHex(), { soft: true, hatch: 0.3 });
   const tie = paint(0x2a2228, { hatch: 0 });
   if (S.extra === 'ponytail') {
-    const at0 = onHead(Math.PI, 0.12), out = at0.clone().sub(C).setY(0).normalize();
+    const at0 = onHead(Math.PI, 0.3), out = at0.clone().sub(C).setY(0).normalize();
     const curve = new THREE.CatmullRomCurve3([at0, at0.clone().addScaledVector(out, 0.35 * R).add(new THREE.Vector3(0, -0.15 * R, 0)),
       at0.clone().addScaledVector(out, 0.42 * R).add(new THREE.Vector3(0, -0.9 * R, 0)), at0.clone().addScaledVector(out, 0.3 * R).add(new THREE.Vector3(0, -1.7 * R, 0))]);
     const tg = new THREE.TubeGeometry(curve, 40, 1, 14, false), tp = tg.attributes.position, q = new THREE.Vector3(), cc = new THREE.Vector3();
     for (let i = 0; i < tp.count; i++) {                                                 // tapers from the tie to a soft point, with strand ridges
       const t = Math.floor(i / 15) / 40, a = (i % 15) / 14 * Math.PI * 2;
       curve.getPointAt(Math.min(1, t), cc);
-      const rad = R * (0.2 * (1 - t * 0.75) + 0.05 * Math.sin(Math.PI * Math.min(1, t * 3))) * (1 + 0.06 * Math.sin(a * 9));
+      const rad = R * (0.2 + 0.1 * Math.sin(Math.PI * Math.min(1, t * 1.6)) - 0.17 * ss(t, 0.55, 1)) * (1 + 0.04 * Math.sin(a * 7));   // full, then a soft point
       q.fromBufferAttribute(tp, i).sub(cc).normalize().multiplyScalar(rad).add(cc); tp.setXYZ(i, q.x, q.y, q.z);
     }
     tg.computeVertexNormals();

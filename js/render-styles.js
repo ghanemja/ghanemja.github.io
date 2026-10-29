@@ -17,8 +17,9 @@ import { paint, ink } from './style.js';
 const cache = new Map();
 const once = (key, make) => { if (!cache.has(key)) cache.set(key, make()); return cache.get(key); };
 const ramp = (vals) => { const t = new THREE.DataTexture(new Uint8Array(vals), vals.length, 1, THREE.RedFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; };
-const CEL2 = ramp([150, 255]), CEL3 = ramp([95, 170, 255]);
+const CEL2 = ramp([150, 255]), CEL3 = ramp([95, 170, 255]), CEL_SKIN = ramp([212, 255]);   // (a face in hard dark bands read as blotches)
 const lift = (hex, t, to = 0xffffff) => new THREE.Color(hex).lerp(new THREE.Color(to), t).getHex();
+const warm = (hex, k = 0.3) => { const c = new THREE.Color(hex), h = {}; c.getHSL(h); return c.setHSL(h.h, Math.min(1, h.s * (1 + k)), h.l * (1 - k * 0.3)).getHex(); };
 
 export const RENDER_STYLES = {
   gouache: {
@@ -27,11 +28,11 @@ export const RENDER_STYLES = {
   },
   anime: {
     label: 'Anime', note: 'two hard tones, crisp even outlines', ink: 'crisp',
-    mat: (b) => once(`anime|${b.key}`, () => new THREE.MeshToonMaterial({ color: b.role === 'skin' || b.role === 'hair' ? b.color : lift(b.color, 0.06), vertexColors: b.vc, side: b.side, gradientMap: CEL2 })),
+    mat: (b) => once(`anime|${b.key}`, () => new THREE.MeshToonMaterial({ color: b.role === 'skin' || b.role === 'hair' ? b.color : lift(b.color, 0.06), vertexColors: b.vc, side: b.side, gradientMap: b.role === 'skin' ? CEL_SKIN : CEL2 })),
   },
   clay: {
     label: 'Clay', note: 'soft matte plasticine, no outlines', ink: null,
-    mat: (b) => once(`clay|${b.key}`, () => new THREE.MeshStandardMaterial({ color: lift(b.color, 0.12), vertexColors: b.vc, side: b.side, roughness: b.role === 'eye' || b.role === 'glint' ? 0.25 : 0.88, metalness: 0 })),
+    mat: (b) => once(`clay|${b.key}`, () => new THREE.MeshStandardMaterial({ color: b.vc && (b.role === 'skin' || b.role === 'hair') ? 0xf2d6c6 : lift(b.color, 0.12), vertexColors: b.vc, side: b.side, roughness: b.role === 'eye' || b.role === 'glint' ? 0.25 : 0.88, metalness: 0 })),
   },
   lowpoly: {
     label: 'Low-poly', note: 'a simplified, faceted mesh', ink: null, cell: 0.028,
@@ -46,9 +47,11 @@ export const RENDER_STYLES = {
     mat: (b) => once(`real|${b.key}`, () => {
       const o = { color: b.color, vertexColors: b.vc, side: b.side };
       switch (b.role) {
-        case 'skin': return new THREE.MeshPhysicalMaterial({ ...o, roughness: 0.55, sheen: 0.35, sheenColor: 0xffc2a8, sheenRoughness: 0.6 });
+        // filmic tone mapping greys skin out: it is given back a little warmth and colour first
+        // (skin and hair are vertex-coloured over white, so the material colour is a warm multiplier)
+        case 'skin': return new THREE.MeshPhysicalMaterial({ ...o, color: b.vc ? 0xf0d0bc : warm(b.color), roughness: 0.6, sheen: 0.25, sheenColor: 0xff9f80, sheenRoughness: 0.6 });
+        case 'hair': return new THREE.MeshPhysicalMaterial({ ...o, color: b.vc ? 0xe6d2c0 : warm(b.color, 0.15), roughness: 0.42, sheen: 1, sheenColor: lift(b.color, 0.45), sheenRoughness: 0.3 });
         case 'cloth': return new THREE.MeshPhysicalMaterial({ ...o, roughness: 0.92, sheen: 0.8, sheenColor: lift(b.color, 0.35), sheenRoughness: 0.75 });
-        case 'hair': return new THREE.MeshPhysicalMaterial({ ...o, roughness: 0.42, sheen: 1, sheenColor: lift(b.color, 0.45), sheenRoughness: 0.3 });
         case 'eye': case 'glint': return new THREE.MeshPhysicalMaterial({ ...o, roughness: 0.08, clearcoat: 1 });
         case 'shoe': return new THREE.MeshStandardMaterial({ ...o, roughness: 0.65 });
         case 'sole': return new THREE.MeshStandardMaterial({ ...o, roughness: 0.85 });

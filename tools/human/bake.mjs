@@ -39,6 +39,15 @@ for (const g of ['female', 'male']) {
 for (const u of ['mouth-corner-puller', 'mouth-elevation', 'mouth-upward-retraction', 'mouth-compression',
   'eyebrows-left-up', 'eyebrows-right-up', 'eyebrows-left-inner-up', 'eyebrows-right-inner-up',
   'eye-left-slit', 'eye-right-slit', 'eye-left-opened-up', 'eye-right-opened-up']) TARGETS.push(`expression/units/caucasian/${u}`);
+// body types (MakeHuman's "bodyshapes": measured silhouettes, separate sets for women and men)
+// and the measurement targets that move one girth at a time
+export const SHAPES = {
+  fem: ['apple', 'diamond', 'full-hourglass', 'invert-triangle', 'lean-column', 'neat-hourglass', 'rectangle', 'triangle'],
+  man: ['apple', 'invert-triangle', 'lean-column', 'rectangle', 'trapezoid', 'triangle'],
+};
+for (const [g, list] of Object.entries(SHAPES)) for (const sh of list) TARGETS.push(`bodyshapes/bodyshapes-elvs-${g}-${sh}`);
+for (const m of ['bust', 'underbust', 'waist', 'hips', 'thigh', 'upperarm']) for (const d of ['decr', 'incr']) TARGETS.push(`measure/measure-${m}-circ-${d}`);
+for (const d of ['decr', 'incr']) TARGETS.push(`measure/measure-shoulder-dist-${d}`, `stomach/stomach-pregnant-${d}`, `buttocks/buttocks-volume-${d}`);
 const KEEP_GROUPS = new Set(['body', 'helper-hair', 'helper-l-eye', 'helper-r-eye', 'helper-skirt']);
 
 async function get(path) {
@@ -145,7 +154,7 @@ async function pack(list) {
     const rows = []; let maxD = 1e-9;
     for (const [i, [dx, dy, dz]] of m) { rows.push([i, dx, dy, dz]); maxD = Math.max(maxD, Math.abs(dx), Math.abs(dy), Math.abs(dz)); }
     const q = maxD / 32767;
-    out[t.replace(/^macrodetails\/(height\/|proportions\/)?/, '').replace(/^expression\/units\/caucasian\//, 'expr/')] = {
+    out[t.replace(/^macrodetails\/(height\/|proportions\/)?/, '').replace(/^expression\/units\/caucasian\//, 'expr/').replace(/^bodyshapes\/bodyshapes-elvs-/, 'shape/').replace(/^measure\/measure-/, 'measure/')] = {
       q, idx: b64(Uint16Array.from(rows.map(r => r[0]))),
       d: b64(Int16Array.from(rows.flatMap(r => [r[1], r[2], r[3]].map(x => Math.round(x / q))))),
     };

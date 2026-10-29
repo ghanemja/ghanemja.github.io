@@ -16,7 +16,9 @@
 // Parameters: age in years (1–90; children and older people need loadAges first), and
 // (all 0..1, 0.5 = average adult) sex (0 female … 1 male), muscle,
 // weight, height, proportions (>0.5 idealised, <0.5 uncommon), and ancestry
-// { african, asian, caucasian } (any mix; normalised), and `expression`: facial units
+// { african, asian, caucasian } (any mix; normalised), `shape` (a body type from BODY_TYPES,
+// with `shapeAmount` 0..1), the girths `bust`, `waist`, `hips`, `shoulders`, `belly`, `seat`
+// (−1..1, 0 = as the rest of the body makes them), and `expression`: facial units
 // by name ('mouth-corner-puller' is the smile muscle). `stature` sets the final
 // height in scene units; MakeHuman's own units are decimetres.
 import * as THREE from 'three';
@@ -68,6 +70,25 @@ export function statureFor(years, sex = 0, height = 0.5) {
   return base * (1 + (height - 0.5) * 0.12);                          // ±6% across the slider
 }
 
+// body types: MakeHuman's measured silhouettes ("bodyshapes", sculpted separately for women
+// and men). Where one set has no version of a type, the nearest one stands in.
+// The measured silhouettes alone move a girth only 2–4 cm (they read as "everyone the same"),
+// so each type also carries a girth recipe: where the body is wider or narrower.
+export const BODY_TYPES = {
+  rectangle: { label: 'Straight', fem: { rectangle: 1 }, man: { rectangle: 1 }, girth: { waist: 0.35, hips: -0.2 } },
+  hourglass: { label: 'Hourglass', women: true, fem: { 'neat-hourglass': 1 }, man: { rectangle: 0.5 }, girth: { waist: -0.5, hips: 0.45, bust: 0.3, shoulders: 0.1 } },
+  curvy: { label: 'Curvy', women: true, fem: { 'full-hourglass': 1 }, man: { triangle: 0.5, apple: 0.3 }, girth: { hips: 0.6, seat: 0.25, bust: 0.45, waist: -0.1 } },
+  pear: { label: 'Pear', fem: { triangle: 1 }, man: { triangle: 1 }, girth: { hips: 0.75, seat: 0.15, shoulders: -0.4, bust: -0.15 } },
+  apple: { label: 'Round', fem: { apple: 1 }, man: { apple: 1 }, girth: { belly: 0.45, waist: 0.6, hips: 0.1 } },
+  diamond: { label: 'Diamond', fem: { diamond: 1 }, man: { apple: 0.6, rectangle: 0.4 }, girth: { waist: 0.45, belly: 0.25, hips: 0.25, shoulders: -0.35 } },
+  wedge: { label: 'Broad shoulders', fem: { 'invert-triangle': 1 }, man: { 'invert-triangle': 1 }, girth: { shoulders: 0.75, hips: -0.4, waist: -0.15 } },
+  trapezoid: { label: 'Athletic', fem: { 'invert-triangle': 0.5, rectangle: 0.5 }, man: { trapezoid: 1 }, girth: { shoulders: 0.5, waist: -0.35, seat: 0.2 } },
+  column: { label: 'Lean', fem: { 'lean-column': 1 }, man: { 'lean-column': 1 }, girth: { waist: -0.3, hips: -0.45, bust: -0.35, seat: -0.3 } },
+};
+// (belly is MakeHuman's "pregnant" target, so it is kept to half: a tummy, not a pregnancy)
+const GIRTH_MAX = { belly: 0.5 };
+const GIRTHS = { bust: 'measure/bust-circ', waist: 'measure/waist-circ', hips: 'measure/hips-circ', shoulders: 'measure/shoulder-dist', belly: 'stomach/stomach-pregnant', seat: 'buttocks/buttocks-volume' };
+
 // MakeHuman's macro blend: which targets, how much, for a set of parameters
 function macroWeights(P) {
   const w = {}, add = (k, v) => { if (v > 1e-4) w[k] = (w[k] || 0) + v; };
@@ -102,6 +123,13 @@ function macroWeights(P) {
     add(`${g}-young-averagemuscle-averageweight-idealproportions`, gw * Math.max(0, (P.proportions - 0.5) * 2));
     add(`${g}-young-averagemuscle-averageweight-uncommonproportions`, gw * Math.max(0, (0.5 - P.proportions) * 2));
   }
+  // body type and girths: grown-up shapes, so they come in through the teens
+  const grown = THREE.MathUtils.smoothstep(P.age ?? 25, 11, 18);
+  const T = BODY_TYPES[P.shape], amt = (P.shapeAmount ?? 1) * grown, girth = { ...(T?.girth || {}) };
+  if (T) for (const [set, gw] of [['fem', 1 - P.sex], ['man', P.sex]]) for (const [k, v] of Object.entries(T[set])) add(`shape/${set}-${k}`, gw * v * amt * 1.3);
+  for (const g of Object.keys(GIRTHS)) girth[g] = (girth[g] || 0) * amt + (P[g] || 0) * Math.max(0.35, grown);
+  if (girth.bust > 0) girth.bust *= 1 - P.sex;                     // (a fuller bust is a woman's)
+  for (const [g, v] of Object.entries(girth)) if (v) add(`${GIRTHS[g]}-${v > 0 ? 'incr' : 'decr'}`, Math.min(GIRTH_MAX[g] ?? 1, Math.abs(v)));
   for (const [k, v] of Object.entries(P.expression || {})) add('expr/' + k, v);   // e.g. { 'mouth-corner-puller': 0.6 }
   return w;
 }

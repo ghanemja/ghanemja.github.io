@@ -160,8 +160,9 @@ export function relaxedPose(sk) {
 // ── gaits, as fractions of the leg so every body moves like itself ──
 const GAITS = {
   //        stance share, stride (cycle distance ÷ leg), cycles/s for a 0.85 leg, foot lift, hip drop, bob, arm swing, elbow, lean, foot spacing
-  walk: { duty: 0.62, stride: 1.55, cadence: 0.95, lift: 0.09, drop: 0.03, bob: 0.016, arm: 0.3, elbow: 0.25, lean: 0.04, footX: 0.8, curl: 0 },
-  run: { duty: 0.36, stride: 2.6, cadence: 1.4, lift: 0.3, drop: 0.08, bob: 0.03, arm: 0.6, elbow: 1.45, lean: 0.17, footX: 0.55, curl: 0.55 },
+  // strike: the foot's pitch as it lands (− toe up: a walk lands on the heel; + toe down: a run lands on the ball of the foot)
+  walk: { duty: 0.62, stride: 1.55, cadence: 0.95, lift: 0.09, drop: 0.03, bob: 0.016, arm: 0.3, elbow: 0.25, lean: 0.04, footX: 0.8, curl: 0, strike: -0.22, heel: 0 },
+  run: { duty: 0.36, stride: 2.6, cadence: 1.4, lift: 0.3, drop: 0.08, bob: 0.03, arm: 0.6, elbow: 1.45, lean: 0.17, footX: 0.55, curl: 0.55, strike: 0.2, heel: 0.03 },
 };
 
 // a hand on a handlebar, in the rig frame: fingers forward and a little down, palm down onto the bar
@@ -247,13 +248,15 @@ export function makeMotion(person) {
       if (ph < G.duty) {                                            // stance: the foot stays put while the body passes over it
         const u = ph / G.duty;
         a.z = Lst * (0.5 - u) + 0.02 * M.leg;
-        a.y += 0.06 * M.leg * ss(u, 0.7, 1);                        // heel rises for the push-off
-        pitch = 0.5 * ss(u, 0.7, 1) - 0.22 * (1 - ss(u, 0, 0.15));  // heel strike (toe up) … toe-off (toe down)
+        // a runner's heel barely touches: the foot lands toe-down and the heel stays a little up
+        const land = 1 - ss(u, 0, G.heel ? 0.35 : 0.15);
+        a.y += 0.06 * M.leg * ss(u, 0.7, 1) + G.heel * M.leg * (0.4 + 0.6 * land);   // heel rises for the push-off
+        pitch = 0.5 * ss(u, 0.7, 1) + G.strike * land + (G.heel ? 0.08 : 0);       // strike … toe-off (toe down)
       } else {                                                      // swing: lift, carry it forward, reach
         const u = (ph - G.duty) / (1 - G.duty);
         a.z = Lst * (ss(u, 0, 1) - 0.5) + 0.02 * M.leg;
         a.y += G.lift * M.leg * Math.sin(Math.PI * u) + (G === GAITS.run ? 0.22 * M.leg * Math.sin(Math.PI * Math.min(1, u * 1.5)) : 0);
-        pitch = 0.5 * (1 - u) - 0.22 * ss(u, 0.75, 1);
+        pitch = 0.5 * (1 - u) + G.strike * ss(u, 0.75, 1);
       }
       leg(k, a, new THREE.Vector3(0, 0.1, 1), pitch);
     }
@@ -302,7 +305,10 @@ export function makeMotion(person) {
       leg(k, pedal.add(new THREE.Vector3(0, 0.065 * M.s, -0.03 * M.s)), new THREE.Vector3(s * 0.08, 0.3, 1), 0.12 + 0.18 * Math.sin(c + Math.PI / 2));
       // the grip lies across the palm just short of the knuckles; the fingers wrap round it
       const g = W(spec.grip[k].clone().add(new THREE.Vector3(s * spec.gripLen * 0.5, 0, 0)));
-      const F = GRIP_F.clone().applyQuaternion(rq), N = GRIP_N.clone().applyQuaternion(rq);
+      // the hand carries on the forearm's line down to the bar (aimed straight ahead while the
+      // forearm sloped down, the wrist cocked up), rolled so the palm comes down onto the grip
+      const reach = g.clone().sub(wp(B['upperarm01.' + k])).normalize(), Fw = GRIP_F.clone().applyQuaternion(rq);
+      const F = Fw.lerp(reach, 0.7).normalize(), N = GRIP_N.clone().applyQuaternion(rq).addScaledVector(F, -GRIP_N.clone().applyQuaternion(rq).dot(F)).normalize();
       hand(k, g, F, N, W(M.shoulder[k]).add(new THREE.Vector3(s * 0.7, -0.6, -0.3)), { along: 0.85, gap: spec.barR });
       curlFingers(B, k, 0.85);                                      // wrapped round the bar (≈65° / 85° / 45°)
     }

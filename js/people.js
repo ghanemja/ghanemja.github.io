@@ -12,18 +12,18 @@
 // Garments are smoothed so they drape over the body instead of shrink-wrapping
 // it, then pushed back out wherever smoothing sank them inside.
 import * as THREE from 'three';
-import { loadAnatomy, loadAges, needsAges, statureFor, buildBody, buildSkeleton, regionWeight } from './anatomy.js';
+import { loadAnatomy, loadAges, needsAges, statureFor, buildBody, buildSkeleton, regionWeight, rotateBone } from './anatomy.js';
 import { applyRenderStyle, recolor } from './render-styles.js';
 import { stylize, STYLES, smoothSurface, eyeCentres, headHeight } from './stylize.js';
 import { paint, ink } from './style.js';
 import { shoeGeo } from './folk.js';
-import { relaxedPose, makeMotion } from './motion.js';
+import { relaxedPose, makeMotion, wp } from './motion.js';
 import { makeHair } from './hair.js';
 
 export const LOOK_JANELLE = {
   body: { sex: 0, muscle: 0.45, weight: 0.42, height: 0.5, proportions: 0.6 },
   // a warm, easy smile: the zygomaticus lifts the mouth corners, the cheeks lift the lower lids a touch
-  expression: { 'mouth-corner-puller': 0.55, 'mouth-elevation': 0.15, 'eye-left-slit': 0.12, 'eye-right-slit': 0.12 },
+  expression: { 'mouth-corner-puller': 0.55, 'mouth-elevation': 0.15, 'eye-left-slit': 0.04, 'eye-right-slit': 0.04 },   // (more squints: small dark eyes at a distance)
   skin: 0xefc3a2, lips: 0xd98a7e, blush: 0xe79a8a, eyes: 0x4a3226, brows: 0x9a7448,
   hair: 0xc9a06a, hairStyle: 'bob', top: 0x2f2b33, bottom: 0x6f8db0, shoes: 0xf1ebdf, sole: 0xc98f5a,
 };
@@ -258,7 +258,7 @@ function dress(body, N, look) {
   S.f = { neck: Array.from(R('neck01')), neck2: Array.from(R('neck02')), hands: Array.from(both('wrist')), feet: Array.from(both('foot')),
     arms: Array.from(both('shoulder01')), ua2: Array.from(both('upperarm02')), shin: Array.from(both('lowerleg01')), ul2: Array.from(both('upperleg02')) };
   const y = (i, s) => s.P[i * 3 + 1], top = look.topType ?? 'sweater', bottom = look.bottomType ?? 'trousers';
-  const hemY = J['upperleg01.L'].head.y + (look.hem ?? 0.02) * H, waistY = hemY + 0.08 * H;
+  const hemY = J['upperleg01.L'].head.y + (look.hem ?? 0.02) * H, waistY = hemY + 0.08 * H, kneeY = J['lowerleg01.L'].head.y;
   const collarF = top === 'turtleneck' ? 'neck2' : 'neck', collar = 0.5;
   const sleeveF = top === 'tee' ? 'ua2' : 'hands', cuff = 0.5;
   const out = { top, bottom };
@@ -267,11 +267,11 @@ function dress(body, N, look) {
   out.top = cut(cut(cut(copySurface(S), (i, s) => collar - s.f[collarF][i]), (i, s) => cuff - s.f[sleeveF][i]),
     (i, s) => s.f.arms[i] > 0.5 ? 1 : y(i, s) - hemY);
   const legEnd = bottom === 'trousers' ? (i, s) => 0.45 - s.f.feet[i]                    // to the ankle
-    : bottom === 'shorts' ? (i, s) => 0.3 - s.f.shin[i]                                  // to just above the knee
+    : bottom === 'shorts' ? (i, s) => y(i, s) - (kneeY + 0.045 * H)                      // to just above the knee (a level hem: the knee's weight field wandered)
     : (i, s) => 0.5 - s.f.ul2[i];                                                         // under a skirt: to mid thigh
   out.bottom = cut(cut(cut(copySurface(S), (i, s) => 0.5 - s.f.arms[i]), (i, s) => waistY - y(i, s)), legEnd);
   if (bottom !== 'trousers') {                                                            // bare legs below, never the feet (shoes)
-    const from = bottom === 'shorts' ? (i, s) => s.f.shin[i] - 0.12 : (i, s) => s.f.ul2[i] - 0.3;
+    const from = bottom === 'shorts' ? (i, s) => kneeY + 0.06 * H - y(i, s) : (i, s) => s.f.ul2[i] - 0.3;
     out.legs = cut(cut(copySurface(S), from), (i, s) => 0.6 - s.f.feet[i]);
   }
   if (bottom === 'skirt') {                                                               // MakeHuman's fitted skirt surface, cut at the knee
@@ -336,16 +336,20 @@ function eyes(body, look) {
   ['helper-l-eye', 'helper-r-eye'].forEach((gname, side) => {
     const c = cs[side], vs = [...new Set(body.A.tris[gname])], p = new THREE.Vector3();
     let rad = 0; for (const v of vs) rad += p.fromArray(body.pos, v * 3).distanceTo(c); rad /= vs.length;
-    const g = new THREE.SphereGeometry(rad, 40, 28), P = g.attributes.position, col = new Float32Array(P.count * 3), k = new THREE.Color();
+    // its pole looks forward, so the iris and pupil are rings of the mesh: clean circles (with the
+    // pole up, the iris edge crossed the rows and came out blocky)
+    const g = new THREE.SphereGeometry(rad, 48, 40).rotateX(Math.PI / 2), P = g.attributes.position, col = new Float32Array(P.count * 3), k = new THREE.Color();
     for (let i = 0; i < P.count; i++) {
       const f = p.fromBufferAttribute(P, i).normalize().z;
-      k.copy(f > pupilCos ? dark : f > irisCos ? iris.clone().lerp(dark, 0.35 * (f - irisCos) / (pupilCos - irisCos)) : white);
+      // iris: its own colour, a dark limbal ring at the rim (what makes an eye read as an eye), a little deeper by the pupil
+      const t = (f - irisCos) / (pupilCos - irisCos);
+      k.copy(f > pupilCos ? dark : f > irisCos ? iris.clone().lerp(dark, 0.55 * (1 - THREE.MathUtils.smoothstep(t, 0, 0.18)) + 0.2 * THREE.MathUtils.smoothstep(t, 0.7, 1)) : white);
       col.set([k.r, k.g, k.b], i * 3);
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     const m = new THREE.Mesh(g, paint(0xffffff, { vertexColors: true, hatch: 0 })); m.position.copy(c); m.userData.noInk = true; out.add(m);
     const glint = new THREE.Mesh(new THREE.SphereGeometry(rad * (big ? 0.2 : 0.13), 10, 8), paint(0xffffff, { hatch: 0 }));
-    glint.position.copy(c).add(new THREE.Vector3(rad * 0.28, rad * 0.12, rad * 0.96)); glint.userData.noInk = true; out.add(glint);
+    glint.position.copy(c).add(new THREE.Vector3(-rad * 0.17, rad * 0.17, rad * 0.98));   // inside the iris, upper left glint.userData.noInk = true; out.add(glint);
   });
   return out;
 }
@@ -356,11 +360,11 @@ function brows(body, H, look) {
   for (const c of [l, r]) {
     const s = Math.sign(c.x), pts = [];
     for (let i = 0; i <= 8; i++) {
-      const t = i / 8, p = c.clone().add(new THREE.Vector3(s * E * (-0.28 + 0.62 * t), E * (0.34 + 0.08 * Math.sin(Math.PI * t * 0.9) - 0.05 * t), 0));
+      const t = i / 8, p = c.clone().add(new THREE.Vector3(s * E * (-0.28 + 0.62 * t), E * (0.27 + 0.07 * Math.sin(Math.PI * t * 0.9) - 0.05 * t), 0));   // on the brow ridge, not up on the forehead
       const d = p.clone().sub(H.C).normalize();
       pts.push(d.multiplyScalar(H.radius(d) * 1.012).add(H.C));
     }
-    const curve = new THREE.CatmullRomCurve3(pts), g = new THREE.TubeGeometry(curve, 24, E * 0.028, 6);
+    const curve = new THREE.CatmullRomCurve3(pts), g = new THREE.TubeGeometry(curve, 24, E * 0.036, 6);
     const P = g.attributes.position, q = new THREE.Vector3(), cc = new THREE.Vector3();
     for (let i = 0; i < P.count; i++) {                    // taper: full at the inner end, fine at the tail
       const t = Math.floor(i / 7) / 24; curve.getPointAt(Math.min(1, t), cc);
@@ -381,7 +385,7 @@ function skinColours(body, look) {
     p.fromArray(pos, i * 3); c.copy(base);
     if (p.z > mouth.z - E * 0.5) {
       const m = Math.hypot((p.x - mouth.x) / (E * 0.42), (p.y - mouth.y) / (E * 0.13));
-      c.lerp(lips, 0.55 * (1 - THREE.MathUtils.smoothstep(m, 0.6, 1)));
+      c.lerp(lips, 0.7 * (1 - THREE.MathUtils.smoothstep(m, 0.6, 1)));
       if (body.style.soften) for (const e of [l, r]) {       // a painted style gets a little blush
         const b = Math.hypot((p.x - e.x * 1.15) / (E * 0.3), (p.y - (e.y - E * 0.55)) / (E * 0.2));
         c.lerp(blush, 0.4 * (1 - THREE.MathUtils.smoothstep(b, 0.3, 1)));
@@ -412,6 +416,33 @@ function shoes(body, look, sk) {
     out.push(g);
   }
   return out;
+}
+
+// the relaxed arms swing out just far enough that the hands hang clear of what's worn at the
+// hips: on wide hips or a skirt, arms hanging at a fixed angle went straight into the cloth
+function clearHips(sk, meshes, k) {
+  const B = sk.byName, Z = new THREE.Vector3(0, 0, 1), p = new THREE.Vector3();
+  for (const key of ['L', 'R']) {
+    const s = key === 'L' ? 1 : -1;
+    for (let it = 0; it < 4; it++) {
+      sk.root.updateMatrixWorld(true);
+      const w = wp(B['wrist.' + key]), tip = wp(B['finger3-3.' + key]), sh = wp(B['upperarm01.' + key]);
+      let need = 0;
+      for (const m of meshes) {
+        const P = m.geometry.attributes.position;
+        for (let i = 0; i < P.count; i++) {
+          p.fromBufferAttribute(P, i);
+          if (p.x * s <= 0 || p.y > w.y + 0.03 * k || p.y < tip.y - 0.02 * k) continue;
+          const t = THREE.MathUtils.clamp((w.y - p.y) / ((w.y - tip.y) || 1), 0, 1), hx = (w.x + (tip.x - w.x) * t) * s, hz = w.z + (tip.z - w.z) * t;
+          if (Math.abs(p.z - hz) > 0.05 * k) continue;
+          need = Math.max(need, p.x * s + 0.028 * k - hx);                 // the hand's inner side, a finger's width off the cloth
+        }
+      }
+      if (need <= 0.002 * k) break;
+      rotateBone(B['upperarm01.' + key], Z, s * Math.atan2(need, sh.y - w.y) * 1.05);
+    }
+  }
+  sk.root.updateMatrixWorld(true);
 }
 
 export async function makePerson(spec = {}) {
@@ -487,11 +518,13 @@ export async function makePerson(spec = {}) {
   const botM = add(geometryOf(bot, drape(bot, { thick: 0.006, ease: () => 0.003, smooth: 18, k })), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth');
   const cloth = { top: [topM], bottom: [botM] };
   if (D.skirt) {                                        // the skirt: lifted a little off the fitted surface, the same colour as the bottoms
-    const sk2 = D.skirt, P = sk2.P.slice(), used = new Set(sk2.T), c = body.joints.root?.head ?? new THREE.Vector3();
+    const sk2 = D.skirt, P = Float32Array.from(sk2.P), used = new Set(sk2.T), c = body.joints.root?.head ?? new THREE.Vector3();
     for (const i of used) {                             // its normals may face in: lift away from the body's axis either way
       const nx = sk2.N[i * 3], nz = sk2.N[i * 3 + 2], ox = P[i * 3] - c.x, oz = P[i * 3 + 2] - c.z, sg = nx * ox + nz * oz >= 0 ? 1 : -1;
       add3(P, i, sg * nx * 0.012 * k, sg * sk2.N[i * 3 + 1] * 0.012 * k, sg * nz * 0.012 * k);
     }
+    // and it falls from the widest point of the hips and seat rather than following the thighs back in (a sack)
+    hang(P, sk2, () => 1, { fall: 0.995, maxPush: 0.08 * k, top: body.joints['upperleg01.L'].head.y + 0.02 * body.P.stature, band: 0.07 * body.P.stature, hem: -99, hemBand: 0.01 });   // (the waistband stays fitted)
     cloth.bottom.push(add(geometryOf(sk2, P), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth'));
   }
   for (const m of parts) { rig.add(m); m.bind(sk.skeleton); }
@@ -505,6 +538,7 @@ export async function makePerson(spec = {}) {
   sk.byName.head.add(atHead);
 
   relaxedPose(sk);
+  clearHips(sk, cloth.bottom, k);
   const tag = (g, role) => g.traverse(o => { if (o.isMesh && !o.userData.role) o.userData.role = role; });
   for (const g of shoeGroups) { g.children[0].userData.role = 'shoe'; g.children[1].userData.role = 'sole'; }
   const tagHead = () => { eyeG.traverse(o => { if (o.isMesh) o.userData.role = o.geometry.attributes.color ? 'eye' : 'glint'; }); tag(browG, 'brow'); if (hairG) hairG.traverse(o => { if (o.isMesh) o.userData.role = o.geometry.type === 'TorusGeometry' ? 'prop' : 'hair'; }); };

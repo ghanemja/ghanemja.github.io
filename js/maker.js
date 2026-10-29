@@ -9,7 +9,7 @@ import { makeBike } from './motion.js';
 import { paint, ink, styleTick, blobShadow } from './style.js';
 import { HAIRSTYLES } from './hair.js';
 import { RENDER_STYLES, applyRenderStyle, applySceneStyle } from './render-styles.js';
-import { PALETTE, TOP_COLOURS, FACES, STYLE_NAMES, DEFAULT, TOPS, BOTTOMS, AGE_MIN, AGE_MAX, AGE_RANGES, randomCitizen, generateCitizens, toPersonSpec, INSTANT, loadRoster, saveRoster, toJSON, fromJSON } from './citizens.js';
+import { PALETTE, TOP_COLOURS, FACES, STYLE_NAMES, DEFAULT, TOPS, BOTTOMS, BODY_TYPES, AGE_MIN, AGE_MAX, AGE_RANGES, randomCitizen, generateCitizens, toPersonSpec, INSTANT, loadRoster, saveRoster, toJSON, fromJSON } from './citizens.js';
 
 const $ = (s) => document.querySelector(s);
 const stageEl = $('#stage');
@@ -63,7 +63,7 @@ async function show() {
   portrait(p, cur());
 }
 function setProp() {
-  if (prop) { prop.parent?.remove(prop.group ?? prop); prop = null; }
+  if (prop) { const o = prop.group ?? prop; o.parent?.remove(o); prop = null; }   // (a bike is { group, … }, not itself in the scene)
   if (!current) return;
   if (action === 'bike') { prop = makeBike(current); current.group.add(prop.group); applyRenderStyle(prop.group, render); }
   if (action === 'sit') {
@@ -155,10 +155,16 @@ const CLOTHES_ICON = {
 const icon = (inner, face = true) => `<svg viewBox="0 0 42 42" aria-hidden="true">${face ? HEAD : ''}${inner}</svg>`;
 const BODY_ICON = (w, h) => `<svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="${10 + (1 - h) * 4}" r="5" fill="#efc3a2" stroke="#2a2230" stroke-width="1.5"/><rect x="${21 - w}" y="${16 + (1 - h) * 4}" width="${w * 2}" height="${24 - (1 - h) * 4}" rx="${w * 0.7}" fill="#6f8db0" stroke="#2a2230" stroke-width="1.5"/></svg>`;
 
+// a body type's silhouette, drawn from its own girth recipe (shoulders, waist, hips, belly)
+const SHAPE_ICON = (t) => {
+  const g = BODY_TYPES[t].girth || {}, sh = 9 + 3 * (g.shoulders || 0), w = 6.2 + 3 * (g.waist || 0) + 2 * (g.belly || 0), h = 8 + 3.4 * (g.hips || 0) + 1.5 * (g.seat || 0);
+  return `<svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="7" r="4.5" fill="#efc3a2" stroke="#2a2230" stroke-width="1.5"/><path d="M${21 - sh} 15 C${21 - sh} 13 ${21 + sh} 13 ${21 + sh} 15 C${21 + sh * 0.9} 20 ${21 + w} 22 ${21 + w} 25 C${21 + w} 28 ${21 + h} 29 ${21 + h} 33 L${21 + h * 0.8} 40 L${21 - h * 0.8} 40 L${21 - h} 33 C${21 - h} 29 ${21 - w} 28 ${21 - w} 25 C${21 - w} 22 ${21 - sh * 0.9} 20 ${21 - sh} 15 Z" fill="#6f8db0" stroke="#2a2230" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+};
 const TABS = {
   Body: [
     { tiles: 'sex', label: 'Body', options: [[0, 'Woman', BODY_ICON(6, 0.85)], [1, 'Man', BODY_ICON(7.5, 1)]] },
     { slider: 'age', label: 'Age', min: AGE_MIN, max: AGE_MAX, step: 1, show: (v) => v + (v == 1 ? ' year' : ' years'), ends: ['child', 'elder'] },
+    { tiles: 'bodyType', label: 'Body type', options: Object.entries(BODY_TYPES).map(([k, v]) => [k, v.label, SHAPE_ICON(k)]) },
     { slider: 'height', label: 'Height', ends: ['shorter', 'taller'], note: 'for their age' },
     { slider: 'build', label: 'Build', ends: ['slight', 'solid'] },
     { slider: 'muscle', label: 'Muscle', ends: ['soft', 'strong'] },
@@ -177,7 +183,7 @@ const TABS = {
     { tiles: 'topType', label: 'Top', options: Object.entries(TOPS).map(([k, v]) => [k, v, CLOTHES_ICON[k]]) },
     { swatches: 'top', label: 'Top colour', colours: TOP_COLOURS },
     { tiles: 'bottomType', label: 'Bottoms', options: Object.entries(BOTTOMS).map(([k, v]) => [k, v, CLOTHES_ICON[k]]) },
-    { swatches: 'bottom', label: 'Bottoms colour', colours: PALETTE.clothes },
+    { swatches: 'bottom', label: 'Bottoms colour', colours: TOP_COLOURS },
     { swatches: 'shoes', label: 'Shoes', colours: [0xf1ebdf, 0x2f2b33, 0xd8584a, 0x8e2f3a, 0x5b4636, 0xe4b84f, 0x3f8f88, 0x6f8db0] },
   ],
   Style: [
