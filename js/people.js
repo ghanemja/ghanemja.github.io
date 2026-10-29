@@ -241,6 +241,59 @@ function hang(P, S, w, { NT = 48, NY = 36, fall = 0.975, top = Infinity, band = 
   return P;
 }
 
+// ── a skirt is the smooth outer envelope of the hips and legs, falling straight down ──
+// Measured on the dense body mesh (arms left out: the hands hang at hip height), in
+// cylinder coordinates round each row's axis: per height and angle, the furthest the body
+// reaches, carried down from above (a skirt falls from the widest point of hips and seat),
+// bridged across the cleft between the buttocks, blurred smooth. Every skirt vertex below
+// the waistband is then put ON that envelope, a little off it. (Pushing the sparse skirt
+// helper out toward an envelope it sampled itself left lumps, a shelf under the seat, and
+// a bulge at the hem.)
+function skirtShape(P, S, body, k) {
+  const { A, pos, joints: J } = body, H = body.P.stature, NT = 64, NY = 40;
+  const arms = regionWeight(A, 'shoulder01.L'), arms2 = regionWeight(A, 'shoulder01.R');
+  const sIds = [...new Set(S.T)];
+  let y0 = 1e9, y1 = -1e9; for (const i of sIds) { y0 = Math.min(y0, P[i * 3 + 1]); y1 = Math.max(y1, P[i * 3 + 1]); }
+  const row = (y) => Math.min(NY - 1, Math.max(0, Math.floor((y1 - y) / (y1 - y0 + 1e-6) * NY)));     // 0 = top
+  const bIds = [...new Set(A.tris.body)].filter(i => arms[i] + arms2[i] < 0.3 && pos[i * 3 + 1] >= y0 - 0.02 * H && pos[i * 3 + 1] <= y1 + 0.02 * H);
+  // each row's axis: the middle of the body's extent there, smoothed between rows
+  const lo = new Float32Array(NY * 2).fill(1e9), hi = new Float32Array(NY * 2).fill(-1e9), cx = new Float32Array(NY), cz = new Float32Array(NY);
+  for (const i of bIds) { const r = row(pos[i * 3 + 1]); for (const [a, o] of [[0, 0], [1, 2]]) { lo[r * 2 + a] = Math.min(lo[r * 2 + a], pos[i * 3 + o]); hi[r * 2 + a] = Math.max(hi[r * 2 + a], pos[i * 3 + o]); } }
+  for (let r = 0; r < NY; r++) { if (hi[r * 2] > -1e9) { cx[r] = (lo[r * 2] + hi[r * 2]) / 2; cz[r] = (lo[r * 2 + 1] + hi[r * 2 + 1]) / 2; } else if (r) { cx[r] = cx[r - 1]; cz[r] = cz[r - 1]; } }
+  for (let pass = 0; pass < 6; pass++) for (const C of [cx, cz]) { const t = C.slice(); for (let r = 1; r < NY - 1; r++) C[r] = (t[r - 1] + 2 * t[r] + t[r + 1]) / 4; }
+  const col = (x, z, r) => ((Math.floor((Math.atan2(x - cx[r], z - cz[r]) / Math.PI + 1) / 2 * NT) % NT) + NT) % NT;
+  const env = new Float32Array(NT * NY);
+  for (const i of bIds) { const r = row(pos[i * 3 + 1]), x = pos[i * 3], z = pos[i * 3 + 2], c = col(x, z, r); env[r * NT + c] = Math.max(env[r * NT + c], Math.hypot(x - cx[r], z - cz[r])); }
+  for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) if (!env[r * NT + c]) {                  // empty cells: the nearest filled ones round the ring
+    for (let d = 1; d < NT / 2; d++) { const a = env[r * NT + (c + d) % NT], b = env[r * NT + (c - d + NT) % NT]; if (a || b) { env[r * NT + c] = a && b ? (a + b) / 2 : a || b; break; } }
+  }
+  { const t = env.slice(); for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++)                // bridged across the cleft (a small reach only)
+    env[r * NT + c] = Math.max(t[r * NT + c], Math.min(t[r * NT + (c + 1) % NT], t[r * NT + (c + NT - 1) % NT])); }
+  for (let r = 1; r < NY; r++) for (let c = 0; c < NT; c++) env[r * NT + c] = Math.max(env[r * NT + c], env[(r - 1) * NT + c] * 0.996);   // falls from above
+  for (let pass = 0; pass < 6; pass++) {
+    const t = env.slice();
+    for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) {
+      let a = 0, n = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr; if (rr < 0 || rr >= NY) continue; a += t[rr * NT + (c + dc + NT) % NT]; n++; }
+      env[r * NT + c] = Math.max(t[r * NT + c] * 0.985, a / n);                                    // (smoothing never pulls it far back in)
+    }
+  }
+  const fr = (y) => THREE.MathUtils.clamp((y1 - y) / (y1 - y0 + 1e-6) * NY - 0.5, 0, NY - 1);
+  const lerpRow = (C, f) => { const r = Math.floor(f), t = f - r; return C[r] + (C[Math.min(NY - 1, r + 1)] - C[r]) * t; };
+  const band = J['upperleg01.L'].head.y + 0.02 * H, off = 0.014 * k;
+  for (const i of sIds) {
+    const y = P[i * 3 + 1], f = fr(y), x0 = lerpRow(cx, f), z0 = lerpRow(cz, f), dx = P[i * 3] - x0, dz = P[i * 3 + 2] - z0, cur = Math.hypot(dx, dz);
+    if (cur < 1e-6) continue;
+    const fc = ((Math.atan2(dx, dz) / Math.PI + 1) / 2 * NT - 0.5 + NT) % NT, c0 = Math.floor(fc), tc = fc - c0, r0 = Math.floor(f), tr = f - r0, r1 = Math.min(NY - 1, r0 + 1);
+    const g = (r, c) => env[r * NT + ((c % NT) + NT) % NT];
+    const want = (g(r0, c0) * (1 - tc) + g(r0, c0 + 1) * tc) * (1 - tr) + (g(r1, c0) * (1 - tc) + g(r1, c0 + 1) * tc) * tr + off;
+    const t = 1 - THREE.MathUtils.smoothstep(y, band - 0.06 * H, band);                           // the waistband stays as fitted
+    const s = 1 + (Math.max(want, cur) / cur - 1) * t;
+    P[i * 3] = x0 + dx * s; P[i * 3 + 2] = z0 + dz * s;
+  }
+  smoothSurface(P, S.T, 6);
+}
+
 // ── dressing ──
 // Clothes are the body surface cut along smooth fields — the rig's own weight falloffs
 // (neck, wrist, mid upper arm, knee, mid thigh, foot) and heights (hems) — so every
@@ -524,7 +577,7 @@ export async function makePerson(spec = {}) {
       add3(P, i, sg * nx * 0.012 * k, sg * sk2.N[i * 3 + 1] * 0.012 * k, sg * nz * 0.012 * k);
     }
     // and it falls from the widest point of the hips and seat rather than following the thighs back in (a sack)
-    hang(P, sk2, () => 1, { fall: 0.995, maxPush: 0.08 * k, top: body.joints['upperleg01.L'].head.y + 0.02 * body.P.stature, band: 0.07 * body.P.stature, hem: -99, hemBand: 0.01 });   // (the waistband stays fitted)
+    skirtShape(P, sk2, body, k);
     cloth.bottom.push(add(geometryOf(sk2, P), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth'));
   }
   for (const m of parts) { rig.add(m); m.bind(sk.skeleton); }

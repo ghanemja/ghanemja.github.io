@@ -128,9 +128,14 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
 - **Arms clear the clothes.** After the relaxed pose, `clearHips()` swings each arm out
   just far enough that the hand hangs a finger's width off whatever is worn at the hips.
   At a fixed angle, the hands of a pear-shaped body went straight into her skirt.
-- **A skirt falls from the hips.** It goes through `hang()` (faded in below the waistband,
-  which stays fitted), so it drops straight from the widest point of hips and seat. Cut
-  from the body surface alone it ballooned and then tucked back in at the hem like a sack.
+- **A skirt falls from the hips.** `skirtShape()` measures the outer envelope of the hips
+  and legs on the dense body mesh (arms left out), carries it down from the widest point,
+  bridges the cleft between the buttocks, blurs it, and puts every skirt vertex below the
+  waistband on it (the waistband stays fitted). History: cut from the body alone it
+  ballooned and tucked in at the hem like a sack; pushed through the torso's `hang()` it
+  got a shelf under the seat (the hips' side width spread round to the back, and the capped
+  push stopped short of a 10 cm crease) and lumps (the sparse skirt mesh left empty cells).
+  Printing one column (y, z) after each stage found it in one go.
 - **Shorts are cut on a level plane above the knee**, not along the knee's weight field,
   whose iso-line wandered into a ragged hem.
 - **No clothes in a skin colour.** From across the plaza a tan top on tan skin reads as no
