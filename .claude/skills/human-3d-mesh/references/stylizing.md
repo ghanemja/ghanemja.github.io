@@ -87,14 +87,45 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
   width, riding the foot bone. The bare foot is never kept.
 
 ## Hair, eyes, brows, face
-- Hair grows from a radius map of the head (`headMap`): `radius` is the real surface and
-  `scalp` is a blurred copy, so hair doesn't follow the ears or nose. Keep **only the
-  triangles where hair grows**. Hidden "sunk inside the head" geometry showed through the
-  eye openings and made the eyes look black.
+- **Hair is one grid over the head (js/hair.js), never a sphere with triangles thrown away.**
+  Columns run round the head and rows from the crown down. Each column follows the
+  smoothed scalp (`headMap().scalp`) lifted by the style's thickness and crown volume,
+  and for longer styles hangs as a curtain below the ears. Each column **ends exactly
+  on its cut line**: the fringe across the face, the style's length at the sides and
+  back. Rows are spread along each column's own length, so the edge is a clean curve by
+  construction, with a lip of thickness. Short styles taper to the skin at the nape and
+  round the ears.
+- Styles are data (`HAIRSTYLES`): buzz, crop, pixie, bob, long bob, ponytail, bun, curls.
+  A new style means new numbers (fringe height and sweep, face window, side/back ends,
+  curtain cut / A-line / bell / tuck), plus an extra mesh for a tail or bun.
+- **Bugs the hair already hit, so check for them:**
+  - *Wrong winding:* every normal pointed into the head. Double-sided shading hid it, but
+    the outline (back faces pushed out along the normals) then sat on the hair and showed
+    through as black holes. Check `normal · (vertex − centre) > 0`.
+  - *Aliasing:* strand grooves at up to 97 waves round a 112-column grid zig-zagged into
+    flipped slivers. Keep geometric detail under half the grid's resolution, and use
+    whole-number frequencies so the seam at the back meets. Curls are lumps a few
+    centimetres across, not noise.
+  - *Vector aliasing:* `d.multiplyScalar(r)` mutates `d`. Using `d` again afterwards
+    collapsed the hair onto a unit sphere. Clone first.
+  - *Sphere-and-mask hair* (the old approach) left ragged edges, and its hidden inner
+    shell showed through the eye openings.
 - Eyes are smooth spheres at the anatomical eyeball's centre and radius, painted
   sclera / iris / pupil, plus a catchlight placed low on the eye (not above the lid).
 - The face's outline skips triangles inside the eye sockets (`userData.inkGeometry`), or
   the outline's back faces show through the eye openings as black.
+
+## Making many people (the Citizen Maker)
+- `citizens.html` + `js/maker.js` is the creator UI. Citizens are plain data
+  (`js/citizens.js`): `toPersonSpec()` turns one into a `makePerson` spec.
+  `person.restyle({...})` changes colours and hair in place; body, face and style changes
+  rebuild the person.
+- **Batches:** `generateCitizens(n, { seed, style, women })` is seeded (the same seed always
+  makes the same people) and spreads variety on purpose: sexes in the requested share, and
+  skin tones, face shapes, hair colours and names dealt from shuffled decks so all appear
+  before any repeats. Top and trousers never match. The page takes `?batch=30&seed=harbour`;
+  export gives `citizens.json` for a game.
+- Each person is still ~90k triangles. The plaza shows at most 16 at once.
 
 ## Posing
 Motion (walk, run, sit, bike, idle) is in [motion.md](motion.md). The relaxed stand:

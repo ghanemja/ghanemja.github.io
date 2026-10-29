@@ -17,13 +17,14 @@ import { stylize, STYLES, smoothSurface, eyeCentres, headHeight } from './styliz
 import { paint, ink } from './style.js';
 import { shoeGeo } from './folk.js';
 import { relaxedPose, makeMotion } from './motion.js';
+import { makeHair } from './hair.js';
 
 export const LOOK_JANELLE = {
   body: { sex: 0, muscle: 0.45, weight: 0.42, height: 0.5, proportions: 0.6 },
   // a warm, easy smile: the zygomaticus lifts the mouth corners, the cheeks lift the lower lids a touch
   expression: { 'mouth-corner-puller': 0.55, 'mouth-elevation': 0.15, 'eye-left-slit': 0.12, 'eye-right-slit': 0.12 },
   skin: 0xefc3a2, lips: 0xd98a7e, blush: 0xe79a8a, eyes: 0x4a3226, brows: 0x9a7448,
-  hair: 0xc9a06a, top: 0x2f2b33, bottom: 0x6f8db0, shoes: 0xf1ebdf, sole: 0xc98f5a,
+  hair: 0xc9a06a, hairStyle: 'bob', top: 0x2f2b33, bottom: 0x6f8db0, shoes: 0xf1ebdf, sole: 0xc98f5a,
 };
 
 const add3 = (a, i, x, y, z) => { a[i * 3] += x; a[i * 3 + 1] += y; a[i * 3 + 2] += z; };
@@ -191,71 +192,6 @@ function headMap(body) {
   return { C, radius, scalp, R: Rside };
 }
 
-// ── a chin-length bob with a side part, sculpted on the head's own shape ──
-function bobHair(body, H, color) {
-  const ss = THREE.MathUtils.smoothstep, { C, scalp: radius, R } = H, { chin } = headHeight(body);
-  const flow = new THREE.Vector3(0.3, 1, 0.12).normalize();
-  const _pp = new THREE.Vector3(), _ax = new THREE.Vector3(), _bx = new THREE.Vector3();
-  const strandAt = (d) => {
-    _pp.copy(d).addScaledVector(flow, -d.dot(flow));
-    _ax.set(1, 0, 0).addScaledVector(flow, -flow.x).normalize(); _bx.crossVectors(flow, _ax);
-    const a = Math.atan2(_pp.dot(_ax), _pp.dot(_bx));
-    return Math.sin(a * 15) * 0.65 + Math.sin(a * 34.5 + 1.7) * 0.35;
-  };
-  const azi = (d) => Math.abs(Math.atan2(d.x, d.z)) / Math.PI;
-  // > 0 where hair grows. The front edge is the fringe: high at the side part (+x),
-  // sweeping down across the forehead to the far brow; at the sides the hair frames
-  // the face in front of the ears
-  const mask = (d) => Math.max(d.y - (0.36 + 0.3 * d.x), (azi(d) - 0.4) * 3);
-  const inflate = (d) => 1.04 + 0.035 * Math.max(0, d.y) + 0.02 * Math.max(0, -d.z) + 0.01 * strandAt(d);
-  const BOB = [[0, 1.0], [0.08, 1.07], [0.2, 1.12], [0.42, 1.15], [0.76, 1.16]];   // radius by height above the cut, in head radii
-  const bobR = (h) => {
-    if (h <= 0) return BOB[0][1];
-    for (let i = 1; i < BOB.length; i++) if (h <= BOB[i][0]) {
-      const [h0, r0] = BOB[i - 1], [h1, r1] = BOB[i], t = (h - h0) / (h1 - h0); return r0 + (r1 - r0) * t * t * (3 - 2 * t);
-    }
-    return BOB[BOB.length - 1][1];
-  };
-  const base = new THREE.Color(color), root = base.clone().multiplyScalar(0.74), shine = base.clone().lerp(new THREE.Color(0xfff1d6), 0.45);
-  const g = new THREE.SphereGeometry(1, 104, 78), P = g.attributes.position, d = new THREE.Vector3(), o = new THREE.Vector3();
-  const col = new Float32Array(P.count * 3), c = new THREE.Color(), grows = new Float32Array(P.count);
-  for (let i = 0; i < P.count; i++) {
-    d.fromBufferAttribute(P, i).normalize();
-    // where hair grows it stands off the (smoothed) scalp; toward the hairline it
-    // tucks down onto the skin, so the edge reads as hair growing out of the head
-    const m = grows[i] = ss(mask(d), -0.05, 0.06);
-    o.copy(d).multiplyScalar(THREE.MathUtils.lerp(H.radius(d) * 0.985, radius(d) * inflate(d), m)).add(C);
-    // below the ears the bob hangs as a bell instead of following the jaw, and ends at a clean cut
-    const th = Math.atan2(d.x, d.z), side = ss(Math.abs(th) / Math.PI, 0.36, 0.44), back = Math.max(0, -Math.cos(th));
-    const edgeY = chin + R * (0.06 + 0.25 * back);
-    if (side > 0) {
-      const h = Math.max(0, (o.y - edgeY) / R), hx = o.x - C.x, hz = o.z - C.z, rh = Math.hypot(hx, hz) || 1e-4;
-      const w = side * (1 - ss(h, 0.5, 1.3)), kk = 1 + (bobR(h) * R * (1 + 0.06 * back) / rh - 1) * w;
-      o.x = C.x + hx * kk; o.z = C.z + hz * kk;
-    }
-    if (o.y < edgeY) { o.y = edgeY; grows[i] *= side > 0.5 ? 1 : 0; }    // the cut line; nothing hangs below it
-    P.setXYZ(i, o.x, o.y, o.z);
-    const r = strandAt(d), band = Math.exp(-((d.dot(flow) - 0.5) ** 2) / 0.02) * THREE.MathUtils.clamp(0.5 + 0.6 * r, 0, 1);
-    c.copy(base).lerp(root, 0.45 * Math.max(0, -r)).lerp(shine, 0.6 * band);
-    col.set([c.r, c.g, c.b], i * 3);
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  // only the triangles where hair grows: nothing is left hidden inside the head (a hidden
-  // inner shell showed through the eye openings as black eyes)
-  const I = g.index.array, keep = [];
-  for (let t = 0; t < I.length; t += 3) if (grows[I[t]] > 0.02 || grows[I[t + 1]] > 0.02 || grows[I[t + 2]] > 0.02) keep.push(I[t], I[t + 1], I[t + 2]);
-  g.setIndex(keep);
-  g.deleteAttribute('normal'); g.deleteAttribute('uv');
-  g.computeVertexNormals();
-  // vertices flattened onto the cut line can end up with no area around them: a zero
-  // normal is NaN in the shader (it rendered the whole bob white) — point them outward
-  const Nn = g.attributes.normal;
-  for (let i = 0; i < Nn.count; i++) if (Math.hypot(Nn.getX(i), Nn.getY(i), Nn.getZ(i)) < 0.5) {
-    o.fromBufferAttribute(P, i).sub(C).normalize(); Nn.setXYZ(i, o.x, o.y, o.z);
-  }
-  return new THREE.Mesh(g, paint(0xffffff, { vertexColors: true, soft: true, hatch: 0.3, side: THREE.DoubleSide }));
-}
-
 // eyes: an eyeball the size and place of the anatomical one (a smooth sphere so the
 // iris edge is crisp), painted: sclera, iris, pupil, a catchlight. A real iris is
 // ≈11.5 mm across a 24 mm eye (≈29° from the axis), the pupil ≈3–4 mm; the
@@ -362,13 +298,14 @@ export async function makePerson(spec = {}) {
   const add = (geo, mat) => { const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; parts.push(m); return m; };
 
   // skin: face & neck, and hands — nothing else of the body is ever drawn
-  const skinCol = skinColours(body, look);
+  const skinCol = skinColours(body, look), skinParts = [];
   for (const key of ['face', 'hands']) {
     const geo = geometryOf(D[key]), used = geo.userData.used;
     const col = new Float32Array(used.length * 3), c = new THREE.Color(look.skin);
     used.forEach((v, i) => { if (v < A.n) col.set(skinCol.subarray(v * 3, v * 3 + 3), i * 3); else col.set([c.r, c.g, c.b], i * 3); });
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     const m = add(geo, paint(0xffffff, { vertexColors: true, soft: true }));
+    skinParts.push({ m, used });
     if (key === 'face') {                                   // no outline from inside the eye sockets
       const P = geo.attributes.position, idx = geo.index.array, keep = [], p = new THREE.Vector3();
       for (let t = 0; t < idx.length; t += 3) {
@@ -382,23 +319,43 @@ export async function makePerson(spec = {}) {
   // garments
   const top = D.top, bot = D.bottom;
   const upperW = (i) => Math.max(0, 1 - top.f.arms[i] - top.f.neck[i]);
-  add(geometryOf(top, drape(top, { thick: 0.008, ease: (i) => 0.012 * upperW(i), smooth: 30, k,
+  const topM = add(geometryOf(top, drape(top, { thick: 0.008, ease: (i) => 0.012 * upperW(i), smooth: 30, k,
     smoothW: top.P.map((_, j) => j).filter(j => j % 3 === 0).map(j => 1 - 0.6 * Math.min(1, top.f.arms[j / 3])) })),
     paint(look.top, { soft: true, side: THREE.DoubleSide }));
-  add(geometryOf(bot, drape(bot, { thick: 0.006, ease: () => 0.003, smooth: 18, k })), paint(look.bottom, { side: THREE.DoubleSide }));
+  const botM = add(geometryOf(bot, drape(bot, { thick: 0.006, ease: () => 0.003, smooth: 18, k })), paint(look.bottom, { side: THREE.DoubleSide }));
   for (const m of parts) { rig.add(m); m.bind(sk.skeleton); }
-  shoes(body, look, sk);
+  const shoeGroups = shoes(body, look, sk);
 
   // head pieces ride the head bone rigidly (the bones keep world-aligned rest frames)
   const H = headMap(body), atHead = new THREE.Group();
   atHead.position.copy(body.joints.head.head).negate();
-  atHead.add(eyes(body, look), brows(body, H, look));
-  if (spec.showHair !== false) atHead.add(bobHair(body, H, look.hair));   // (showHair: false only for checking the face)
+  let eyeG = eyes(body, look), browG = brows(body, H, look), hairG = spec.showHair !== false ? makeHair(H, headHeight(body), look.hairStyle, look.hair) : null;
+  atHead.add(eyeG, browG); if (hairG) atHead.add(hairG);                         // (showHair: false only for checking the face)
   sk.byName.head.add(atHead);
 
   relaxedPose(sk);
   ink(group, 'fine');
   const person = { group, rig, sk, body, look };
   person.motion = makeMotion(person);     // every person comes rigged for idle, walk, run, sit and bike
+  // restyle(changes): colours and hairstyle change in place, instantly (a creator UI calls
+  // this on every click). Body shape, style and expression need a new makePerson.
+  person.restyle = (ch = {}) => {
+    Object.assign(look, ch);
+    if (ch.top != null) topM.material = paint(look.top, { soft: true, side: THREE.DoubleSide });
+    if (ch.bottom != null) botM.material = paint(look.bottom, { side: THREE.DoubleSide });
+    if (ch.shoes != null || ch.sole != null) for (const g of shoeGroups) { g.children[0].material = paint(look.shoes); g.children[1].material = paint(look.sole); }
+    if (ch.skin != null || ch.lips != null || ch.blush != null) {
+      const col = skinColours(body, look);
+      for (const { m, used } of skinParts) {
+        const a = m.geometry.attributes.color;
+        used.forEach((v, i) => { if (v < A.n) a.array.set(col.subarray(v * 3, v * 3 + 3), i * 3); });
+        a.needsUpdate = true;
+      }
+    }
+    const swap = (old, fresh) => { atHead.remove(old); atHead.add(fresh); ink(fresh, 'fine'); return fresh; };
+    if (ch.eyes != null) eyeG = swap(eyeG, eyes(body, look));
+    if (ch.brows != null) browG = swap(browG, brows(body, H, look));
+    if ((ch.hair != null || ch.hairStyle != null) && hairG) hairG = swap(hairG, makeHair(H, headHeight(body), look.hairStyle, look.hair));
+  };
   return person;
 }

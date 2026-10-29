@@ -42,7 +42,7 @@ scene.add(new THREE.HemisphereLight(0xfff6e8, 0xd8c8b0, 1.35), sun);
 
 const H = 1.7, gap = 0.75;
 const t0 = performance.now();
-const people = await Promise.all(styles.map(s => makePerson({ style: s, body, stature: H, showHair: q.get('hair') !== '0' })));
+const people = await Promise.all(styles.map(s => makePerson({ style: s, body, stature: H, showHair: q.get('hair') !== '0', ...(q.get('hairStyle') ? { hairStyle: q.get('hairStyle') } : {}) })));
 console.log('LOG built', styles.length, 'in', Math.round(performance.now() - t0), 'ms');
 const action = q.get('action') || 'idle', phase = +(q.get('phase') ?? 0.25);
 people.forEach((p, i) => {

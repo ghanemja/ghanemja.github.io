@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Citizen Maker</title>
+<meta name="description" content="Make your own set of citizens for a game — one at a time or in seeded batches: body, face, hair, clothes and style, then watch them walk, run, sit and ride around the plaza." />
+<link rel="preload" href="./fonts/caveat-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="./fonts/patrick-hand-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face { font-family: 'Caveat'; font-weight: 700; font-display: swap; src: url(./fonts/caveat-latin-700-normal.woff2) format('woff2'); }
+  @font-face { font-family: 'Patrick Hand'; font-weight: 400; font-display: swap; src: url(./fonts/patrick-hand-latin-400-normal.woff2) format('woff2'); }
+  :root {
+    --paper: #f6efdf; --paper2: #efe4cc; --bg: #f3ead7; --ink: #2a2230; --ink2: #5a4e5e; --accent: #e8604c; --gold: #e4b84f; --mint: #3f8f88;
+    --sketch: 255px 14px 225px 16px / 16px 225px 14px 255px;
+    --shadow: 3px 4px 0 rgba(42,34,48,0.85);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); font-family: 'Patrick Hand', 'Comic Sans MS', cursive; color: var(--ink); }
+  body { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto minmax(0, 1fr) auto; height: 100dvh; overflow: hidden; }
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 10px 18px 4px; flex-wrap: wrap; }
+  header h1 { font-family: 'Caveat', cursive; font-size: 40px; margin: 0; line-height: 1; transform: rotate(-1.5deg); }
+  header h1 span { color: var(--accent); }
+  header .sp { flex: 1; }
+  header a { color: var(--ink2); font-size: 16px; }
+  .sk { background: var(--paper); border: 2.5px solid var(--ink); border-radius: var(--sketch); box-shadow: var(--shadow); }
+  button { font: inherit; color: var(--ink); cursor: pointer; }
+  button.sk { font-size: 18px; padding: 6px 16px; transition: transform .12s ease, box-shadow .12s ease; }
+  button.sk:hover { transform: translate(-1px,-1px) rotate(-0.6deg); box-shadow: 5px 6px 0 rgba(42,34,48,0.85); }
+  button.sk:active { transform: translate(2px,3px); box-shadow: 1px 1px 0 rgba(42,34,48,0.85); }
+  button.sk.on { background: var(--gold); }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* the stage */
+  #stage { position: relative; min-width: 0; min-height: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  #stage canvas:active { cursor: grabbing; }
+  #actions { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  #actions button { font-size: 17px; padding: 4px 14px; }
+  #zoom { position: absolute; right: 14px; top: 10px; display: flex; gap: 6px; }
+  #zoom button { font-size: 15px; padding: 2px 12px; }
+  #busy { position: absolute; left: 16px; top: 10px; font-family: 'Caveat', cursive; font-size: 26px; color: var(--ink2); opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #busy.on { opacity: 1; }
+  #hint { position: absolute; left: 16px; bottom: 16px; font-size: 14px; color: var(--ink2); }
+
+  /* the editor */
+  #panel { grid-row: 2; grid-column: 2; margin: 6px 16px 10px 4px; padding: 12px 14px; display: flex; flex-direction: column; min-height: 0; transform: rotate(0.25deg); }
+  #name { font: inherit; font-family: 'Caveat', cursive; font-size: 34px; width: 100%; border: 0; border-bottom: 2.5px dashed var(--ink2); background: transparent; color: var(--ink); padding: 0 2px; }
+  #tabs { display: flex; gap: 4px; margin: 10px 0 8px; flex-wrap: wrap; }
+  #tabs button { flex: 1; font-size: 17px; padding: 4px 6px; background: var(--paper2); border: 2px solid var(--ink); border-radius: 12px 12px 4px 4px; }
+  #tabs button.on { background: var(--gold); }
+  #controls { overflow: auto; min-height: 0; padding: 2px 4px 6px; }
+  .row { margin: 10px 0 14px; }
+  .row > label, .row > .lbl { display: block; font-size: 18px; margin-bottom: 6px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tile { background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; padding: 4px 2px 2px; font-size: 14px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px; }
+  .tile svg { width: 42px; height: 42px; }
+  .tile.on { background: var(--gold); box-shadow: 2px 3px 0 rgba(42,34,48,.8); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sw { width: 34px; height: 34px; border-radius: 50%; border: 2.5px solid var(--ink); padding: 0; }
+  .sw.on { outline: 3px solid var(--accent); outline-offset: 2px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink2); margin-top: -2px; }
+  .note { font-size: 14px; color: var(--ink2); margin: 4px 0; }
+
+  /* the roster */
+  #roster { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 8px 16px 12px; overflow-x: auto; }
+  #cards { display: flex; gap: 10px; flex: 1; min-width: 0; overflow-x: auto; padding: 4px 4px 8px; }
+  #roster { overflow: visible; }
+  .card { width: 82px; flex: none; padding: 4px 4px 2px; background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; display: flex; flex-direction: column; align-items: center; font-size: 15px; }
+  .card img, .card .ph { width: 70px; height: 70px; border-radius: 10px; background: var(--paper2); object-fit: cover; }
+  .card span { max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card.on { background: var(--gold); box-shadow: var(--shadow); transform: rotate(-1.5deg); }
+  #roster .gap { flex: 1; min-width: 10px; }
+  #roster button.sk { white-space: nowrap; }
+  #file { display: none; }
+  .batch { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 17px; padding: 4px 10px; border: 2px dashed var(--ink2); border-radius: 14px; }
+  .batch input[type=number] { width: 56px; }
+  .batch input { font: inherit; font-size: 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--paper); color: var(--ink); padding: 1px 6px; }
+  .batch .chk { font-size: 15px; color: var(--ink2); }
+  .batch .chk input { accent-color: var(--accent); }
+  #count { font-size: 15px; color: var(--ink2); white-space: nowrap; }
+
+  body.plaza { grid-template-columns: minmax(0, 1fr) 0; }
+  body.plaza #panel, body.plaza #actions, body.plaza #zoom, body.plaza #hint { display: none; }
+  @media (max-width: 820px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto minmax(260px, 46dvh) minmax(0, 1fr) auto; overflow: auto; height: auto; min-height: 100dvh; }
+    #stage { grid-row: 2; height: 46dvh; }
+    #panel { grid-row: 3; grid-column: 1; margin: 6px 16px; transform: none; }
+    #roster { grid-row: 4; }
+    header h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Citizen <span>Maker</span></h1>
+  <div class="sp"></div>
+  <form id="batchF" class="batch" aria-label="Make a batch of citizens">
+    <label>make <input type="number" id="batchN" min="1" max="200" value="12" aria-label="How many citizens"> citizens</label>
+    <input id="seed" placeholder="seed (optional)" size="11" aria-label="Seed: the same seed always makes the same batch">
+    <label class="chk"><input type="checkbox" id="replace" checked> replace roster</label>
+    <button class="sk" id="batch" type="submit">generate</button>
+  </form>
+  <a href="./index.html">back to the town</a>
+</header>
+
+<main id="stage">
+  <div id="busy">sketching…</div>
+  <div id="zoom"><button class="sk" data-zoom="full">whole</button><button class="sk" data-zoom="face">face</button></div>
+  <div id="actions" role="group" aria-label="Preview action">
+    <button class="sk on" data-act="idle">Stand</button><button class="sk" data-act="walk">Walk</button><button class="sk" data-act="run">Run</button><button class="sk" data-act="sit">Sit</button><button class="sk" data-act="bike">Bike</button>
+  </div>
+  <div id="hint">drag to turn them round</div>
+</main>
+
+<section id="panel" class="sk" aria-label="Edit citizen">
+  <input id="name" aria-label="Name" maxlength="16" />
+  <div id="tabs" role="tablist"></div>
+  <div id="controls"></div>
+</section>
+
+<footer id="roster">
+  <span id="count"></span>
+  <div id="cards"></div>
+  <button class="sk" id="new">+ new</button>
+  <button class="sk" id="rand">surprise me</button>
+  <button class="sk" id="dup">copy</button>
+  <button class="sk" id="del">remove</button>
+  <button class="sk" id="plaza">plaza</button>
+  <button class="sk" id="export">export</button>
+  <button class="sk" id="import">import</button>
+  <input type="file" id="file" accept="application/json,.json" />
+</footer>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="./js/maker.js?cb=2"></script>
+</body>
+</html>
