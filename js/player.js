@@ -24,8 +24,8 @@ const PLAYER_LOOK = {
   neck: 0.75,                                      // a shorter neck: with sloped shoulders the full one read giraffe-long                                       // soft sloped shoulders, not a square yoke
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { profile: 1, jaw: 0.28, chin: 0.55, cheeks: 0.5, long: -0.25, skull: 0.55, brow: 0.4 },
-    nose: 'cute', noseSize: 1.0, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
-    brows: 'raised', lashes: true, blush: 0.9 },
+    nose: 'cute', noseSize: 1.0, mouth: 'smile', eyes: 'round', eyeSize: 1.05, eyeTall: 0.88,
+    brows: 'soft', browW: 1.9, lashes: true, blush: 0.9 },
 };
 
 // the beret and the little mustard backpack, hung on the rig's own joints
@@ -168,7 +168,7 @@ function dressPlayer(g) {
     const skinM = paint(skinHex, { soft: true, hatch: 0.3 });
     grip.visible = false;
     const H = new THREE.Group();
-    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.117, young: 1, res: 88 }), skinM));
+    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.117, young: 1, res: 104 }), skinM));
     ink(H, 'fine');
     hand.add(H);
     hand.rotation.x = -0.06;

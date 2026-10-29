@@ -209,7 +209,7 @@ export function buildHead(J, S, F, mats) {
   const es = F.eyeSize ?? 1;
   for (const s of [-1, 1]) {
     const c = pt(s * 0.36, 0.12);
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.016 * es, 12, 10), dark); e.scale.set(0.8, F.eyes === 'narrow' ? 0.95 : 1.15, 0.5); e.position.copy(c); bits.push(add(e));
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.016 * es, 12, 10), dark); e.scale.set(0.8, F.eyes === 'narrow' ? 0.95 : (F.eyeTall ?? 1.15), 0.5); e.position.copy(c); bits.push(add(e));
     const hl = new THREE.Mesh(new THREE.SphereGeometry(0.0045 * es, 8, 6), paint(0xffffff, { hatch: 0 })); hl.position.copy(c).add(new THREE.Vector3(-0.004, 0.006, 0.007)); bits.push(add(hl));
     if (F.eyes === 'sleepy' || F.eyes === 'narrow') {
       const lidDrop = F.eyes === 'sleepy' ? 0.45 : 0.18;
@@ -221,7 +221,7 @@ export function buildHead(J, S, F, mats) {
   }
   // brows: tapered strokes, shaped by the expression
   const BROWS = {
-    flat: [0.4, 0.43, 0.4], worried: [0.47, 0.44, 0.36], raised: [0.43, 0.51, 0.44], heavy: [0.37, 0.41, 0.37], frown: [0.35, 0.41, 0.42],
+    flat: [0.4, 0.43, 0.4], soft: [0.28, 0.33, 0.29], worried: [0.47, 0.44, 0.36], raised: [0.43, 0.51, 0.44], heavy: [0.37, 0.41, 0.37], frown: [0.35, 0.41, 0.42],
   };
   const browM = paint(F.browColor ?? S.hair ?? 0x3a2a24, { hatch: 0 });
   for (const s of [-1, 1]) {
@@ -232,8 +232,14 @@ export function buildHead(J, S, F, mats) {
   const ns = F.noseSize ?? 1;
   if (F.nose === 'cute') {           // a small soft button, half sunk into the face so only the tip rounds out, slightly upturned
     const tip = new THREE.Mesh(new THREE.SphereGeometry(0.0118 * ns, 18, 14), skin);
-    tip.scale.set(1.25, 0.9, 0.85); tip.rotation.x = -0.3;
-    tip.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0.002, 0.007)); add(tip);   // proud enough to break the profile
+    tip.scale.set(1.05, 0.8, 0.85); tip.rotation.x = -0.3;
+    tip.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0.003, 0.007)); add(tip);   // proud enough to break the profile
+    // nostril wings either side of the tip, a touch lower and further back: the base of the
+    // nose reads as a soft three-lobed curve, not a single ball
+    for (const sx of [-1, 1]) {
+      const w = new THREE.Mesh(new THREE.SphereGeometry(0.0062 * ns, 14, 10), skin); w.scale.set(1.05, 0.85, 0.8);
+      w.position.copy(pt(sx * 0.085, -0.118)).add(new THREE.Vector3(0, 0.001, 0.0012)); add(w);
+    }
     // the bridge runs from between the eyes down into the tip, so the nose grows out of the face
     const top = pt(0, 0.1).add(new THREE.Vector3(0, 0, -0.003)), bot = pt(0, -0.1).add(new THREE.Vector3(0, 0.004, 0.004));
     const len = top.distanceTo(bot);
@@ -252,6 +258,9 @@ export function buildHead(J, S, F, mats) {
   // mouth: an expression, not a stamp
   const vm = MOUTH_V, mouthM = paint(0x4a2630, { hatch: 0 });
   switch (F.mouth) {
+    case 'smile':             // a simple closed smile: one soft arc, slightly tucked at the corners
+      bits.push(add(stroke(shape, arc(-0.17, 0.17, vm + 0.025, 0.045, 11), 0.0034, lineM, 0.0035)));
+      break;
     case 'grin': {            // an open smile with teeth
       const top = arc(-0.2, 0.2, vm + 0.015, 0.02), bot = arc(-0.2, 0.2, vm + 0.015, 0.11);
       bits.push(add(fill(shape, top, bot, paint(0x5a2230, { hatch: 0, side: THREE.DoubleSide }))));
