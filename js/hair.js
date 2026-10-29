@@ -60,7 +60,10 @@ export function makeHair(H, { chin }, styleName, colour) {
     const p = d.clone().multiplyScalar(r).add(C); return p.addScaledVector(d, curlN(p));   // (clone: multiplyScalar mutates d)
   };
   const faceW = (th) => 1 - ss(Math.abs(th), S.face, S.face + 0.32);                   // 1 across the face … 0 behind the temples
-  const fringeE = (th) => S.fringe[0] + S.fringe[1] * Math.sin(th);                     // a side-swept fringe (a clean line: "choppy" read as messy)
+  // a style that shows the forehead starts at the person's own hairline (H.hairlineE, the face in
+  // thirds); one with a fringe brings it down over the forehead, never up past that line
+  const front = S.fringe[0] >= 0.45 ? (H.hairlineE ?? S.fringe[0]) + (S.hairline ?? 0) : Math.min(S.fringe[0], (H.hairlineE ?? 1) - 0.12);
+  const fringeE = (th) => front + S.fringe[1] * Math.sin(th);                     // a side-swept fringe (a clean line: "choppy" read as messy)
   // where short hair ends, all the way round: across the forehead, a little higher at the
   // temples, straight DOWN in front of the ear as a sideburn, up and over the ear, then down
   // behind it to the nape. (Blending the fringe straight into the side length cut a diagonal

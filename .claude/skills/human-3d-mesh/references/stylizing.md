@@ -257,6 +257,11 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   zero slope at every knot, so the line came out as steps and plateaus. `spline()` is a
   monotone cubic, so it can't overshoot. The temple is a rounded corner. No strand ripples
   at the crown, where they all meet in a spike.
+- **The hairline is placed from the face, not per style:** `headMap()` gives `hairlineE`,
+  the elevation a quarter of the brow-to-chin height above the brows. Styles that show
+  the forehead start there; a fringe comes down from it, never higher. Real average
+  proportions (the face in thirds, the forehead near half the brow-to-chin height) read as
+  a huge forehead on a drawn character, and so did fixed per-style elevations.
 - Styles are data (`HAIRSTYLES`): buzz, crop, pixie, bob, long bob, ponytail, bun, curls.
   A new style means new numbers (fringe height and sweep, face window, side/back ends,
   curtain cut / A-line / bell / tuck), plus an extra mesh for a tail or bun.

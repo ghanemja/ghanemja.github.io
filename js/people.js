@@ -445,7 +445,15 @@ function headMap(body) {
   };
   const radius = (d) => bilerp(grid, d), scalp = (d) => bilerp(soft, d);
   const Rside = (radius(new THREE.Vector3(1, 0, 0)) + radius(new THREE.Vector3(-1, 0, 0))) / 2;
-  return { C, radius, scalp, R: Rside };
+  // where the hairline belongs, measured from the face: a quarter of the brow-to-chin height above
+  // the brows. (Real average proportions, the face in thirds, put it near half, and on a drawn
+  // character that read as a huge forehead; a fixed elevation per style ignored the face.)
+  // Found as the elevation where the scalp at the front reaches that height.
+  const [el, er] = eyeCentres(body), browY = (el.y + er.y) / 2 + 0.27 * el.distanceTo(er), { chin } = headHeight(body);
+  const hairY = browY + 0.25 * (browY - chin);
+  let lo2 = -0.2, hi2 = 0.999;
+  for (let it = 0; it < 30; it++) { const e = (lo2 + hi2) / 2, d = new THREE.Vector3(0, e, Math.sqrt(1 - e * e)); if (C.y + d.y * scalp(d) < hairY) lo2 = e; else hi2 = e; }
+  return { C, radius, scalp, R: Rside, hairlineE: (lo2 + hi2) / 2 };
 }
 
 // eyes: an eyeball the size and place of the anatomical one (a smooth sphere so the
