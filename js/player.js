@@ -18,8 +18,10 @@ const PLAYER_LOOK = {
   top: 0x4a4550, bottom: 0x7d9cc0,
   shoes: 0xf0ece2, sole: 0xc9a87c,                // white sneakers on a gum sole — the contrast makes the shoe shape read
   height: 1.02, build: 1.0,
+  slope: 1,
+  neck: 0.6,                                      // a shorter neck: with sloped shoulders the full one read giraffe-long                                       // soft sloped shoulders, not a square yoke
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
-  face: { shape: { jaw: 0.28, chin: 0.62, cheeks: 0.45, long: 0.12, skull: 0.55, brow: 0.4 },
+  face: { shape: { jaw: 0.28, chin: 0.55, cheeks: 0.5, long: -0.25, skull: 0.55, brow: 0.4 },
     nose: 'cute', noseSize: 1.0, mouth: 'grin', eyes: 'round', eyeSize: 1.05,
     brows: 'raised', lashes: true, blush: 0.9 },
 };
@@ -27,7 +29,7 @@ const PLAYER_LOOK = {
 // the beret and the little mustard backpack, hung on the rig's own joints
 function dressPlayer(g) {
   const J = g.userData.human.J;
-  J.head.scale.set(0.88, 1.04, 0.96);          // human heads are upright: ~3/4 as wide as tall
+  J.head.scale.set(0.9, 0.97, 0.96);          // human heads are upright: ~3/4 as wide as tall
 
 
   // ── her hair: a chin-length bob with a side part, sculpted ON her own skull
@@ -158,10 +160,13 @@ function dressPlayer(g) {
     const s = k === 'L' ? -1 : 1;
     const grip = J['grip' + k], hand = J['hand' + k];
     if (!grip || !hand) continue;
-    const skinM = grip.children.find(c => c.isMesh)?.material ?? paint(0xefc3a2);
+    // the soft skin ramp (as on her face): the hard 3-band body ramp turned each
+    // knuckle bump into a pale hard-edged blotch on the back of the hand
+    const skinHex = grip.children.find(c => c.isMesh)?.material?.color?.getHex() ?? 0xefc3a2;
+    const skinM = paint(skinHex, { soft: true, hatch: 0.3 });
     grip.visible = false;
     const H = new THREE.Group();
-    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.112 }), skinM));
+    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.106, young: 1 }), skinM));
     ink(H, 'fine');
     hand.add(H);
     hand.rotation.x = -0.06;
@@ -200,7 +205,7 @@ function dressPlayer(g) {
   bp.add(handle);
   for (const s of [-1, 1]) {                    // straps hugging over the shoulders to the chest
     const strap = new THREE.Mesh(rbox(0.028, 0.16, 0.013, 0.005), flapM);
-    strap.position.set(s * 0.062, 0.08, 0.07);
+    strap.position.set(s * 0.058, 0.055, 0.07);   // seated on the sloped shoulder line
     strap.rotation.x = -0.3;
     bp.add(strap);
   }
