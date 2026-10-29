@@ -171,7 +171,53 @@ function macroWeights(P) {
 
 export const DEFAULTS = { sex: 0, age: 25, muscle: 0.5, weight: 0.5, height: 0.5, proportions: 0.5, ancestry: {}, stature: 1.7 };
 
+// ── human proportions, enforced ──
+// Front-view widths (as ratios, and as fractions of stature) that real adults fall within; a
+// body built outside them gets its body-type shaping scaled back, then its build moved toward
+// average, until it fits. Body types and girths stacked on a heavy build went far past it
+// (a pear woman's hips at 50 cm across, waists half the hip width). Children are exempt:
+// they have no waist to speak of. [woman, man]
+export const BODY_RANGE = {
+  whr: [[0.6, 0.86], [0.72, 0.98]],          // waist width ÷ hip width
+  shr: [[0.76, 1.2], [0.92, 1.32]],          // shoulder joints apart ÷ hip width
+  hipW: [[0.16, 0.262], [0.16, 0.25]],       // hip width ÷ stature
+  belly: [[0.09, 0.19], [0.09, 0.19]],       // belly depth ÷ stature
+};
+let _torsoIds = null;
+export function bodyRatios(b) {
+  const { A, pos: P, joints: J } = b, H = b.P.stature, hip = J['upperleg01.L'].head.y;
+  if (!_torsoIds || _torsoIds.A !== A) {                       // body vertices that aren't arms
+    const a = regionWeight(A, 'shoulder01.L'), a2 = regionWeight(A, 'shoulder01.R');
+    _torsoIds = { A, ids: [...new Set(A.tris.body)].filter(i => a[i] + a2[i] < 0.2) };
+  }
+  const ids = _torsoIds.ids, span = (y0, y1, k, f = () => true) => { let lo = 1e9, hi = -1e9; for (const i of ids) { const y = P[i * 3 + 1]; if (y > y0 && y < y1 && f(i)) { lo = Math.min(lo, P[i * 3 + k]); hi = Math.max(hi, P[i * 3 + k]); } } return hi - lo; };
+  const hipW = span(hip - 0.04 * H, hip, 0);
+  let waist = 1e9; for (let k = 0; k < 8; k++) { const y = hip + 0.06 * H + k * 0.012 * H; waist = Math.min(waist, span(y, y + 0.01 * H, 0)); }
+  const belly = span(hip + 0.04 * H, hip + 0.12 * H, 2, (i) => Math.abs(P[i * 3]) < 0.06 * H);
+  return { whr: waist / hipW, shr: J['upperarm01.L'].head.distanceTo(J['upperarm01.R'].head) / hipW, hipW: hipW / H, belly: belly / H };
+}
+function outOfRange(r, sex) {
+  let worst = 0;
+  for (const [k, [f, m]] of Object.entries(BODY_RANGE)) {
+    const lo = f[0] + (m[0] - f[0]) * sex, hi = f[1] + (m[1] - f[1]) * sex;
+    worst = Math.max(worst, (lo - r[k]) / lo, (r[k] - hi) / hi);
+  }
+  return worst;                                                // > 0: outside the range by that fraction
+}
+
 export function buildBody(A, params = {}) {
+  let b = buildBodyRaw(A, params);
+  if (params.enforce === false || (b.P.age ?? 25) < 15) return b;
+  // scale back the body type and girths, then the build, until the body is a human one
+  for (let it = 0, f = 1, wb = 1; it < 8 && outOfRange(bodyRatios(b), b.P.sex) > 0; it++) {
+    if (f > 0.35) f *= 0.8; else wb *= 0.75;
+    const p2 = { ...params, shapeAmount: (params.shapeAmount ?? 1) * f, weight: 0.5 + ((params.weight ?? 0.5) - 0.5) * wb, muscle: 0.5 + ((params.muscle ?? 0.5) - 0.5) * wb };
+    for (const g of ['bust', 'waist', 'hips', 'shoulders', 'belly', 'seat']) if (params[g]) p2[g] = params[g] * f;
+    b = buildBodyRaw(A, p2); b.P.enforced = { shape: f, build: wb };
+  }
+  return b;
+}
+function buildBodyRaw(A, params = {}) {
   const P = { ...DEFAULTS, ...params };
   const pos = Float32Array.from(A.base);
   for (const [k, wt] of Object.entries(macroWeights(P))) {

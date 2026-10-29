@@ -55,6 +55,13 @@ recipe**, because the silhouettes alone move a girth only 2–4 cm and every typ
 the same. Girths are their own parameters too, −1..1: `bust`, `waist`, `hips`,
 `shoulders`, `belly` (MakeHuman's "pregnant" target, kept to half), `seat`. Body types
 fade in through the teens; children don't have them.
+- **Proportions are enforced** (`BODY_RANGE`, `bodyRatios()` in js/anatomy.js). Front-view
+  waist÷hip and shoulder÷hip widths, hip width÷stature and belly depth÷stature must fall in
+  a human range for the person's sex. Out of range, `buildBody` scales back the body-type
+  shaping (×0.8 a step), then moves the build toward average, until the body fits; it costs
+  about 6 ms a person. Children are exempt. Type recipes stacked on a heavy build had
+  reached hips 50 cm across and waists half the hip width. `enforce: false` turns it off,
+  for the lab only.
 - Batches deal body types from a deck (men from the types that occur in men) and spread
   `build` and `muscle` over almost the whole range, two-dice rather than three. With a
   three-dice bell everyone came out near average and the crowd looked cloned.
@@ -262,6 +269,16 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   the forehead start there; a fringe comes down from it, never higher. Real average
   proportions (the face in thirds, the forehead near half the brow-to-chin height) read as
   a huge forehead on a drawn character, and so did fixed per-style elevations.
+- **Built the way hair artists build cards** (80.lv, Games Artist breakdowns): the base mass
+  hides the scalp; big clumps, then a top layer with air between, then thin breakup locks,
+  with clump widths varied; short transition locks along hairlines so the edge is soft; a
+  few flyaways last on longer hair; occlusion baked into the vertex colours (deep and
+  underside darker).
+- **Strand highlight, not painted shine:** every hair mesh carries `hairDir` (the strand
+  direction), and `withSheen()` in js/render-styles.js adds a Kajiya-Kay highlight (two
+  shifted lobes, after Scheuermann 2004) drawn per style: soft in gouache, an angel ring
+  in anime, two-lobe in realistic, none in clay. Keep it subtle (stronger read as metal or
+  plastic), and never give a vertex a zero `hairDir`: NaN rendered as white slivers.
 - Styles are data (`HAIRSTYLES`): buzz, crop, pixie, bob, long bob, ponytail, bun, curls.
   A new style means new numbers (fringe height and sweep, face window, side/back ends,
   curtain cut / A-line / bell / tuck), plus an extra mesh for a tail or bun.
