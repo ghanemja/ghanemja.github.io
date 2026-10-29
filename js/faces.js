@@ -212,12 +212,27 @@ export function buildHead(J, S, F, mats) {
     // F.lids: a soft, flush eye with an upper-lid line instead of lash ticks (the ticks read
     // as antennae, and a deep dome popped out of the profile like a bead)
     const flush = !!F.lids;
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.016 * es, flush ? 28 : 12, flush ? 20 : 10), dark);
+    // F.iris (a hex colour): a white eye with a coloured iris and a darker pupil, instead of a solid dark dot
+    const irisCol = F.iris;
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.016 * es * (irisCol ? 1.14 : 1), flush ? 28 : 12, flush ? 20 : 10),
+      irisCol ? paint(0xfbf8f1, { hatch: 0, emissive: 0x6f6c66 }) : dark);   // lifted so the cel shading can't grey half of it
     e.scale.set(0.8, F.eyes === 'narrow' ? 0.95 : (F.eyeTall ?? 1.15), flush ? 0.3 : 0.5);
     e.position.copy(c);
-    if (flush) e.position.sub(c.clone().sub(HC).normalize().multiplyScalar(0.0022));
+    const nrm = c.clone().sub(HC).normalize();
+    if (flush) e.position.addScaledVector(nrm, -0.0022);
     bits.push(add(e));
-    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.0045 * es, 8, 6), paint(0xffffff, { hatch: 0 })); hl.position.copy(c).add(new THREE.Vector3(-0.004, 0.006, 0.007)); bits.push(add(hl));
+    let hlAt = c.clone().add(new THREE.Vector3(-0.004, 0.006, 0.007));
+    if (irisCol) {
+      // the iris sits straight ahead on the white (the head-surface normal points it sideways: cross-eyed)
+      const fwd = new THREE.Vector3(0, 0, 1), ic = e.position.clone().addScaledVector(fwd, 0.0045);
+      const iris = new THREE.Mesh(new THREE.SphereGeometry(0.0078 * es, 20, 14), paint(irisCol, { hatch: 0 }));
+      iris.scale.set(1, 1, 0.35); iris.position.copy(ic); iris.lookAt(ic.clone().add(fwd)); bits.push(add(iris));
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.0038 * es, 14, 10), paint(new THREE.Color(irisCol).multiplyScalar(0.45).getHex(), { hatch: 0 }));
+      pupil.scale.set(1, 1, 0.3); pupil.position.copy(ic).addScaledVector(fwd, 0.0008); pupil.lookAt(pupil.position.clone().add(fwd)); bits.push(add(pupil));
+      iris.userData.noInk = pupil.userData.noInk = true;
+      hlAt = ic.clone().addScaledVector(fwd, 0.0018).add(new THREE.Vector3(-0.0025, 0.0029, 0));
+    }
+    const hl = new THREE.Mesh(new THREE.SphereGeometry((irisCol ? 0.0024 : 0.0045) * es, 8, 6), paint(0xffffff, { hatch: 0 })); hl.position.copy(hlAt); hl.userData.noInk = !!irisCol; bits.push(add(hl));
     if (F.eyes === 'sleepy' || F.eyes === 'narrow') {
       const lidDrop = F.eyes === 'sleepy' ? 0.45 : 0.18;
       const lid = new THREE.Mesh(new THREE.SphereGeometry(0.0185 * es, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), skin);
@@ -291,7 +306,16 @@ export function buildHead(J, S, F, mats) {
   // blush
   if (F.blush !== 0) for (const s of [-1, 1]) {
     const ch = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), paint(F.blushColor ?? 0xe89a86, { hatch: 0 })); ch.scale.set(1.1 * (F.blush ?? 1), 0.6, 0.3);
-    ch.position.copy(pt(s * 0.55, -0.2)).add(new THREE.Vector3(0, 0, -0.003)); bits.push(add(ch));
+    ch.position.copy(pt(s * 0.55, -0.2)).add(new THREE.Vector3(0, 0, -0.003));
+    if (F.blushFlush) {
+      // painted on, not stuck on: a paper-thin disc lying in the cheek's surface, no outline
+      const n = ch.position.clone().sub(HC).normalize();
+      ch.scale.set(1.1 * (F.blush ?? 1), 0.75, 0.04);
+      ch.position.copy(pt(s * 0.55, -0.2)).addScaledVector(n, 0.0006);
+      ch.lookAt(ch.position.clone().add(n));
+      ch.userData.noInk = true;
+    }
+    bits.push(add(ch));
   }
   // ears
   for (const s of [-1, 1]) { const ear = new THREE.Mesh(new THREE.SphereGeometry(0.024, 12, 10), skin); ear.scale.set(0.5, 1, 0.8); ear.position.copy(pt(s * 0.97, 0.03, -1)).add(new THREE.Vector3(0, 0, 0.012)); add(ear); }
