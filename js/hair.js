@@ -123,6 +123,7 @@ export function makeHair(H, { chin }, styleName, colour) {
   };
 
   // the grid (plus a lip row along the cut, turned in toward the head)
+  const row = NR + 2;
   const P = [], Cc = [], idx = [], c = new THREE.Color();
   const cols = [];
   for (let j = 0; j < NT; j++) cols.push(column(-Math.PI + (j / NT) * Math.PI * 2));
@@ -143,7 +144,6 @@ export function makeHair(H, { chin }, styleName, colour) {
     const hlE = S.taper && isHairline(th), lip = lastV.clone().addScaledVector(inward, hlE ? 0.012 * R : S.th * R * 0.9).add(prev.clone().sub(lastV).multiplyScalar(hlE ? 0.1 : 0.6));
     P.push(lip.x, lip.y, lip.z); c.copy(hlE ? base.clone().lerp(dark, 0.3) : dark); Cc.push(c.r, c.g, c.b);
   }
-  const row = NR + 2;
   for (let j = 0; j < NT; j++) {
     const a = j * row, b = ((j + 1) % NT) * row;
     // wound so the normals face OUT of the head: the outline is drawn from back faces pushed
@@ -155,6 +155,13 @@ export function makeHair(H, { chin }, styleName, colour) {
   geo.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3));
   geo.setIndex(idx);
   geo.computeVertexNormals();
+  { const T4 = new Float32Array(P.length), v = (k) => new THREE.Vector3(P[k * 3], P[k * 3 + 1], P[k * 3 + 2]);   // strand direction: down each column
+    for (let j = 0; j < NT; j++) for (let i = 0; i < row; i++) {
+      // (the lip is the last vertex: it takes the edge's direction; a zero vector made NaN, white slivers)
+      const ii = Math.min(i, NR), k = j * row + i, a = j * row + Math.max(0, ii - 1), b = j * row + Math.min(NR, ii + 1), t = v(b).sub(v(a)).normalize();
+      T4.set([t.x, t.y, t.z], k * 3);
+    }
+    geo.setAttribute('hairDir', new THREE.BufferAttribute(T4, 3)); }
   const mat = paint(0xffffff, { vertexColors: true, soft: true, hatch: 0.3, side: THREE.DoubleSide });
   const shell = new THREE.Mesh(geo, mat);
   g.add(shell);
@@ -166,7 +173,7 @@ export function makeHair(H, { chin }, styleName, colour) {
   // The shell underneath guarantees coverage and the clean hairline.
   const rnd = (n) => { const v = Math.sin(n * 91.7 + 13.1) * 43758.5453; return v - Math.floor(v); };
   const outOf = (p) => { const d = p.clone().sub(C); if (p.y < C.y - 0.15 * R) d.y *= 0.25; return d.normalize(); };
-  const LP = [], LC = [], LI = [];
+  const LP = [], LC = [], LI = [], LT = [];
   // a lock along `pts` (root → tip): half-width w(t), thickness h(t), shade (×colour)
   const lock = (pts, w, h, shade) => {
     const n = pts.length, ring = 6, start = LP.length / 3, b = new THREE.Vector3(), nn = new THREE.Vector3(), tan = new THREE.Vector3(), col = new THREE.Color();
@@ -176,9 +183,12 @@ export function makeHair(H, { chin }, styleName, colour) {
       b.crossVectors(tan, o).normalize(); nn.crossVectors(b, tan).normalize();
       for (let k = 0; k < ring; k++) {
         const a = (k / ring) * Math.PI * 2, up = Math.sin(a), q = p.clone().addScaledVector(b, Math.cos(a) * w(t)).addScaledVector(nn, up * h(t) * (up > 0 ? 1 : 0.35));
-        LP.push(q.x, q.y, q.z);
-        col.copy(base).multiplyScalar(shade).lerp(dark, 0.55 * (1 - ss(t, 0, 0.3)) + 0.25 * Math.max(0, -up))   // dark at the root and underneath
-          .lerp(shine, 0.45 * Math.max(0, up) * Math.exp(-((t - 0.38) ** 2) / 0.025));                           // a band of shine across the crown
+        LP.push(q.x, q.y, q.z); LT.push(tan.x, tan.y, tan.z);                         // (the strand direction: the highlight runs across it)
+        // baked occlusion, as hair artists bake it into the vertices: hair deep in the mass (near the
+        // scalp) is darker than hair on the outside, and so is the underside of each lock and its root
+        const dq = q.clone().sub(C), depth = THREE.MathUtils.clamp((dq.length() - H.scalp(dq.normalize())) / (R * (S.th + S.vol * 0.5 + 0.08)), 0, 1);
+        col.copy(base).multiplyScalar(shade * (0.68 + 0.32 * depth)).lerp(dark, 0.5 * (1 - ss(t, 0, 0.3)) + 0.25 * Math.max(0, -up))
+          .lerp(shine, 0.3 * Math.max(0, up) * depth * Math.exp(-((t - 0.38) ** 2) / 0.025));                    // (a little painted shine for the flat styles)
         LC.push(col.r, col.g, col.b);
       }
     }
@@ -195,23 +205,49 @@ export function makeHair(H, { chin }, styleName, colour) {
     return e.addScaledVector(d, s - Lend);
   };
   const NL = S.locks ?? 0;
-  if (NL && !S.curl && !S.extra) for (const layer of [0, 1]) for (let j = 0; j < NL; j++) {
-    const th = -Math.PI + ((j + 0.5 * layer + 0.3 * rnd(j * 7 + layer)) / NL) * Math.PI * 2, col = column(th), fw = faceW(th);
-    const s0 = col.end * (layer ? 0.28 + 0.2 * rnd(j + 3) : 0.02 + 0.06 * rnd(j + 5));
+  // Layered as hair artists build cards: the base mass hides the scalp; then big clumps (layer 0);
+  // then a top layer over them with a little air between (1); then thin breakup locks (2) so it
+  // isn't one width all over. Clumps vary in width; thick and thin together read as hair.
+  const LAYER = [{ n: 1, w: 1.15, lift: 0.012, s0: [0.02, 0.06], shade: 0.86 }, { n: 1, w: 0.95, lift: 0.03, s0: [0.25, 0.2], shade: 1 }, { n: 0.6, w: 0.42, lift: 0.046, s0: [0.12, 0.35], shade: 1.07 }];
+  if (NL && !S.curl && !S.extra) for (let layer = 0; layer < 3; layer++) for (let j = 0, nl = Math.round(NL * LAYER[layer].n); j < nl; j++) {
+    const Ly = LAYER[layer], th = -Math.PI + ((j + 0.5 * (layer % 2) + 0.35 * rnd(j * 7 + layer)) / nl) * Math.PI * 2, col = column(th), fw = faceW(th);
+    const s0 = col.end * (Ly.s0[0] + Ly.s0[1] * rnd(j + 3 + layer * 5)), wv = 0.7 + 0.6 * rnd(j * 23 + layer);
     // at a hairline a lock stops just short of it and settles flat; a hanging fringe or the ends of
     // longer hair reach a little past the cut in soft points (locks spilling past a hairline onto
     // the temples and ears, at full thickness, made the edge a ragged ledge)
     const hl = isHairline(th);
     const s1 = hl ? col.end * (0.97 - 0.03 * rnd(j * 3 + layer)) : col.end * (1 - 0.05 * rnd(j * 3 + layer)) + R * (S.tip ?? 0.05) * (0.5 + rnd(j * 11 + layer)) * (0.4 + 0.6 * fw);
-    const pts = [], lift = R * (0.012 + 0.016 * layer + 0.006 * (j % 3));   // (each a little above its neighbour: at one height they z-fought into stripes)
+    const pts = [], lift = R * (Ly.lift + 0.006 * (j % 3));   // (each a little above its neighbour: at one height they z-fought into stripes)
     for (let i = 0; i <= 24; i++) {
       const t = i / 24, sAt = s0 + (s1 - s0) * t, p = taper(along(col, sAt), th, Math.min(1, sAt / col.end));
       pts.push(p.addScaledVector(outOf(p), lift * (hl ? 1 - ss(t, 0.45, 1) : 1 - 0.5 * t)));
     }
     const ring = (p) => Math.hypot(p.x - C.x, p.z - C.z);
     const spacing = (i) => (2 * Math.PI * ring(pts[i])) / NL;
-    lock(pts, (t) => spacing(Math.round(t * 24)) * (S.lockW ?? 0.85) * (0.35 + 0.65 * ss(t, 0, 0.12)) * (1 - 0.85 * ss(t, 0.62, 1)),
-      (t) => R * (S.lockH ?? 0.035) * (1 - 0.6 * t) * (hl ? 1 - 0.9 * ss(t, 0.45, 1) : 1), 0.9 + 0.2 * rnd(j * 13 + layer));
+    lock(pts, (t) => spacing(Math.round(t * 24)) * (S.lockW ?? 0.85) * Ly.w * wv * (0.35 + 0.65 * ss(t, 0, 0.12)) * (1 - 0.85 * ss(t, 0.62, 1)),
+      (t) => R * (S.lockH ?? 0.035) * (layer === 2 ? 0.6 : 1) * (1 - 0.6 * t) * (hl ? 1 - 0.9 * ss(t, 0.45, 1) : 1), Ly.shade * (0.93 + 0.14 * rnd(j * 13 + layer)));
+  }
+  // transition locks: short, thin clumps along a hairline, growing into it, so the edge is soft
+  // (the shell's edge alone read as a cut line)
+  if (NL && S.taper && !S.curl) for (let j = 0, n = Math.round(NL * 1.6); j < n; j++) {
+    const th = -Math.PI + ((j + 0.5 * rnd(j * 3)) / n) * Math.PI * 2;
+    if (!isHairline(th)) continue;
+    const col = column(th), len = R * (0.14 + 0.08 * rnd(j * 5)), s0 = Math.max(0, col.end - len), pts = [];
+    for (let i = 0; i <= 10; i++) { const t = i / 10, sAt = s0 + (col.end * 0.995 - s0) * t, p = taper(along(col, sAt), th, Math.min(1, sAt / col.end)); pts.push(p.addScaledVector(outOf(p), R * 0.008 * (1 - t))); }
+    const sp = (2 * Math.PI * Math.hypot(pts[0].x - C.x, pts[0].z - C.z)) / n;
+    lock(pts, (t) => sp * 0.75 * (1 - 0.8 * ss(t, 0.5, 1)), (t) => R * 0.012 * (1 - 0.8 * t), 0.95 + 0.1 * rnd(j));
+  }
+  // flyaways: a few single strands lifting off the mass, the last layer; they break the perfect
+  // outline (none on very short hair)
+  if (NL && (S.curtain || S.extra) && !S.curl) for (let j = 0; j < 9; j++) {
+    const th = -Math.PI + rnd(j * 41 + 7) * Math.PI * 2, col = column(th), s0 = col.end * (0.15 + 0.4 * rnd(j * 43)), len = R * (0.35 + 0.35 * rnd(j * 47)), pts = [];
+    const side = (rnd(j * 53) - 0.5) * 2;
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16, p = along(col, Math.min(col.end, s0 + len * t)), o = outOf(p);
+      const sideways = new THREE.Vector3(Math.cos(th), 0, -Math.sin(th));
+      pts.push(p.addScaledVector(o, R * (0.03 + 0.14 * t * t)).addScaledVector(sideways, R * 0.08 * side * t * t));
+    }
+    lock(pts, (t) => R * 0.007 * (1 - 0.7 * t), (t) => R * 0.006, 1.05);
   }
   // pulled back (ponytail, bun): locks from the hairline over the head to the tie
   const tieDir = S.extra === 'bun' ? dirAt(Math.PI, 0.5) : S.extra === 'ponytail' ? dirAt(Math.PI, 0.3) : null;
@@ -289,6 +325,7 @@ export function makeHair(H, { chin }, styleName, colour) {
     const lg = new THREE.BufferGeometry();
     lg.setAttribute('position', new THREE.Float32BufferAttribute(LP, 3));
     lg.setAttribute('color', new THREE.Float32BufferAttribute(LC, 3));
+    lg.setAttribute('hairDir', new THREE.Float32BufferAttribute(LT, 3));
     lg.setIndex(LI); lg.computeVertexNormals();
     g.add(new THREE.Mesh(lg, paint(0xffffff, { vertexColors: true, soft: true, hatch: 0.25 })));
     shell.geometry.attributes.color.array.forEach((x, i, a) => { a[i] = x * 0.82; });   // the mass beneath is in the locks' shade

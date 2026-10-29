@@ -50,7 +50,7 @@ export const RENDER_STYLES = {
         // filmic tone mapping greys skin out: it is given back a little warmth and colour first
         // (skin and hair are vertex-coloured over white, so the material colour is a warm multiplier)
         case 'skin': return new THREE.MeshPhysicalMaterial({ ...o, color: b.vc ? 0xf0d0bc : warm(b.color), roughness: 0.6, sheen: 0.25, sheenColor: 0xff9f80, sheenRoughness: 0.6 });
-        case 'hair': return new THREE.MeshPhysicalMaterial({ ...o, color: b.vc ? 0xe6d2c0 : warm(b.color, 0.15), roughness: 0.42, sheen: 1, sheenColor: lift(b.color, 0.45), sheenRoughness: 0.3 });
+        case 'hair': return new THREE.MeshPhysicalMaterial({ ...o, color: b.vc ? 0xe6d2c0 : warm(b.color, 0.15), roughness: 0.6, sheen: 0.35, sheenColor: lift(b.color, 0.3), sheenRoughness: 0.5 });   // (the strand highlight does the shine)
         case 'cloth': return new THREE.MeshPhysicalMaterial({ ...o, roughness: 0.92, sheen: 0.8, sheenColor: lift(b.color, 0.35), sheenRoughness: 0.75 });
         case 'eye': case 'glint': return new THREE.MeshPhysicalMaterial({ ...o, roughness: 0.08, clearcoat: 1 });
         case 'shoe': return new THREE.MeshStandardMaterial({ ...o, roughness: 0.65 });
@@ -81,6 +81,48 @@ function lowPoly(geo, cell) {
   return flat;
 }
 
+// ── hair highlight: Kajiya–Kay, the strand model real-time hair shaders are built on (Scheuermann,
+// "Practical Real-Time Hair Rendering and Shading", 2004). The highlight comes from the STRAND
+// direction (attribute hairDir), so it lies across the strands and moves with the light and view —
+// not a band painted into the colour. Two lobes, as there: a white one shifted toward the root and
+// a softer one in the hair's colour toward the tip. Each style draws it its own way.
+const SHEEN = {
+  gouache: { a: 0.16, b: 0.06, e1: 70, e2: 18, band: 0.5 },   // (stronger read as metal)
+  anime: { a: 0.3, b: 0, e1: 60, e2: 1, band: 1 },          // a crisp "angel ring"
+  realistic: { a: 0.28, b: 0.18, e1: 160, e2: 30, band: 0 },
+  pixel: { a: 0.35, b: 0, e1: 50, e2: 1, band: 1 },
+  lowpoly: { a: 0.25, b: 0, e1: 40, e2: 1, band: 0.6 },
+};
+const sheenCache = new Map();
+function withSheen(mat, style) {
+  const S = SHEEN[style]; if (!S) return mat;
+  const key = mat.uuid + style; if (sheenCache.has(key)) return sheenCache.get(key);
+  const m = mat.clone(), prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey?.bind(mat);
+  m.userData = { ...mat.userData };
+  m.onBeforeCompile = (sh, r) => {
+    if (prev) prev.call(m, sh, r);
+    sh.vertexShader = 'attribute vec3 hairDir;\nvarying vec3 vHairDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHairDir = normalize((modelViewMatrix * vec4(hairDir, 0.0)).xyz);');
+    sh.fragmentShader = 'varying vec3 vHairDir;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', `
+      {
+        vec3 T = normalize(vHairDir), N = normalize(normal), V = normalize(vViewPosition);
+        #if NUM_DIR_LIGHTS > 0
+          vec3 L = normalize(directionalLights[0].direction);
+        #else
+          vec3 L = normalize(vec3(0.3, 0.8, 0.5));
+        #endif
+        vec3 Hh = normalize(L + V);
+        float th1 = dot(normalize(T - 0.08 * N), Hh), th2 = dot(normalize(T + 0.12 * N), Hh);
+        float s1 = pow(sqrt(max(0.0, 1.0 - th1 * th1)), ${S.e1.toFixed(1)}), s2 = pow(sqrt(max(0.0, 1.0 - th2 * th2)), ${S.e2.toFixed(1)});
+        float lit = smoothstep(-0.1, 0.35, dot(N, L));
+        s1 = mix(s1, smoothstep(0.35, 0.55, s1), ${S.band.toFixed(2)});            // banded for the drawn styles
+        gl_FragColor.rgb += lit * (${S.a.toFixed(2)} * s1 * vec3(1.0, 0.97, 0.9) + ${S.b.toFixed(2)} * s2 * gl_FragColor.rgb);
+      }
+      #include <dithering_fragment>`);
+  };
+  m.customProgramCacheKey = () => (prevKey ? prevKey() : '') + 'sheen' + style;
+  sheenCache.set(key, m); return m;
+}
+
 function baseOf(m) {
   if (m.userData.base) return m.userData.base;
   const mat = m.material, color = mat.color ? mat.color.getHex() : 0xffffff;
@@ -102,6 +144,7 @@ export function applyRenderStyle(root, name = 'gouache') {
   for (const m of meshes) {
     const b = baseOf(m);
     m.material = R.mat(b);
+    if (b.role === 'hair' && m.geometry.attributes.hairDir) m.material = withSheen(m.material, name);
     if (!m.userData.geo0) m.userData.geo0 = m.geometry;
     if (R.cell && b.role !== 'eye' && b.role !== 'glint') {
       // small features need a finer grid or they collapse: faces and hands at under half the size
