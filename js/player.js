@@ -18,7 +18,8 @@ const PLAYER_LOOK = {
   top: 0x4a4550, bottom: 0x7d9cc0,
   shoes: 0xf0ece2, sole: 0xc9a87c,                // white sneakers on a gum sole — the contrast makes the shoe shape read
   height: 1.02, build: 1.0,
-  slope: 1,                                       // soft sloped shoulders, not a square yoke
+  slope: 1,
+  neck: 0.6,                                      // a shorter neck: with sloped shoulders the full one read giraffe-long                                       // soft sloped shoulders, not a square yoke
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { jaw: 0.28, chin: 0.62, cheeks: 0.45, long: 0.12, skull: 0.55, brow: 0.4 },
     nose: 'cute', noseSize: 1.0, mouth: 'grin', eyes: 'round', eyeSize: 1.05,

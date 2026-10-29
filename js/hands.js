@@ -50,7 +50,7 @@ const FINGERS = [
   { mcp: [0.17, 0.485], r0: 0.050, len: 0.45, splay: -4, flex: [16, 32, 18] },   // index
   { mcp: [0.055, 0.50], r0: 0.051, len: 0.50, splay: 0, flex: [20, 38, 20] },    // middle
   { mcp: [-0.06, 0.485], r0: 0.048, len: 0.475, splay: 5, flex: [24, 44, 22] },  // ring
-  { mcp: [-0.165, 0.44], r0: 0.042, len: 0.375, splay: 11, flex: [30, 50, 24] }, // pinky
+  { mcp: [-0.165, 0.452], r0: 0.044, len: 0.41, splay: 10, flex: [26, 44, 22] }, // pinky: 0.82 of the middle, knuckle back ≈0.05 HL — at 0.75 with the deepest set-back and curl it read stunted
 ];
 const PHAL = [0.5, 0.29, 0.21];                 // proximal / middle / distal share of a finger
 

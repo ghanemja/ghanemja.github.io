@@ -42,14 +42,18 @@ export function shoeGeo() {
   // rises over the tongue, dips across the vamp, swells over the toe box and turns
   // down at the tip; the heel is upright and rounded; the bottom follows the toe spring.
   const up = new THREE.Shape();
+  // the S has to be in the part in front of the trouser hem (x > ~0.03): the
+  // ankle curves are hidden, so the instep rounds over, the vamp dips, and a
+  // raised toe cap rounds up again before turning down at the tip
   up.moveTo(-0.034, 0.012);
-  up.quadraticCurveTo(-0.046, 0.016, -0.044, 0.032);              // rounded heel
-  up.quadraticCurveTo(-0.043, 0.049, -0.036, 0.054);              // back of the heel, up to the tab
-  up.quadraticCurveTo(-0.02, 0.044, -0.004, 0.046);               // collar dips down round the ankle
-  up.quadraticCurveTo(0.012, 0.05, 0.024, 0.054);                 // up over the tongue
-  up.quadraticCurveTo(0.046, 0.042, 0.058, 0.039);                // the vamp dips (concave)…
-  up.quadraticCurveTo(0.086, 0.036, 0.1, 0.022);                  // …then swells over the toe box (convex)
-  up.quadraticCurveTo(0.103, 0.014, 0.088, 0.014);                // the toe turns down
+  up.quadraticCurveTo(-0.047, 0.016, -0.045, 0.032);              // rounded heel
+  up.quadraticCurveTo(-0.044, 0.05, -0.036, 0.052);               // back of the heel, up to the tab
+  up.quadraticCurveTo(-0.022, 0.035, -0.006, 0.039);              // collar dips round the ankle bone
+  up.quadraticCurveTo(0.01, 0.059, 0.026, 0.053);                 // the tongue rises over the instep
+  up.quadraticCurveTo(0.044, 0.047, 0.058, 0.036);                // the instep rounds over (convex)…
+  up.quadraticCurveTo(0.068, 0.03, 0.08, 0.033);                // …the vamp dips (concave)…
+  up.quadraticCurveTo(0.098, 0.039, 0.103, 0.024);                // …a raised, round toe cap (convex)
+  up.quadraticCurveTo(0.105, 0.013, 0.088, 0.013);                // the toe turns down
   up.quadraticCurveTo(0.06, 0.012, 0.04, 0.012);                  // underside rides the toe spring
   up.lineTo(-0.034, 0.012);
   // the sole: thin, rounded heel, the toe springs up off the ground
@@ -312,7 +316,7 @@ export function makeFolk(spec) {
       if (S.outfit === 'uniform') { const edge = new THREE.Mesh(new THREE.TorusGeometry(0.066, 0.004, 6, 26), paint(0xe4b84f)); edge.rotation.copy(ring.rotation); edge.scale.copy(ring.scale); edge.position.set(0, 0.362, -0.004); J.spine.add(edge); }
     }
   }
-  J.head = joint(J.neck, 0, 0.06, 0.016);
+  J.head = joint(J.neck, 0, 0.06 - 0.06 * (1 - (S.neck ?? 1)), 0.016);   // S.neck < 1 shortens the neck (the head sinks onto it)
   // the head: its own shape, features, expression and hair (faces.js)
   const head = buildHead(J, S, S.face || {}, { skin, hairM, dark });
   const onSkull = (u, v, zs, out) => { const p = head.pt(u, v, zs); return p.add(p.clone().sub(HC).normalize().multiplyScalar(out)); };
@@ -512,7 +516,12 @@ export function poseFolk(inst, dt, k, { talk = 0 } = {}) {
   // forward is +Z: a negative X rotation swings a hanging limb forward
   J.thighL.rotation.x = -legA * s; J.thighR.rotation.x = legA * s;
   // the knee folds on the forward swing (the left thigh travels forward while c > 0)
-  J.shinL.rotation.x = 0.9 * k * Math.max(0, c); J.shinR.rotation.x = 0.9 * k * Math.max(0, -c);
+  // …and never locks: a soft bend at heel strike and through stance (a knee
+  // straight at the front of the stride reads as a stiff, kicking leg)
+  J.shinL.rotation.x = k * (0.16 + 0.8 * Math.max(0, c)); J.shinR.rotation.x = k * (0.16 + 0.8 * Math.max(0, -c));
+  // the foot stays near level instead of hanging off the end of the shin:
+  // toes up as the leg reaches forward, heel lifting as it trails
+  if (J.footL) { J.footL.rotation.x = -0.7 * (J.thighL.rotation.x + J.shinL.rotation.x); J.footR.rotation.x = -0.7 * (J.thighR.rotation.x + J.shinR.rotation.x); }
   // arms: each side follows the person's stance (what they're doing), else a relaxed hang;
   // walking swings them; talking lifts the free hand into a gesture
   const st = inst.stance;
