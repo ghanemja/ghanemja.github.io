@@ -298,8 +298,8 @@ export function makeFolk(spec) {
   // with a full slope the yoke is a real shoulder line: from the neck a gentle, slightly
   // CONCAVE trapezius run out to a rounded shoulder point — a convex dome there reads hunched
   const prof = sl >= 1
-    ? [[0.001, -0.01], [0.112, 0.0], [0.122, 0.1], [0.12, 0.17], [0.126, 0.225], [0.124, 0.262],
-       [0.112, 0.29], [0.1, 0.31], [0.089, 0.328], [0.079, 0.343], [0.06, 0.36], [0.001, 0.368]]   // the neckline stays as wide as the collar ring (the torso is shallower front-to-back)
+    ? [[0.001, -0.01], [0.112, 0.0], [0.122, 0.1], [0.12, 0.17], [0.123, 0.215], [0.12, 0.245],
+       [0.11, 0.272], [0.097, 0.297], [0.087, 0.32], [0.081, 0.337], [0.074, 0.352], [0.001, 0.366]]   // the neckline stays as wide as the collar ring (the torso is shallower front-to-back)
     : [[0.001, -0.01], [0.112, 0.0], [0.125, 0.1], [0.122, 0.17],
        [0.132 - 0.006 * sl, 0.25 - 0.025 * sl], [0.134 - 0.016 * sl, 0.278 - 0.022 * sl], [0.12 - 0.022 * sl, 0.31 - 0.006 * sl],
        [0.088 - 0.012 * sl, 0.342], [0.05, 0.362], [0.001, 0.37]];
