@@ -149,11 +149,14 @@ export function relaxedPose(sk) {
   sk.root.updateMatrixWorld(true);
   for (const k of ['L', 'R']) {
     const s = k === 'L' ? 1 : -1;
-    // arms hang a touch off the body (hands clear of the thighs), elbows soft
-    turnTo(B['upperarm01.' + k], wp(B['lowerarm01.' + k]).sub(wp(B['upperarm01.' + k])), new THREE.Vector3(s * 0.2, -1, 0.0));
-    turnTo(B['lowerarm01.' + k], wp(B['wrist.' + k]).sub(wp(B['lowerarm01.' + k])), new THREE.Vector3(s * 0.1, -1, 0.1));
-    palmTo(B, k, new THREE.Vector3(-s, 0, 0.15));                 // palm to the thigh
-    curlFingers(B, k, 0);
+    // a relaxed stand, as posing guides draw it: the upper arm hangs close to the body and a little
+    // back, the elbow soft and pointing BACK, the forearm carrying the hand slightly forward and out,
+    // the palm toward the thigh, fingers gently curled. (Arms angled out from the shoulder bowed the
+    // elbows sideways, a gunslinger's stance, and flat fingers read as claws.)
+    turnTo(B['upperarm01.' + k], wp(B['lowerarm01.' + k]).sub(wp(B['upperarm01.' + k])), new THREE.Vector3(s * 0.07, -1, -0.05));
+    turnTo(B['lowerarm01.' + k], wp(B['wrist.' + k]).sub(wp(B['lowerarm01.' + k])), new THREE.Vector3(s * 0.12, -1, 0.2));
+    palmTo(B, k, new THREE.Vector3(-s, 0, 0.2));                  // palm to the thigh
+    curlFingers(B, k, 0.25);
   }
 }
 

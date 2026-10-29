@@ -55,6 +55,12 @@ recipe**, because the silhouettes alone move a girth only 2–4 cm and every typ
 the same. Girths are their own parameters too, −1..1: `bust`, `waist`, `hips`,
 `shoulders`, `belly` (MakeHuman's "pregnant" target, kept to half), `seat`. Body types
 fade in through the teens; children don't have them.
+- **Check the landmarks, not just the widths** (figure-drawing canon): chin at 1 head, wrists
+  near the crotch, fingertips at mid-thigh, knees about 1.75–2 heads above the ankles,
+  women's shoulders about level with the hips (1:1.03) and men's wider (1:1.18). The natural
+  build meets them (7.6–7.8 heads). What read as "weird" was everything around it: a
+  gunslinger arm pose, leggings-tight trousers making carrot legs, and +15% heads.
+  Trousers are straight-leg (`legHang` with a gentle taper), and the town head is +8%.
 - **Proportions are enforced** (`BODY_RANGE`, `bodyRatios()` in js/anatomy.js). Front-view
   waist÷hip and shoulder÷hip widths, hip width÷stature and belly depth÷stature must fall in
   a human range for the person's sex. Out of range, `buildBody` scales back the body-type
@@ -153,6 +159,8 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
   weights are its own, the pelvis at the waist going to the thigh it lies over (only the
   cloth between the legs shares both), because skinned like trousers it split open
   between the legs. Saved skirts show as trousers.
+- **Sleeves end on a plane across the arm** (mid upper arm for a tee, at the wrist for long
+  sleeves), like necklines: a weight boundary wanders into a ragged hem.
 - **Necklines are a smooth tilted line round the neck** (lower at the front), not the
   neck bone's weight boundary, which zig-zags across the mesh at the base of the neck and
   sawtoothed both the collar and the skin under it. A skirt is

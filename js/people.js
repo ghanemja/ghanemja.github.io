@@ -299,11 +299,11 @@ function skirtShape(P, S, body, k) {
 // carried down (a wide leg doesn't follow the knee and calf back in), never narrower than
 // a wide hem, blurred smooth; below the crotch every trouser vertex is put on it. The two
 // legs never cross the middle.
-function legHang(P, S, body, k) {
+function legHang(P, S, body, k, { minR: mR = 0.075, fall = 0.997, round = 0.88 } = {}) {
   const J = body.joints, H = body.P.stature, NT = 40, NY = 36;
   const ids = [...new Set(S.T)], crotch = J['upperleg01.L'].head.y - 0.045 * H;
   let y0 = 1e9; for (const i of ids) y0 = Math.min(y0, P[i * 3 + 1]);
-  const y1 = crotch + 0.03 * H, minR = 0.075 * k, off = 0.006 * k;
+  const y1 = crotch + 0.03 * H, minR = mR * k, off = 0.006 * k;
   for (const side of [1, -1]) {
     const mine = ids.filter(i => P[i * 3] * side > 0 && P[i * 3 + 1] < y1);
     const row = (y) => Math.min(NY - 1, Math.max(0, Math.floor((y1 - y) / (y1 - y0 + 1e-6) * NY)));
@@ -317,8 +317,8 @@ function legHang(P, S, body, k) {
     for (const i of mine) { const r = row(P[i * 3 + 1]), c = col(P[i * 3], P[i * 3 + 2], r); env[r * NT + c] = Math.max(env[r * NT + c], Math.hypot(P[i * 3] - cx[r], P[i * 3 + 2] - cz[r])); }
     for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) if (!env[r * NT + c])
       for (let d = 1; d < NT / 2; d++) { const a = env[r * NT + (c + d) % NT], b = env[r * NT + (c - d + NT) % NT]; if (a || b) { env[r * NT + c] = a && b ? (a + b) / 2 : a || b; break; } }
-    for (let r = 0; r < NY; r++) { let m = 0; for (let c = 0; c < NT; c++) m = Math.max(m, env[r * NT + c]); for (let c = 0; c < NT; c++) env[r * NT + c] = Math.max(env[r * NT + c], m * 0.88); }   // round, not the leg's own section
-    for (let r = 1; r < NY; r++) for (let c = 0; c < NT; c++) env[r * NT + c] = Math.max(env[r * NT + c], env[(r - 1) * NT + c] * 0.997, minR);
+    for (let r = 0; r < NY; r++) { let m = 0; for (let c = 0; c < NT; c++) m = Math.max(m, env[r * NT + c]); for (let c = 0; c < NT; c++) env[r * NT + c] = Math.max(env[r * NT + c], m * round); }   // round, not the leg's own section
+    for (let r = 1; r < NY; r++) for (let c = 0; c < NT; c++) env[r * NT + c] = Math.max(env[r * NT + c], env[(r - 1) * NT + c] * fall, minR);
     for (let pass = 0; pass < 6; pass++) {
       const t = env.slice();
       for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) {
@@ -371,7 +371,18 @@ function dress(body, N, look) {
     arms: Array.from(both('shoulder01')), ua2: Array.from(both('upperarm02')), shin: Array.from(both('lowerleg01')), ul2: Array.from(both('upperleg02')) };
   const y = (i, s) => s.P[i * 3 + 1], top = look.topType ?? 'sweater', bottom = look.bottomType ?? 'trousers';
   const hemY = J['upperleg01.L'].head.y + (look.hem ?? TOP_FIT[top]?.hem ?? 0.02) * H, waistY = hemY + 0.08 * H, kneeY = J['lowerleg01.L'].head.y;
-  const sleeveF = top === 'tee' ? 'ua2' : 'hands', cuff = 0.5;
+  // sleeves end on a plane across the arm (mid upper arm for a T-shirt, just short of the wrist for
+  // long sleeves), not on a weight boundary, which wandered into a ragged hem
+  const tee = top === 'tee', armPlane = {};
+  for (const k of ['L', 'R']) {
+    const a = J[(tee ? 'upperarm01.' : 'lowerarm01.') + k].head, b = J[(tee ? 'lowerarm01.' : 'wrist.') + k].head, d = b.clone().sub(a), len = d.length();
+    armPlane[k] = { a, d: d.normalize(), at: tee ? len * 0.48 : len - 0.012 * H };
+  }
+  const sleeve = (i, s) => {                                    // > 0 past the sleeve's end (toward the hand), on the arms only
+    if (s.f.arms[i] < 0.3) return -1;
+    const pl = armPlane[s.P[i * 3] > 0 ? 'L' : 'R'], dx = s.P[i * 3] - pl.a.x, dy = s.P[i * 3 + 1] - pl.a.y, dz = s.P[i * 3 + 2] - pl.a.z;
+    return dx * pl.d.x + dy * pl.d.y + dz * pl.d.z - pl.at;
+  };
   const out = { top, bottom };
   // the neckline is a smooth tilted line round the neck (lower at the front, like a real collar),
   // not the neck bone's weight boundary: that zig-zags across the mesh at the base of the neck,
@@ -382,8 +393,8 @@ function dress(body, N, look) {
   const above = (i, s) => s.P[i * 3 + 1] - lineY(s.P[i * 3 + 2]);
   out.face = cut(copySurface(S), (i, s) => Math.min(above(i, s) + 0.012 * H, near(i, s)));
   out.neckline = lineY;
-  out.hands = cut(copySurface(S), (i, s) => s.f[sleeveF][i] - (cuff - 0.2));            // hands — and forearms under short sleeves
-  out.top = cut(cut(cut(copySurface(S), (i, s) => Math.max(-above(i, s), -near(i, s))), (i, s) => cuff - s.f[sleeveF][i]),
+  out.hands = cut(copySurface(S), (i, s) => sleeve(i, s) + 0.015 * H);                   // hands — and forearms under short sleeves (tucked a little under the cuff)
+  out.top = cut(cut(cut(copySurface(S), (i, s) => Math.max(-above(i, s), -near(i, s))), (i, s) => -sleeve(i, s)),
     (i, s) => s.f.arms[i] > 0.5 ? 1 : y(i, s) - hemY);
   const legEnd = bottom === 'trousers' || bottom === 'baggy' ? (i, s) => 0.45 - s.f.feet[i]   // to the ankle
     : bottom === 'shorts' ? (i, s) => y(i, s) - (kneeY + 0.045 * H)                      // to just above the knee (a level hem: the knee's weight field wandered)
@@ -572,7 +583,11 @@ function clearHips(sk, meshes, k) {
         }
       }
       if (need <= 0.002 * k) break;
-      rotateBone(B['upperarm01.' + key], Z, s * Math.atan2(need, sh.y - w.y) * 1.05);
+      // the forearm swings out from the elbow (the upper arm stays at the side: swung from the
+      // shoulder, the elbow bowed out); only a lot of clearance moves the upper arm too
+      const el = wp(B['lowerarm01.' + key]), a = Math.atan2(need, el.y - w.y) * 1.05;
+      rotateBone(B['lowerarm01.' + key], Z, s * Math.min(a, 0.3));
+      if (a > 0.3) rotateBone(B['upperarm01.' + key], Z, s * Math.atan2(need * 0.5, sh.y - w.y));
     }
   }
   sk.root.updateMatrixWorld(true);
@@ -653,7 +668,10 @@ export async function makePerson(spec = {}) {
   const topM = add(geometryOf(top, topP),
     paint(look.top, { soft: true, side: THREE.DoubleSide }), 'cloth');
   const botP = drape(bot, { thick: 0.007, ease: () => 0.007, smooth: 18, k });
+  // trousers fall from the thigh too, just less than baggy ones: skin-tight, they swelled over the
+  // thighs and pinched to thin ankles (carrot legs)
   if (D.bottom.type === 'baggy') legHang(botP, bot, body, k);
+  else if (D.bottom.type === 'trousers') legHang(botP, bot, body, k, { minR: 0.046, fall: 0.984, round: 0.62 });
   const botM = add(geometryOf(bot, botP), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth');
   const cloth = { top: [topM], bottom: [botM] };
   if (D.skirt) {                                        // the skirt: lifted a little off the fitted surface, the same colour as the bottoms

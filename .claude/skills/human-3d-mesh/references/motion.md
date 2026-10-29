@@ -85,4 +85,13 @@ seated and hung next to the handlebar instead of holding it. Now `hand(k, contac
   70% toward shoulder → grip.
 - In the Citizen Maker a bike is `{ group, spec, … }`, not an Object3D: remove its `group`.
   `prop.parent` was undefined, so the bike stayed on screen after switching actions.
+- **A relaxed stand, as posing guides draw it:** the upper arm hangs close to the body and a
+  little back, the elbow soft and pointing BACK, the forearm carrying the hand slightly
+  forward and out, the palm to the thigh, fingers gently curled (0.25). Arms angled out from
+  the shoulder bowed the elbows sideways, a gunslinger's stance. To clear wide hips or a
+  skirt, `clearHips()` swings the FOREARM out from the elbow; the upper arm moves only when
+  that isn't enough.
+- **Rig checks (from rigging tutorials):** every bend goes through two-bone IK with a pole
+  target, so knees and elbows can't fold backwards; and look at the shoulders and armpits
+  side-on in a lit style, where deformation breaks first.
 

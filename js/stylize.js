@@ -38,7 +38,7 @@ export const STYLES = {
   real: { head: 1, hands: 1, feet: 1, eyes: 1, soften: 0, expression: {} },
   // the town: a person with human proportions, painted — the head only a touch
   // larger than life, small details softened for the gouache look
-  town: { head: 1.15, hands: 1.02, feet: 1.0, eyes: 1.08, soften: 3, expression: {} },
+  town: { head: 1.08, hands: 1.02, feet: 1.0, eyes: 1.08, soften: 3, expression: {} },
   // exaggerated styles must say so (exaggerated: true), and are only used when asked for
   storybook: { exaggerated: true, head: 1.55, hands: 1.12, feet: 1.06, eyes: 1.35, soften: 3,
     expression: { 'eye-left-opened-up': 0.2, 'eye-right-opened-up': 0.2 } },   // open, bright eyes (more reads as startled)
