@@ -24,7 +24,7 @@ const PLAYER_LOOK = {
   neck: 0.75,                                      // a shorter neck: with sloped shoulders the full one read giraffe-long                                       // soft sloped shoulders, not a square yoke
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { profile: 1, jaw: 0.28, chin: 0.55, cheeks: 0.5, long: -0.25, skull: 0.55, brow: 0.4 },
-    nose: 'cute', noseSize: 1.0, mouth: 'smile', eyes: 'round', eyeSize: 1.15, eyeTall: 0.8, mouthUp: 0.08,
+    nose: 'cute', noseSize: 1.0, mouth: 'smile', eyes: 'round', eyeSize: 1.38, eyeTall: 0.8, mouthUp: 0.08,
     brows: 'none', lids: true, lidLine: false, iris: 0x7a5032, blushFlush: true, blush: 0.9 },
 };
 
