@@ -25,14 +25,23 @@ let _shoe = null;
 export function shoeGeo() {
   if (_shoe) return _shoe;
   const y0 = -ANK;
-  const ext = (sh, depth, bev) => {
+  const ext = (sh, depth, bev, dome = 0) => {
     const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bev, bevelSize: bev * 0.8, bevelSegments: 4, curveSegments: 14 });
     g.translate(0, 0, -depth / 2).rotateY(-Math.PI / 2);          // silhouette x → +Z (forward), extrusion → X (width)
     g.deleteAttribute('uv');
     const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {                             // flare: wider at the toe
-      const k = THREE.MathUtils.clamp((p.getZ(i) + 0.02) / 0.09, 0, 1);
-      p.setX(i, p.getX(i) * (1 + 0.28 * k));
+    g.computeBoundingBox();
+    const yb = g.boundingBox.min.y, yt = g.boundingBox.max.y, zt = g.boundingBox.max.z;
+    for (let i = 0; i < p.count; i++) {
+      const z = p.getZ(i), y = p.getY(i);
+      let sx = 1 + 0.28 * THREE.MathUtils.clamp((z + 0.02) / 0.09, 0, 1);   // flare: wider at the toe
+      // a round toe seen from above (an extruded outline has a square one)
+      const tz = THREE.MathUtils.clamp((z - (zt - 0.05)) / 0.05, 0, 1);
+      sx *= Math.sqrt(Math.max(0.12, 1 - tz * tz));
+      // domed across the top like a real toe box (an extrusion has flat walls and a flat roof)
+      const ty = THREE.MathUtils.clamp((y - yb) / (yt - yb), 0, 1);
+      sx *= 1 - dome * ty * ty;
+      p.setX(i, p.getX(i) * sx);
     }
     const w = mergeVertices(g, 1e-5); w.computeVertexNormals();     // weld → smooth, rounded shading
     w.computeBoundingBox(); w.translate(0, y0 - w.boundingBox.min.y, 0);
@@ -65,7 +74,7 @@ export function shoeGeo() {
   so.quadraticCurveTo(0.086, 0.016, 0.048, 0.013);                // top of the sole follows it
   so.lineTo(-0.036, 0.013);
   so.quadraticCurveTo(-0.047, 0.011, -0.04, 0.004);
-  const upper = ext(up, 0.046, 0.011), sole = ext(so, 0.056, 0.005);
+  const upper = ext(up, 0.05, 0.011, 0.55), sole = ext(so, 0.05, 0.004);   // sole as wide as the upper's base, so its top never shows as a ledge
   // a foot is ~15% of a person's height: scale up so the collar rises above the ankle
   for (const g of [upper, sole]) { g.translate(0, ANK, 0); g.scale(1.2, 1.2, 1.2); g.translate(0, -ANK, 0); }
   upper.translate(0, 0.009, 0);                                   // the upper sits in the sole
@@ -269,7 +278,7 @@ export function makeFolk(spec) {
     const wl = S.wideLeg ?? 0;
     limbs.push(limb(J.hips, x, 0, wl ? [th, sh, sh] : [th, sh, ft], 0.27, 0.25, wl ? [
       [-0.045, 0.001], [-0.032, 0.05 * B], [0, 0.066 * B], [0.1, 0.066 * B], [0.2, 0.06 * rB], [0.27, 0.058 * rB],
-      [0.35, 0.062 * rB], [0.43, 0.07], [0.5, 0.077], [0.545, 0.081], [0.552, 0.074], [0.554, 0.001]]
+      [0.35, 0.062 * rB], [0.42, 0.069], [0.48, 0.075], [0.515, 0.078], [0.522, 0.071], [0.524, 0.001]]   // the hem breaks a little above the ground
       : [
       [-0.045, 0.001], [-0.032, 0.05 * B], [0, 0.066 * B], [0.1, 0.066 * B], [0.2, 0.056 * rB], [0.27, 0.047 * rB],
       [0.33, 0.05 * rB], [0.41, 0.044], [0.47, 0.037], [0.5, 0.036], [0.512, 0.001]], legCol));   // the hem ends just inside the shoe collar

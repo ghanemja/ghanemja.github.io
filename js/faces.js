@@ -18,6 +18,7 @@ const MOUTH_V = -0.44;                                  // where the mouth sits 
 // P: jaw 0 (narrow, pointed) … 1 (square) · chin 0…1 · cheeks 0…1 · long −1…1 · skull 0…1 · brow 0…1
 export function headShapeFor(P = {}) {
   const jaw = P.jaw ?? 0.5, chin = P.chin ?? 0.5, cheeks = P.cheeks ?? 0.4, long = P.long ?? 0, skull = P.skull ?? 0.5, brow = P.brow ?? 0.5;
+  const prof = P.profile ?? 0;            // 0…1: how strongly the centreline (bridge, lips, chin) steps out of a flat face in side view
   return function shape(v, out = new THREE.Vector3()) {
     let { x, y, z } = v;
     const lo = Math.max(0, -y), front = Math.max(0, z), ax = Math.abs(x);
@@ -34,6 +35,14 @@ export function headShapeFor(P = {}) {
     // full cheeks widen the face, they do NOT push forward: in side view the
     // silhouette must come from the centreline (brow→nose→lips→chin), and a
     // forward cheek swallows the whole profile into one ball
+    if (prof) {                                                      // the profile line (centreline only, so the cheeks stay flat)
+      const cl = bump(0, 0.22, ax) * front;
+      z += prof * cl * (0.035 * bump(0.02, 0.13, y)                  // a bridge rising toward the nose
+                      - 0.018 * bump(-0.25, 0.05, y)                 // the notch under the nose
+                      + 0.03 * bump(-0.42, 0.08, y)                  // the lips
+                      - 0.02 * bump(-0.6, 0.05, y)                   // the crease under the lip
+                      + 0.045 * bump(-0.78, 0.09, y));               // the chin
+    }
     const ch = cheeks * bump(-0.15, 0.25, y) * bump(0.55, 0.25, ax) * (z > -0.2 ? 1 : 0);
     x *= 1 + 0.11 * ch; z += 0.008 * ch * front;
     const narrow = (0.46 - 0.26 * jaw) * Math.pow(lo, 1.5 + 1.6 * jaw);
@@ -224,10 +233,14 @@ export function buildHead(J, S, F, mats) {
   if (F.nose === 'cute') {           // a small soft button, half sunk into the face so only the tip rounds out, slightly upturned
     const tip = new THREE.Mesh(new THREE.SphereGeometry(0.0118 * ns, 18, 14), skin);
     tip.scale.set(1.25, 0.9, 0.85); tip.rotation.x = -0.3;
-    tip.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0.002, -0.002)); add(tip);
-    const bridge = new THREE.Mesh(new THREE.CapsuleGeometry(0.0055 * ns, 0.018, 4, 8), skin);
-    bridge.rotation.x = 0.35;
-    bridge.position.copy(pt(0, -0.02)).add(new THREE.Vector3(0, 0, -0.004)); add(bridge);
+    tip.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0.002, 0.007)); add(tip);   // proud enough to break the profile
+    // the bridge runs from between the eyes down into the tip, so the nose grows out of the face
+    const top = pt(0, 0.1).add(new THREE.Vector3(0, 0, -0.003)), bot = pt(0, -0.1).add(new THREE.Vector3(0, 0.004, 0.004));
+    const len = top.distanceTo(bot);
+    const bridge = new THREE.Mesh(new THREE.CapsuleGeometry(0.0068 * ns, len, 4, 10), skin);
+    bridge.position.copy(top).add(bot).multiplyScalar(0.5);
+    bridge.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), bot.clone().sub(top).normalize());
+    bridge.scale.set(1, 1, 0.85); add(bridge);
   } else if (F.nose === 'button') {
     const b = new THREE.Mesh(new THREE.SphereGeometry(0.019 * ns, 16, 12), skin); b.scale.set(1.05, 0.95, 0.85);
     b.position.copy(pt(0, -0.1)).add(new THREE.Vector3(0, 0, 0.006)); add(b);
