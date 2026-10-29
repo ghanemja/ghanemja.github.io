@@ -87,9 +87,8 @@ function outfit(pick, o, rand, sex, skin) {
   for (let i = 0; i < 12 && skin != null && dist(bottom, skin) < 80; i++) bottom = pick(BOTTOM_COLOURS);
   let top = o.top ?? pick(TOP_COLOURS);
   for (let i = 0; i < 12 && (top === bottom || (skin != null && dist(top, skin) < 70)); i++) top = pick(TOP_COLOURS);
-  const topType = o.topType ?? pick(['sweater', 'sweater', 'tee', 'tee', 'turtleneck']);
-  const u = rand(), skirt = sex < 0.5 ? 0.35 : 0.04;                        // anyone may wear anything; skirts are commoner on women
-  const bottomType = o.bottomType ?? (u < skirt ? 'skirt' : u < skirt + 0.2 ? 'shorts' : 'trousers');
+  const topType = o.topType ?? pick(['sweater', 'sweatshirt', 'sweatshirt', 'tee', 'tee', 'turtleneck']);
+  const u = rand(), bottomType = o.bottomType ?? (u < 0.35 ? 'baggy' : u < 0.55 ? 'shorts' : 'trousers');
   return { topType, top, bottomType, bottom, shoes: o.shoes ?? pick(SHOES) };
 }
 
@@ -127,7 +126,7 @@ const mix = (a, b, t) => {                              // blend two 0xRRGGBB co
 export function toPersonSpec(c, { render } = {}) {
   c = { ...DEFAULT, ...c };
   return {
-    style: c.style, hairStyle: c.hairStyle, hair: c.hair, topType: c.topType, bottomType: c.bottomType, ...(render ? { render } : {}),
+    style: c.style, hairStyle: c.hairStyle, hair: c.hair, topType: c.topType, bottomType: BOTTOMS[c.bottomType] ? c.bottomType : 'trousers',   // (saved skirts: trousers for now) ...(render ? { render } : {}),
     body: { sex: c.sex, age: c.age, shape: c.bodyType, muscle: c.muscle, weight: c.build, height: c.height, proportions: 0.55, ancestry: FACES[c.face] ?? FACES.mix },
     expression: { 'mouth-corner-puller': 0.1 + 0.6 * c.smile, 'mouth-elevation': 0.2 * c.smile, 'eye-left-slit': 0.05 * c.smile, 'eye-right-slit': 0.05 * c.smile, 'eye-left-opened-up': 0.08, 'eye-right-opened-up': 0.08 },
     skin: c.skin, lips: mix(c.skin, 0xc0606a, 0.6), blush: mix(c.skin, 0xe58a80, 0.55), eyes: c.eyes,

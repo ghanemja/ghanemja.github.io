@@ -294,6 +294,56 @@ function skirtShape(P, S, body, k) {
   smoothSurface(P, S.T, 6);
 }
 
+// ── baggy trousers: each leg falls straight from the widest part of the thigh ──
+// Per leg, per height and angle round that leg's own axis: the furthest the leg reaches,
+// carried down (a wide leg doesn't follow the knee and calf back in), never narrower than
+// a wide hem, blurred smooth; below the crotch every trouser vertex is put on it. The two
+// legs never cross the middle.
+function legHang(P, S, body, k) {
+  const J = body.joints, H = body.P.stature, NT = 40, NY = 36;
+  const ids = [...new Set(S.T)], crotch = J['upperleg01.L'].head.y - 0.045 * H;
+  let y0 = 1e9; for (const i of ids) y0 = Math.min(y0, P[i * 3 + 1]);
+  const y1 = crotch + 0.03 * H, minR = 0.075 * k, off = 0.006 * k;
+  for (const side of [1, -1]) {
+    const mine = ids.filter(i => P[i * 3] * side > 0 && P[i * 3 + 1] < y1);
+    const row = (y) => Math.min(NY - 1, Math.max(0, Math.floor((y1 - y) / (y1 - y0 + 1e-6) * NY)));
+    const lo = new Float32Array(NY * 2).fill(1e9), hi = new Float32Array(NY * 2).fill(-1e9), cx = new Float32Array(NY), cz = new Float32Array(NY);
+    for (const i of mine) { const r = row(P[i * 3 + 1]); for (const [a, o] of [[0, 0], [1, 2]]) { lo[r * 2 + a] = Math.min(lo[r * 2 + a], P[i * 3 + o]); hi[r * 2 + a] = Math.max(hi[r * 2 + a], P[i * 3 + o]); } }
+    for (let r = 0; r < NY; r++) { if (hi[r * 2] > -1e9) { cx[r] = (lo[r * 2] + hi[r * 2]) / 2; cz[r] = (lo[r * 2 + 1] + hi[r * 2 + 1]) / 2; } else if (r) { cx[r] = cx[r - 1]; cz[r] = cz[r - 1]; } }
+    // the leg's axis falls straight too (a wide leg hangs plumb from the hip, it doesn't follow the knee in)
+    for (let r = 1; r < NY; r++) { cx[r] = cx[r] * 0.35 + cx[r - 1] * 0.65; cz[r] = cz[r] * 0.35 + cz[r - 1] * 0.65; }
+    const col = (x, z, r) => ((Math.floor((Math.atan2(x - cx[r], z - cz[r]) / Math.PI + 1) / 2 * NT) % NT) + NT) % NT;
+    const env = new Float32Array(NT * NY);
+    for (const i of mine) { const r = row(P[i * 3 + 1]), c = col(P[i * 3], P[i * 3 + 2], r); env[r * NT + c] = Math.max(env[r * NT + c], Math.hypot(P[i * 3] - cx[r], P[i * 3 + 2] - cz[r])); }
+    for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) if (!env[r * NT + c])
+      for (let d = 1; d < NT / 2; d++) { const a = env[r * NT + (c + d) % NT], b = env[r * NT + (c - d + NT) % NT]; if (a || b) { env[r * NT + c] = a && b ? (a + b) / 2 : a || b; break; } }
+    for (let r = 0; r < NY; r++) { let m = 0; for (let c = 0; c < NT; c++) m = Math.max(m, env[r * NT + c]); for (let c = 0; c < NT; c++) env[r * NT + c] = Math.max(env[r * NT + c], m * 0.88); }   // round, not the leg's own section
+    for (let r = 1; r < NY; r++) for (let c = 0; c < NT; c++) env[r * NT + c] = Math.max(env[r * NT + c], env[(r - 1) * NT + c] * 0.997, minR);
+    for (let pass = 0; pass < 6; pass++) {
+      const t = env.slice();
+      for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) {
+        let a = 0, n = 0;
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr; if (rr < 0 || rr >= NY) continue; a += t[rr * NT + (c + dc + NT) % NT]; n++; }
+        env[r * NT + c] = Math.max(t[r * NT + c] * 0.985, a / n);
+      }
+    }
+    const fr = (y) => THREE.MathUtils.clamp((y1 - y) / (y1 - y0 + 1e-6) * NY - 0.5, 0, NY - 1);
+    const lerpRow = (C, f) => { const r = Math.floor(f), t = f - r; return C[r] + (C[Math.min(NY - 1, r + 1)] - C[r]) * t; };
+    for (const i of mine) {
+      const y = P[i * 3 + 1], f = fr(y), x0 = lerpRow(cx, f), z0 = lerpRow(cz, f), dx = P[i * 3] - x0, dz = P[i * 3 + 2] - z0, cur = Math.hypot(dx, dz);
+      if (cur < 1e-6) continue;
+      const fc = ((Math.atan2(dx, dz) / Math.PI + 1) / 2 * NT - 0.5 + NT) % NT, c0 = Math.floor(fc), tc = fc - c0, r0 = Math.floor(f), tr = f - r0, r1 = Math.min(NY - 1, r0 + 1);
+      const g = (r, c) => env[r * NT + ((c % NT) + NT) % NT];
+      const want = (g(r0, c0) * (1 - tc) + g(r0, c0 + 1) * tc) * (1 - tr) + (g(r1, c0) * (1 - tc) + g(r1, c0 + 1) * tc) * tr + off;
+      const t = 1 - THREE.MathUtils.smoothstep(y, crotch - 0.03 * H, y1);              // the seat and hips stay as fitted
+      const sc = 1 + (Math.max(want, cur) / cur - 1) * t;
+      let nx = x0 + dx * sc; if (nx * side < 0.006 * k) nx = side * 0.006 * k;           // never across the middle
+      P[i * 3] = nx; P[i * 3 + 2] = z0 + dz * sc;
+    }
+  }
+  smoothSurface(P, S.T, 4);
+}
+
 // ── dressing ──
 // Clothes are the body surface cut along smooth fields — the rig's own weight falloffs
 // (neck, wrist, mid upper arm, knee, mid thigh, foot) and heights (hems) — so every
@@ -302,8 +352,17 @@ function skirtShape(P, S, body, k) {
 // or a skirt), overlapping a little under each edge. Every option covers the torso and
 // hips: short sleeves end mid upper arm, shorts just above the knee, and a skirt always
 // has shorts under it. People are always clothed.
-export const TOPS = { sweater: 'Sweater', tee: 'T-shirt', turtleneck: 'Turtleneck' };
-export const BOTTOMS = { trousers: 'Trousers', shorts: 'Shorts', skirt: 'Skirt' };
+export const TOPS = { sweater: 'Sweater', sweatshirt: 'Sweatshirt', tee: 'T-shirt', turtleneck: 'Turtleneck' };
+// (a skirt still works as bottomType: 'skirt', but isn't offered while it can't move well)
+export const BOTTOMS = { trousers: 'Trousers', baggy: 'Baggy trousers', shorts: 'Shorts' };
+// how loose each top is: ease off the body (torso, sleeves), how far it hangs out from the
+// chest, cloth thickness, and its hem (above the hip joint, × stature)
+const TOP_FIT = {
+  sweater: { ease: 0.02, sleeve: 0.006, push: 0.04, thick: 0.009, hem: 0.02 },
+  sweatshirt: { ease: 0.034, sleeve: 0.016, push: 0.06, thick: 0.013, hem: -0.005 },
+  tee: { ease: 0.018, sleeve: 0.01, push: 0.035, thick: 0.007, hem: 0.025 },
+  turtleneck: { ease: 0.014, sleeve: 0.004, push: 0.03, thick: 0.008, hem: 0.02 },
+};
 function dress(body, N, look) {
   const { A } = body, R = (b) => regionWeight(A, b), J = body.joints, H = body.P.stature;
   const both = (b) => { const l = R(b + '.L'), r = R(b + '.R'); return l.map((v, i) => v + r[i]); };
@@ -311,18 +370,26 @@ function dress(body, N, look) {
   S.f = { neck: Array.from(R('neck01')), neck2: Array.from(R('neck02')), hands: Array.from(both('wrist')), feet: Array.from(both('foot')),
     arms: Array.from(both('shoulder01')), ua2: Array.from(both('upperarm02')), shin: Array.from(both('lowerleg01')), ul2: Array.from(both('upperleg02')) };
   const y = (i, s) => s.P[i * 3 + 1], top = look.topType ?? 'sweater', bottom = look.bottomType ?? 'trousers';
-  const hemY = J['upperleg01.L'].head.y + (look.hem ?? 0.02) * H, waistY = hemY + 0.08 * H, kneeY = J['lowerleg01.L'].head.y;
-  const collarF = top === 'turtleneck' ? 'neck2' : 'neck', collar = 0.5;
+  const hemY = J['upperleg01.L'].head.y + (look.hem ?? TOP_FIT[top]?.hem ?? 0.02) * H, waistY = hemY + 0.08 * H, kneeY = J['lowerleg01.L'].head.y;
   const sleeveF = top === 'tee' ? 'ua2' : 'hands', cuff = 0.5;
   const out = { top, bottom };
-  out.face = cut(copySurface(S), (i, s) => s.f[collarF][i] - (collar - 0.18));
+  // the neckline is a smooth tilted line round the neck (lower at the front, like a real collar),
+  // not the neck bone's weight boundary: that zig-zags across the mesh at the base of the neck,
+  // and both the collar and the skin under it came out sawtoothed, with dark gaps between
+  const Jn = J.neck01.head, turtle = top === 'turtleneck';
+  const lineY = (z) => Jn.y + (turtle ? 0.035 : 0.004) * H - (turtle ? 0.15 : 0.6) * Math.max(0, z - Jn.z);
+  const near = (i, s) => s.f.neck[i] - 0.03;                            // only round the neck (the neck and head's own weight)
+  const above = (i, s) => s.P[i * 3 + 1] - lineY(s.P[i * 3 + 2]);
+  out.face = cut(copySurface(S), (i, s) => Math.min(above(i, s) + 0.012 * H, near(i, s)));
+  out.neckline = lineY;
   out.hands = cut(copySurface(S), (i, s) => s.f[sleeveF][i] - (cuff - 0.2));            // hands — and forearms under short sleeves
-  out.top = cut(cut(cut(copySurface(S), (i, s) => collar - s.f[collarF][i]), (i, s) => cuff - s.f[sleeveF][i]),
+  out.top = cut(cut(cut(copySurface(S), (i, s) => Math.max(-above(i, s), -near(i, s))), (i, s) => cuff - s.f[sleeveF][i]),
     (i, s) => s.f.arms[i] > 0.5 ? 1 : y(i, s) - hemY);
-  const legEnd = bottom === 'trousers' ? (i, s) => 0.45 - s.f.feet[i]                    // to the ankle
+  const legEnd = bottom === 'trousers' || bottom === 'baggy' ? (i, s) => 0.45 - s.f.feet[i]   // to the ankle
     : bottom === 'shorts' ? (i, s) => y(i, s) - (kneeY + 0.045 * H)                      // to just above the knee (a level hem: the knee's weight field wandered)
     : (i, s) => 0.5 - s.f.ul2[i];                                                         // under a skirt: to mid thigh
   out.bottom = cut(cut(cut(copySurface(S), (i, s) => 0.5 - s.f.arms[i]), (i, s) => waistY - y(i, s)), legEnd);
+  out.top.type = top; out.bottom.type = bottom;
   if (bottom !== 'trousers') {                                                            // bare legs below, never the feet (shoes)
     const from = bottom === 'shorts' ? (i, s) => kneeY + 0.06 * H - y(i, s) : (i, s) => s.f.ul2[i] - 0.3;
     out.legs = cut(cut(copySurface(S), from), (i, s) => 0.6 - s.f.feet[i]);
@@ -560,15 +627,21 @@ export async function makePerson(spec = {}) {
   }
   // garments
   const top = D.top, bot = D.bottom;
-  const upperW = (i) => Math.max(0, 1 - top.f.arms[i] - top.f.neck[i]);
+  const upperW = (i) => Math.max(0, 1 - top.f.arms[i] - top.f.neck[i]), F = TOP_FIT[D.top.type] ?? TOP_FIT.sweater;
+  // the collar hugs the neck: the ease fades out over the last few centimetres (eased right up
+  // to it, the collar stood off the neck with dark gaps at its corners)
+  const atCollar = (i) => THREE.MathUtils.smoothstep(D.neckline(top.P[i * 3 + 2]) - top.P[i * 3 + 1], 0, 0.045 * body.P.stature);
+  const sleeveW = (i) => Math.min(1, top.f.arms[i]) * (1 - THREE.MathUtils.smoothstep(top.f.hands[i], 0, 0.45));   // (not at the cuff)
   // a top hangs from the shoulders and chest rather than following every curve: generous ease and drape over the torso
-  const topP = drape(top, { thick: 0.008, ease: (i) => 0.014 * upperW(i), smooth: 40, k,
+  const topP = drape(top, { thick: F.thick, ease: (i) => (F.ease * upperW(i) + F.sleeve * sleeveW(i)) * atCollar(i), smooth: 40, k,
     smoothW: top.P.map((_, j) => j).filter(j => j % 3 === 0).map(j => 1 - 0.6 * Math.min(1, top.f.arms[j / 3])) });
-  hang(topP, top, (i) => Math.min(1, Math.max(0, upperW(i) * 1.6 - 0.3)), { top: body.joints['upperarm01.L'].head.y - 0.05 * body.P.stature, band: 0.06 * body.P.stature, maxPush: 0.035 * k,
+  hang(topP, top, (i) => Math.min(1, Math.max(0, upperW(i) * 1.6 - 0.3)), { top: body.joints['upperarm01.L'].head.y - 0.05 * body.P.stature, band: 0.06 * body.P.stature, maxPush: F.push * k,
     hem: body.joints['upperleg01.L'].head.y + 0.02 * body.P.stature, hemBand: 0.07 * body.P.stature });
   const topM = add(geometryOf(top, topP),
     paint(look.top, { soft: true, side: THREE.DoubleSide }), 'cloth');
-  const botM = add(geometryOf(bot, drape(bot, { thick: 0.006, ease: () => 0.003, smooth: 18, k })), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth');
+  const botP = drape(bot, { thick: 0.007, ease: () => 0.007, smooth: 18, k });
+  if (D.bottom.type === 'baggy') legHang(botP, bot, body, k);
+  const botM = add(geometryOf(bot, botP), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth');
   const cloth = { top: [topM], bottom: [botM] };
   if (D.skirt) {                                        // the skirt: lifted a little off the fitted surface, the same colour as the bottoms
     const sk2 = D.skirt, P = Float32Array.from(sk2.P), used = new Set(sk2.T), c = body.joints.root?.head ?? new THREE.Vector3();
@@ -578,6 +651,17 @@ export async function makePerson(spec = {}) {
     }
     // and it falls from the widest point of the hips and seat rather than following the thighs back in (a sack)
     skirtShape(P, sk2, body, k);
+    // and it moves as ONE piece of cloth. Skinned like trousers, each part of the hem followed
+    // the thigh under it, so a step or sitting down split the skirt open between the legs.
+    // From the waist down it goes from the pelvis to both thighs together, leaning only a
+    // toward the leg it lies over (only the cloth between the legs is shared by both).
+    { const bi = (n) => A.boneIndex.get(n), root = bi('root'), uL = bi('upperleg01.L'), uR = bi('upperleg01.R');
+      const hipY = body.joints['upperleg01.L'].head.y, hipX = Math.abs(body.joints['upperleg01.L'].head.x) || 0.09 * k;
+      for (const i of used) {
+        const y = P[i * 3 + 1], legs = 1 - THREE.MathUtils.smoothstep(y, hipY - 0.07 * body.P.stature, hipY + 0.01 * body.P.stature);   // (a thigh that rises carries the cloth on it)
+        const side = 0.5 * THREE.MathUtils.smoothstep(Math.abs(P[i * 3]) / hipX, 0.1, 0.75) * Math.sign(P[i * 3]);   // over a leg: that leg; between them: both
+        sk2.K[i] = new Map([[root, 1 - legs], [uL, legs * (0.5 + side)], [uR, legs * (0.5 - side)]]);
+      } }
     cloth.bottom.push(add(geometryOf(sk2, P), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth'));
   }
   for (const m of parts) { rig.add(m); m.bind(sk.skeleton); }

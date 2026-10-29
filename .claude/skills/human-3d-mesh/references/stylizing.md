@@ -120,11 +120,20 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
 - **Drape, don't shrink-wrap:** lift the shell off the body (`thick` + `ease`), smooth it
   with the hem fixed, then push it back out wherever it sank inside. That smoothing is what
   turns anatomy into cloth.
-- **Options:** `topType` sweater / tee (sleeves end mid upper arm) / turtleneck (collar on
-  `neck02`), and `bottomType` trousers / shorts (just above the knee) / skirt. A skirt is
-  MakeHuman's helper-skirt surface cut at the knee, lifted 1.2 cm, with its waistband
-  tucked up under the top's hem, and it always has shorts under it (sitting and biking
-  show them, never a body). Short options add only `legs` / forearm skin.
+- **Options:** `topType` sweater / sweatshirt / tee (sleeves end mid upper arm) /
+  turtleneck, and `bottomType` trousers / baggy / shorts (just above the knee). How loose
+  each top is lives in `TOP_FIT` (torso and sleeve ease, hang push, thickness, hem). Ease
+  fades to nothing at the collar so it hugs the neck. Baggy trousers go through
+  `legHang()`: per leg, the envelope falls plumb from the widest part of the thigh to a
+  wide hem and never crosses the middle. The skirt (`bottomType: 'skirt'`) still builds
+  but isn't offered: it can't yet move without a raised thigh poking through. Its skin
+  weights are its own, the pelvis at the waist going to the thigh it lies over (only the
+  cloth between the legs shares both), because skinned like trousers it split open
+  between the legs. Saved skirts show as trousers.
+- **Necklines are a smooth tilted line round the neck** (lower at the front), not the
+  neck bone's weight boundary, which zig-zags across the mesh at the base of the neck and
+  sawtoothed both the collar and the skin under it. A skirt is
+  Short options add only `legs` / forearm skin.
 - **Arms clear the clothes.** After the relaxed pose, `clearHips()` swings each arm out
   just far enough that the hand hangs a finger's width off whatever is worn at the hips.
   At a fixed angle, the hands of a pear-shaped body went straight into her skirt.

@@ -146,9 +146,11 @@ const HAIR_ICON = {
 const CL = (d, fill) => `<svg viewBox="0 0 42 42" aria-hidden="true"><path d="${d}" fill="${fill}" stroke="#2a2230" stroke-width="2" stroke-linejoin="round"/></svg>`;
 const CLOTHES_ICON = {
   sweater: CL('M14 6l-9 6 3 26h5l1-16 1 16h14l1-16 1 16h5l3-26-9-6c-2 3-4 4-7 4s-5-1-7-4z', '#8e2f3a'),
+  sweatshirt: CL('M14 5l-11 6 2 27h7l1-15 1 17h18l1-17 1 15h7l2-27-11-6c-2 3-4 4-7 4s-5-1-7-4z', '#9aa3a8'),
   tee: CL('M14 6l-10 7 4 6 5-3v20h16V16l5 3 4-6-10-7c-2 3-4 4-7 4s-5-1-7-4z', '#6f8db0'),
   turtleneck: CL('M16 3h10v5l9 4 3 26h-5l-1-16-1 16H11l-1-16-1 16H4l3-26 9-4z', '#3f8f88'),
   trousers: CL('M11 5h20l2 33h-7l-5-24-5 24H9z', '#3f5a7a'),
+  baggy: CL('M11 5h20l4 33h-10l-4-22-4 22H7z', '#6f8a6a'),
   shorts: CL('M11 8h20l3 18h-9l-4-9-4 9H8z', '#b98a5e'),
   skirt: CL('M13 7h16l6 26H7z', '#c98fb5'),
 };
