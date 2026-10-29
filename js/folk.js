@@ -431,6 +431,14 @@ export function makeFolk(spec) {
       [0.22, 0.035], [0.28, 0.028], [0.3, 0.026], [0.312, 0.001]], (d) => d < cuff ? S.top : skinHex,
       { hem: cuff < 0.3 ? cuff : null, inkFrom: 0.03, inkTo: 0.1 }));   // a sleeve to the hand has no hem lip to draw
     J['hand' + k].add(J['grip' + k] = makeHand(s, skin));
+    if ((S.slope ?? 0) >= 1) {
+      // a rounded shoulder cap (the deltoid) riding the arm, so the shoulder line rolls
+      // over into the sleeve instead of the arm tube meeting the torso in a corner
+      const cap = ball(0.043 * rB, paint(S.top), 24, 18);
+      cap.scale.set(0.95, 1.1, 0.88);
+      cap.position.set(s * 0.001, -0.03, 0);
+      J['arm' + k].add(cap);
+    }
   }
   // bind the limbs in this rest pose
   root.updateMatrixWorld(true);

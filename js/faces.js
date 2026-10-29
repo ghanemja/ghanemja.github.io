@@ -215,7 +215,7 @@ export function buildHead(J, S, F, mats) {
     // F.iris (a hex colour): a white eye with a coloured iris and a darker pupil, instead of a solid dark dot
     const irisCol = F.iris;
     const e = new THREE.Mesh(new THREE.SphereGeometry(0.016 * es * (irisCol ? 1.14 : 1), flush ? 28 : 12, flush ? 20 : 10),
-      irisCol ? paint(0xfbf8f1, { hatch: 0, emissive: 0x6f6c66 }) : dark);   // lifted so the cel shading can't grey half of it
+      irisCol ? paint(0xfbf8f1, { hatch: 0, emissive: 0xa8a49c }) : dark);   // lifted so the cel shading can't grey half of it
     e.scale.set(0.8, F.eyes === 'narrow' ? 0.95 : (F.eyeTall ?? 1.15), flush ? 0.3 : 0.5);
     e.position.copy(c);
     const nrm = c.clone().sub(HC).normalize();
@@ -228,7 +228,11 @@ export function buildHead(J, S, F, mats) {
       const iris = new THREE.Mesh(new THREE.SphereGeometry(0.0078 * es, 20, 14), paint(irisCol, { hatch: 0 }));
       iris.scale.set(1, 1, 0.35); iris.position.copy(ic); iris.lookAt(ic.clone().add(fwd)); bits.push(add(iris));
       const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.0038 * es, 14, 10), paint(new THREE.Color(irisCol).multiplyScalar(0.45).getHex(), { hatch: 0 }));
-      pupil.scale.set(1, 1, 0.3); pupil.position.copy(ic).addScaledVector(fwd, 0.0008); pupil.lookAt(pupil.position.clone().add(fwd)); bits.push(add(pupil));
+      pupil.scale.set(1, 1, 0.3); pupil.position.copy(ic).addScaledVector(fwd, 0.0008); pupil.lookAt(pupil.position.clone().add(fwd));
+      if (!F.pupilDot) bits.push(add(pupil));
+      // a small black dot at the centre of the pupil
+      const dot = new THREE.Mesh(new THREE.SphereGeometry((F.pupilDot ?? 0.0018) * es, 12, 8), paint(0x111014, { hatch: 0 }));
+      dot.scale.set(1, 1, 0.3); dot.position.copy(pupil.position).addScaledVector(fwd, 0.0006); dot.lookAt(dot.position.clone().add(fwd)); dot.userData.noInk = true; bits.push(add(dot));
       iris.userData.noInk = pupil.userData.noInk = true;
       hlAt = ic.clone().addScaledVector(fwd, 0.0018).add(new THREE.Vector3(-0.0025, 0.0029, 0));
     }
@@ -286,7 +290,7 @@ export function buildHead(J, S, F, mats) {
   switch (F.mouth) {
     case 'smile':             // a simple closed smile: one soft arc, slightly tucked at the corners
       // F.mouthUp raises the smile toward the nose
-      bits.push(add(stroke(shape, arc(-0.17, 0.17, vm + 0.025 + (F.mouthUp ?? 0), 0.045, 11), 0.0034, lineM, 0.0035)));
+      bits.push(add(stroke(shape, arc(-(F.smileW ?? 0.17), F.smileW ?? 0.17, vm + 0.025 + (F.mouthUp ?? 0), 0.045 * (F.smileW ?? 0.17) / 0.17, 13), 0.0034, lineM, 0.0035)));
       break;
     case 'grin': {            // an open smile with teeth
       const top = arc(-0.2, 0.2, vm + 0.015, 0.02), bot = arc(-0.2, 0.2, vm + 0.015, 0.11);
@@ -308,12 +312,26 @@ export function buildHead(J, S, F, mats) {
     const ch = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), paint(F.blushColor ?? 0xe89a86, { hatch: 0 })); ch.scale.set(1.1 * (F.blush ?? 1), 0.6, 0.3);
     ch.position.copy(pt(s * 0.55, -0.2)).add(new THREE.Vector3(0, 0, -0.003));
     if (F.blushFlush) {
-      // painted on, not stuck on: a paper-thin disc lying in the cheek's surface, no outline
-      const n = ch.position.clone().sub(HC).normalize();
-      ch.scale.set(1.1 * (F.blush ?? 1), 0.75, 0.04);
-      ch.position.copy(pt(s * 0.55, -0.2)).addScaledVector(n, 0.0006);
-      ch.lookAt(ch.position.clone().add(n));
-      ch.userData.noInk = true;
+      // a decal: a patch of the face's own surface, lifted a hair's breadth, in one flat
+      // unshaded colour — no lighting, no outline, so it reads painted on, not raised
+      const N = 14, cu = s * 0.55, cv = -0.2, ru = 0.13 * (F.blush ?? 1), rv = 0.085, pos = [], idx = [];
+      for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+        const a = (i / N) * 2 - 1, b = (j / N) * 2 - 1, k = Math.min(1, 1 / Math.max(1e-6, Math.hypot(a, b))) * Math.hypot(a, b);
+        const r = Math.hypot(a, b) > 1 ? 1 / Math.hypot(a, b) : 1;
+        const p = pt(cu + a * r * ru, cv + b * r * rv);
+        p.sub(HC).multiplyScalar(1.004).add(HC);
+        pos.push(p.x, p.y, p.z);
+      }
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+        const q = i * (N + 1) + j;
+        idx.push(q, q + N + 1, q + 1, q + 1, q + N + 1, q + N + 2);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+      const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: F.blushColor ?? 0xe89a86, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+      m.userData.noInk = true;
+      bits.push(add(m));
+      continue;
     }
     bits.push(add(ch));
   }
