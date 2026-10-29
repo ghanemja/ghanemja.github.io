@@ -234,7 +234,8 @@ export function buildHead(J, S, F, mats) {
     flat: [0.4, 0.43, 0.4], soft: [0.28, 0.33, 0.29], worried: [0.47, 0.44, 0.36], raised: [0.43, 0.51, 0.44], heavy: [0.37, 0.41, 0.37], frown: [0.35, 0.41, 0.42],
   };
   const browM = paint(F.browColor ?? S.hair ?? 0x3a2a24, { hatch: 0 });
-  for (const s of [-1, 1]) {
+  // brows: 'none' draws none
+  if (F.brows !== 'none') for (const s of [-1, 1]) {
     const b = BROWS[(s < 0 ? F.browsL : F.browsR) || F.brows || 'flat'];
     bits.push(add(stroke(shape, [[s * 0.2, b[0]], [s * 0.35, b[1]], [s * 0.5, b[2]]], 0.0055 * (F.browW ?? 1), browM, 0.004)));
   }
@@ -269,7 +270,8 @@ export function buildHead(J, S, F, mats) {
   const vm = MOUTH_V, mouthM = paint(0x4a2630, { hatch: 0 });
   switch (F.mouth) {
     case 'smile':             // a simple closed smile: one soft arc, slightly tucked at the corners
-      bits.push(add(stroke(shape, arc(-0.17, 0.17, vm + 0.025, 0.045, 11), 0.0034, lineM, 0.0035)));
+      // F.mouthUp raises the smile toward the nose
+      bits.push(add(stroke(shape, arc(-0.17, 0.17, vm + 0.025 + (F.mouthUp ?? 0), 0.045, 11), 0.0034, lineM, 0.0035)));
       break;
     case 'grin': {            // an open smile with teeth
       const top = arc(-0.2, 0.2, vm + 0.015, 0.02), bot = arc(-0.2, 0.2, vm + 0.015, 0.11);
