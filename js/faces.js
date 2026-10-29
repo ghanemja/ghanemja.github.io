@@ -224,7 +224,7 @@ export function buildHead(J, S, F, mats) {
       lid.scale.set(0.86, 1.2, 0.62); lid.position.copy(c).add(new THREE.Vector3(0, -0.012 * lidDrop * es, 0.001)); bits.push(add(lid));
       bits.push(add(stroke(shape, arc(s * 0.27, s * 0.45, 0.12 + 0.12 * (0.5 - lidDrop), -0.02), 0.0028, lineM, 0.0075)));
     }
-    if (F.lids) {
+    if (F.lids && F.lidLine !== false) {
       // an upper-lid line arching over the eye, thickest in the middle, with a small flick at the outer corner
       bits.push(add(stroke(shape, [[s * 0.27, 0.145], [s * 0.33, 0.175], [s * 0.4, 0.178], [s * 0.46, 0.158], [s * 0.5, 0.17]], 0.0034, lineM, 0.0045)));
     } else if (F.lashes) for (const k of [0, 1]) bits.push(add(stroke(shape, [[s * (0.45 + k * 0.025), 0.17 - k * 0.02], [s * (0.5 + k * 0.03), 0.2 - k * 0.02]], 0.0025, lineM, 0.006)));
