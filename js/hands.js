@@ -114,10 +114,38 @@ function sdHand(S, r, d, p, Y = 0) {
   let hand = smin(palm, thumb, 0.07);
   for (const segs of S.fingers) {
     let f = 1e9;
-    for (const s of segs) f = smin(f, roundCone(r, d, p, s.a, s.b, s.r1, s.r2), 0.015 + 0.02 * Y);   // young: joints melt, no knobbly knuckles
+    // segments share their radius at each joint, so a plain union is already seamless; a smooth-
+    // min blend ADDS material at the joint (that is what knobbed the young fingers)
+    for (const s of segs) f = Y ? Math.min(f, roundCone(r, d, p, s.a, s.b, s.r1, s.r2)) : smin(f, roundCone(r, d, p, s.a, s.b, s.r1, s.r2), 0.015);
     hand = Math.min(hand, smin(palm, f, 0.045));            // melts into the palm, never into the next finger
   }
   return hand;
+}
+
+// Taubin smoothing (λ/μ): averages each vertex toward its neighbours, then pushes back
+// out, so ripples go but the hand doesn't shrink. Needs an indexed geometry.
+function taubin(g, iters = 6, lam = 0.5, mu = -0.53) {
+  const P = g.attributes.position, n = P.count, idx = g.index.array;
+  const nb = Array.from({ length: n }, () => new Set());
+  for (let i = 0; i < idx.length; i += 3) {
+    const a = idx[i], b = idx[i + 1], c = idx[i + 2];
+    nb[a].add(b); nb[a].add(c); nb[b].add(a); nb[b].add(c); nb[c].add(a); nb[c].add(b);
+  }
+  const A = P.array, T = new Float32Array(A.length);
+  const pass = (f) => {
+    for (let v = 0; v < n; v++) {
+      let x = 0, y = 0, z = 0, k = 0;
+      for (const u of nb[v]) { x += A[u * 3]; y += A[u * 3 + 1]; z += A[u * 3 + 2]; k++; }
+      if (!k) { T[v * 3] = A[v * 3]; T[v * 3 + 1] = A[v * 3 + 1]; T[v * 3 + 2] = A[v * 3 + 2]; continue; }
+      T[v * 3] = A[v * 3] + f * (x / k - A[v * 3]);
+      T[v * 3 + 1] = A[v * 3 + 1] + f * (y / k - A[v * 3 + 1]);
+      T[v * 3 + 2] = A[v * 3 + 2] + f * (z / k - A[v * 3 + 2]);
+    }
+    A.set(T);
+  };
+  for (let i = 0; i < iters; i++) { pass(lam); pass(mu); }
+  P.needsUpdate = true;
+  g.computeVertexNormals();
 }
 
 // makeHandGeometry(s, { length, curl, res }) → BufferGeometry in the hand group's frame
@@ -160,6 +188,7 @@ export function makeHandGeometry(s, { length = 0.105, curl = 0, res = 68, young 
     const t = A[(i + 1) * 3 + c]; A[(i + 1) * 3 + c] = A[(i + 2) * 3 + c]; A[(i + 2) * 3 + c] = t;
   }
   g = mergeVertices(g, length * 1e-4);
+  if (young) taubin(g, 8);               // iron out the marching-cubes stair-steps the ink would trace as bumps
   g.computeBoundingSphere();
   mc.geometry.dispose();
   _cache.set(key, g);
