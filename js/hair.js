@@ -27,7 +27,7 @@ export const HAIRSTYLES = {
   lob:      { label: 'Long bob', th: 0.08, vol: 0.14, fringe: [0.55, 0.15], face: 0.88, curtain: { cut: 1.45, aline: 0.1, bell: 0.08, tuck: 0.03 }, locks: 40, lockW: 1.05, tip: 0.07 },
   ponytail: { label: 'Ponytail', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.55, extra: 'ponytail', taper: true },
   bun:      { label: 'Bun', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.55, extra: 'bun', taper: true },
-  curly:    { label: 'Curls', th: 0.24, vol: 0.2, fringe: [0.5, 0.06], face: 0.98, curtain: { cut: 0.5, aline: 0.12, bell: 0.2, tuck: 0.12 }, curl: 0.04 },
+  curly:    { label: 'Curls', th: 0.17, vol: 0.18, fringe: [0.5, 0.06], face: 0.98, curtain: { cut: 0.55, aline: 0.1, bell: 0.25, tuck: 0.1 }, curl: 0.02 },
 };
 
 const ss = THREE.MathUtils.smoothstep;
@@ -222,27 +222,25 @@ export function makeHair(H, { chin }, styleName, colour) {
     const sp = (2 * Math.PI * Math.hypot(start.x - C.x, start.z - C.z)) / 36;
     lock(pts, (t) => sp * 0.85 * (0.5 + 0.5 * ss(t, 0, 0.1)) * (1 - 0.55 * t), (t) => R * 0.022 * (1 - 0.5 * t) * ss(t, 0, 0.2), 0.92 + 0.16 * rnd(j));   // (rising out of the hairline, not a step)
   }
-  // curls: a cloud of rounded curls over the whole mass, not a lumpy bob
-  if (S.curl) {
-    const ico = new THREE.IcosahedronGeometry(1, 2), IP = ico.attributes.position, v = new THREE.Vector3(), col = new THREE.Color();
-    let n = 0;
-    for (let j = 0; j < 40; j++) {
-      const th = -Math.PI + ((j + 0.5) / 40) * Math.PI * 2, cl = column(th);
-      for (let sIdx = 0, s1 = 0.03 * cl.end; s1 < cl.end * 1.02; sIdx++, s1 += R * (0.17 + 0.04 * rnd(j * 5 + sIdx))) {
-        const p = along(cl, s1), o = outOf(p), rp = R * (0.15 + 0.05 * rnd(j * 17 + sIdx)) * (s1 < 0.15 * cl.end ? 0.8 : 1);
-        const cen = p.clone().addScaledVector(o, R * 0.03 + rp * 0.2), shade = 0.88 + 0.24 * rnd(j * 31 + sIdx), start = LP.length / 3;
-        for (let i = 0; i < IP.count; i++) {
-          v.fromBufferAttribute(IP, i); const up = v.dot(o);
-          const q = cen.clone().addScaledVector(v, rp * (1 + 0.08 * Math.sin(v.x * 9 + v.y * 7 + n)));
-          LP.push(q.x, q.y, q.z);
-          col.copy(base).multiplyScalar(shade).lerp(dark, 0.45 * Math.max(0, -up)).lerp(shine, 0.3 * Math.max(0, up) ** 3); LC.push(col.r, col.g, col.b);
-        }
-        const ix = ico.index ? ico.index.array : Array.from({ length: IP.count }, (_, i) => i);
-        for (const i of ix) LI.push(start + i);
-        n++;
-      }
+  // curls: ringlets, locks that coil round their own path from the crown to the ends. (A
+  // cloud of same-size balls, each outlined, read as bubble wrap on a bob.) Coils carry a
+  // little further out than the mass, so the silhouette is springy, not a smooth helmet.
+  if (S.curl) for (const layer of [0, 1]) for (let j = 0; j < 21; j++) {
+    const th = -Math.PI + ((j + 0.5 * layer + 0.25 * rnd(j * 7 + layer)) / 21) * Math.PI * 2, col = column(th), fw = faceW(th);
+    const s0 = col.end * (layer ? 0.35 + 0.15 * rnd(j) : 0.04 + 0.06 * rnd(j + 9)), s1 = col.end * (1.0 + 0.06 * rnd(j * 5 + layer)) + (fw > 0.3 ? 0.04 * R : 0);   // (the front ones over the mass's edge: short of it, a smooth band framed the face)
+    const coil = R * (0.1 + 0.025 * rnd(j * 3 + layer)), pitch = R * (0.3 + 0.07 * rnd(j * 11)),   // (big, loose curls: tight little ones read as rope)
+    phase = rnd(j * 13 + layer) * 6.28;
+    const pts = [], N = 70, b = new THREE.Vector3(), tan = new THREE.Vector3();
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, sAt = s0 + (s1 - s0) * t, c0 = along(col, sAt), o = outOf(c0);
+      tan.copy(along(col, sAt + 0.01 * R)).sub(c0).normalize(); b.crossVectors(tan, o).normalize();
+      const a = phase + (sAt / pitch) * Math.PI * 2, rr = coil * (0.55 + 0.45 * ss(t, 0, 0.25));   // tighter at the root
+      pts.push(c0.addScaledVector(o, R * (0.04 + 0.02 * layer) + rr * (1 + Math.sin(a)) * 0.6).addScaledVector(b, rr * Math.cos(a)));
     }
+    const thick = R * (0.08 + 0.015 * rnd(j * 17 + layer));
+    lock(pts, (t) => thick * (0.7 + 0.3 * ss(t, 0, 0.1)) * (1 - 0.6 * ss(t, 0.75, 1)), (t) => thick * 0.8 * (1 - 0.6 * ss(t, 0.75, 1)), 0.88 + 0.24 * rnd(j * 19 + layer));
   }
+
 
   // extras: a ponytail or a bun, gathered at the back of the head
   const tailMat = paint(base.getHex(), { soft: true, hatch: 0.3 });

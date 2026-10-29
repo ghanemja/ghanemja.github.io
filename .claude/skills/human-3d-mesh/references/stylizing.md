@@ -238,8 +238,9 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   above its neighbour (at one height they z-fight into noisy stripes), dark at the root
   with a band of shine. The shell beneath, in the locks' shade, keeps coverage and the
   clean hairline. A ponytail or bun has locks pulled back from the hairline to the tie,
-  and its tail is locks twisting round a core. Curls are a cloud of rounded curls laid
-  along the columns, not noise on a bob. Too many locks makes the outline busy: about
+  and its tail is locks twisting round a core. Curls are ringlets: locks that coil round
+  their own path from crown to ends, big and loose (about 21 per layer). A cloud of
+  same-size balls, each outlined, read as bubble wrap, and tight little coils read as rope. Too many locks makes the outline busy: about
   32–40 per layer.
 - **A hairline thins to nothing.** Every edge of short hair (except a fringe that hangs over
   the forehead) is a hairline: the shell and the locks ride the same tapered surface
