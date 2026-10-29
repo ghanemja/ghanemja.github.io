@@ -209,7 +209,14 @@ export function buildHead(J, S, F, mats) {
   const es = F.eyeSize ?? 1;
   for (const s of [-1, 1]) {
     const c = pt(s * 0.36, 0.12);
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.016 * es, 12, 10), dark); e.scale.set(0.8, F.eyes === 'narrow' ? 0.95 : (F.eyeTall ?? 1.15), 0.5); e.position.copy(c); bits.push(add(e));
+    // F.lids: a soft, flush eye with an upper-lid line instead of lash ticks (the ticks read
+    // as antennae, and a deep dome popped out of the profile like a bead)
+    const flush = !!F.lids;
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.016 * es, flush ? 28 : 12, flush ? 20 : 10), dark);
+    e.scale.set(0.8, F.eyes === 'narrow' ? 0.95 : (F.eyeTall ?? 1.15), flush ? 0.3 : 0.5);
+    e.position.copy(c);
+    if (flush) e.position.sub(c.clone().sub(HC).normalize().multiplyScalar(0.0022));
+    bits.push(add(e));
     const hl = new THREE.Mesh(new THREE.SphereGeometry(0.0045 * es, 8, 6), paint(0xffffff, { hatch: 0 })); hl.position.copy(c).add(new THREE.Vector3(-0.004, 0.006, 0.007)); bits.push(add(hl));
     if (F.eyes === 'sleepy' || F.eyes === 'narrow') {
       const lidDrop = F.eyes === 'sleepy' ? 0.45 : 0.18;
@@ -217,7 +224,10 @@ export function buildHead(J, S, F, mats) {
       lid.scale.set(0.86, 1.2, 0.62); lid.position.copy(c).add(new THREE.Vector3(0, -0.012 * lidDrop * es, 0.001)); bits.push(add(lid));
       bits.push(add(stroke(shape, arc(s * 0.27, s * 0.45, 0.12 + 0.12 * (0.5 - lidDrop), -0.02), 0.0028, lineM, 0.0075)));
     }
-    if (F.lashes) for (const k of [0, 1]) bits.push(add(stroke(shape, [[s * (0.45 + k * 0.025), 0.17 - k * 0.02], [s * (0.5 + k * 0.03), 0.2 - k * 0.02]], 0.0025, lineM, 0.006)));
+    if (F.lids) {
+      // an upper-lid line arching over the eye, thickest in the middle, with a small flick at the outer corner
+      bits.push(add(stroke(shape, [[s * 0.27, 0.145], [s * 0.33, 0.175], [s * 0.4, 0.178], [s * 0.46, 0.158], [s * 0.5, 0.17]], 0.0034, lineM, 0.0045)));
+    } else if (F.lashes) for (const k of [0, 1]) bits.push(add(stroke(shape, [[s * (0.45 + k * 0.025), 0.17 - k * 0.02], [s * (0.5 + k * 0.03), 0.2 - k * 0.02]], 0.0025, lineM, 0.006)));
   }
   // brows: tapered strokes, shaped by the expression
   const BROWS = {
