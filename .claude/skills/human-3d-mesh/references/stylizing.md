@@ -232,6 +232,15 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   back. Rows are spread along each column's own length, so the edge is a clean curve by
   construction, with a lip of thickness. Short styles taper to the skin at the nape and
   round the ears.
+- **Locks over the shell.** One smooth shell, however well cut, reads as a plastic helmet.
+  Over it go locks: tapered clumps, each following a column from the crown to its cut
+  and on a little past it to a soft point, in two staggered layers, each lock slightly
+  above its neighbour (at one height they z-fight into noisy stripes), dark at the root
+  with a band of shine. The shell beneath, in the locks' shade, keeps coverage and the
+  clean hairline. A ponytail or bun has locks pulled back from the hairline to the tie,
+  and its tail is locks twisting round a core. Curls are a cloud of rounded curls laid
+  along the columns, not noise on a bob. Too many locks makes the outline busy: about
+  32–40 per layer.
 - Styles are data (`HAIRSTYLES`): buzz, crop, pixie, bob, long bob, ponytail, bun, curls.
   A new style means new numbers (fringe height and sweep, face window, side/back ends,
   curtain cut / A-line / bell / tuck), plus an extra mesh for a tail or bun.
