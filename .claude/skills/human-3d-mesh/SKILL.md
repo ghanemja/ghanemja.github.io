@@ -18,16 +18,18 @@ human**, which is physically accurate by construction, and **stylize** it on pur
 
 ```js
 import { makePerson } from './js/people.js';
-const p = await makePerson({ style: 'town', body: { sex: 0, weight: 0.42 }, stature: 1.2 });
-scene.add(p.group);            // dressed, haired, rigged, posed, toon-painted and inked
+const p = await makePerson({ style: 'town', body: { sex: 0, weight: 0.42, age: 9 },
+  topType: 'tee', bottomType: 'skirt', render: 'gouache' });
+scene.add(p.group);            // dressed, haired, rigged, posed, painted and inked
+p.setRender('realistic');      // gouache · anime · clay · lowpoly · pixel · realistic, no rebuild
 ```
-Parameters, style knobs, dressing, hair, posing and known pitfalls are all in
+Parameters, age (2–90), style knobs, dressing options, cloth fitting, render styles, hair, posing and known pitfalls are all in
 [references/stylizing.md](references/stylizing.md). Motion (walk, run, sit, bike, idle)
 comes with every person automatically; see [references/motion.md](references/motion.md).
 
 **Proportions are human unless a style is explicitly exaggerated.** The head must not
 be much bigger than the body. `checkStyle()` clamps ordinary styles to `HUMAN_RANGE`
-(6.6–8 heads tall), and only a style that declares `exaggerated: true` (storybook,
+(the head at most 1.2× the person's own natural head, so it holds at every age), and only a style that declares `exaggerated: true` (storybook,
 chibi) may leave it, and only when that look was asked for. Look at both styles side by side in
 `tools/human-lab.html?styles=real,town` (`&yaw=90`, `&focus=head|hands|feet`).
 

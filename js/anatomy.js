@@ -13,7 +13,8 @@
 //
 // Build people with makePerson (js/people.js), which dresses them by construction.
 //
-// Parameters (all 0..1, 0.5 = average adult): sex (0 female … 1 male), muscle,
+// Parameters: age in years (1–90; children and older people need loadAges first), and
+// (all 0..1, 0.5 = average adult) sex (0 female … 1 male), muscle,
 // weight, height, proportions (>0.5 idealised, <0.5 uncommon), and ancestry
 // { african, asian, caucasian } (any mix; normalised), and `expression`: facial units
 // by name ('mouth-corner-puller' is the smile muscle). `stature` sets the final
@@ -28,13 +29,43 @@ export function loadAnatomy(url = new URL('../models/human/makehuman.json', impo
     const A = { n: J.n, base: dec(J.pos, Float32Array), bones: J.bones, joints: J.joints, q: J.q, tris: {}, targets: {} };
     for (const [k, v] of Object.entries(J.tris)) A.tris[k] = dec(v, Uint16Array);
     A.skinI = dec(J.skinI, Uint8Array); A.skinW = dec(J.skinW, Uint8Array);
-    for (const [k, v] of Object.entries(J.targets)) A.targets[k] = { idx: dec(v.idx, Uint16Array), d: dec(v.d, Int16Array) };
+    for (const [k, v] of Object.entries(J.targets)) A.targets[k] = { q: v.q ?? J.q, idx: dec(v.idx, Uint16Array), d: dec(v.d, Int16Array) };
     A.boneIndex = new Map(J.bones.map((b, i) => [b.name, i]));
     A.children = J.bones.map(() => []);
     J.bones.forEach((b, i) => { if (b.parent >= 0) A.children[b.parent].push(i); });
     return A;
   });
   return _anat;
+}
+
+// baby / child / old shapes live in a second file, fetched the first time someone isn't a young adult
+let _ages = null;
+export function loadAges(A, url = new URL('../models/human/ages.json', import.meta.url)) {
+  if (!_ages) _ages = fetch(url).then(r => r.json()).then((J) => {
+    for (const [k, v] of Object.entries(J.targets)) A.targets[k] = { q: v.q, idx: dec(v.idx, Uint16Array), d: dec(v.d, Int16Array) };
+    A.hasAges = true; return A;
+  });
+  return _ages;
+}
+
+// ── age ──
+// MakeHuman's age axis runs 0..1: 1 year at 0, 11 at 0.1875, 25 at 0.5, 90 at 1, blending
+// four measured shapes (baby, child, young, old). ageWeights(years) → their weights.
+export function ageWeights(years) {
+  const y = THREE.MathUtils.clamp(years, 1, 90);
+  const v = y < 11 ? (y - 1) / 10 * 0.1875 : y < 25 ? 0.1875 + (y - 11) / 14 * 0.3125 : 0.5 + (y - 25) / 65 * 0.5;
+  if (v < 0.1875) return { baby: 1 - v / 0.1875, child: v / 0.1875 };
+  if (v < 0.5) return { child: 1 - (v - 0.1875) / 0.3125, young: (v - 0.1875) / 0.3125 };
+  return { young: 1 - (v - 0.5) / 0.5, old: (v - 0.5) / 0.5 };
+}
+export const needsAges = (years) => { const w = ageWeights(years); return (w.baby || 0) + (w.child || 0) + (w.old || 0) > 1e-3; };
+// stature by age and sex (metres; a growth curve through WHO / CDC medians), ± the height slider
+const GROW = { female: [[2, 0.86], [4, 1.02], [6, 1.15], [8, 1.27], [10, 1.38], [12, 1.51], [14, 1.6], [16, 1.62], [18, 1.63], [45, 1.63], [65, 1.61], [85, 1.56]],
+  male: [[2, 0.87], [4, 1.03], [6, 1.16], [8, 1.28], [10, 1.38], [12, 1.49], [14, 1.63], [16, 1.72], [18, 1.76], [45, 1.76], [65, 1.74], [85, 1.69]] };
+export function statureFor(years, sex = 0, height = 0.5) {
+  const at = (tab) => { let i = 1; while (i < tab.length - 1 && tab[i][0] < years) i++; const [a0, h0] = tab[i - 1], [a1, h1] = tab[i]; return h0 + (h1 - h0) * THREE.MathUtils.clamp((years - a0) / (a1 - a0), 0, 1); };
+  const base = at(GROW.female) * (1 - sex) + at(GROW.male) * sex;
+  return base * (1 + (height - 0.5) * 0.12);                          // ±6% across the slider
 }
 
 // MakeHuman's macro blend: which targets, how much, for a set of parameters
@@ -44,11 +75,27 @@ function macroWeights(P) {
   const anc = { african: 1, asian: 1, caucasian: 1, ...P.ancestry }, at = anc.african + anc.asian + anc.caucasian || 1;
   const tri = (x, lo, mid, hi) => x < 0.5 ? { [lo]: 1 - x / 0.5, [mid]: x / 0.5 } : { [mid]: 1 - (x - 0.5) / 0.5, [hi]: (x - 0.5) / 0.5 };
   const M = tri(P.muscle, 'minmuscle', 'averagemuscle', 'maxmuscle'), W = tri(P.weight, 'minweight', 'averageweight', 'maxweight');
+  const AG = ageWeights(P.age ?? 25);
   for (const [g, gw] of Object.entries(G)) {
-    for (const e of ['african', 'asian', 'caucasian']) add(`${e}-${g}-young`, gw * anc[e] / at);
-    for (const [m, mw] of Object.entries(M)) for (const [ww, wv] of Object.entries(W)) {
-      if (m === 'averagemuscle' && ww === 'averageweight') continue;      // that combination is the base itself
-      add(`universal-${g}-young-${m}-${ww}`, gw * mw * wv);
+    for (const [a, aw] of Object.entries(AG)) {
+      const w0 = gw * aw;
+      if (a === 'young') {
+        for (const e of ['african', 'asian', 'caucasian']) add(`${e}-${g}-young`, w0 * anc[e] / at);
+        for (const [m, mw] of Object.entries(M)) for (const [ww, wv] of Object.entries(W)) {
+          if (m === 'averagemuscle' && ww === 'averageweight') continue;  // that combination is the base itself
+          add(`universal-${g}-young-${m}-${ww}`, w0 * mw * wv);
+        }
+      } else {
+        // other ages: the averaged face set for that age, plus the adult differences between the
+        // three face sets (scaled down) so face shape still varies; muscle and weight on their axes
+        add(`avg-${g}-${a}`, w0);
+        for (const e of ['african', 'asian', 'caucasian']) {
+          const d = (anc[e] / at - 1 / 3) * w0 * 0.7;
+          if (Math.abs(d) > 1e-4) w[`${e}-${g}-young`] = (w[`${e}-${g}-young`] || 0) + d;
+        }
+        for (const [m, mw] of Object.entries(M)) if (m !== 'averagemuscle') add(`universal-${g}-${a}-${m}-averageweight`, w0 * mw);
+        for (const [ww, wv] of Object.entries(W)) if (ww !== 'averageweight') add(`universal-${g}-${a}-averagemuscle-${ww}`, w0 * wv);
+      }
     }
     add(`${g}-young-averagemuscle-averageweight-maxheight`, gw * Math.max(0, (P.height - 0.5) * 2));
     add(`${g}-young-averagemuscle-averageweight-minheight`, gw * Math.max(0, (0.5 - P.height) * 2));
@@ -59,7 +106,7 @@ function macroWeights(P) {
   return w;
 }
 
-export const DEFAULTS = { sex: 0, muscle: 0.5, weight: 0.5, height: 0.5, proportions: 0.5, ancestry: {}, stature: 1.7 };
+export const DEFAULTS = { sex: 0, age: 25, muscle: 0.5, weight: 0.5, height: 0.5, proportions: 0.5, ancestry: {}, stature: 1.7 };
 
 export function buildBody(A, params = {}) {
   const P = { ...DEFAULTS, ...params };
@@ -67,7 +114,7 @@ export function buildBody(A, params = {}) {
   for (const [k, wt] of Object.entries(macroWeights(P))) {
     const t = A.targets[k];
     if (!t) continue;
-    const s = wt * A.q;
+    const s = wt * t.q;
     for (let j = 0; j < t.idx.length; j++) {
       const i = t.idx[j] * 3;
       pos[i] += t.d[j * 3] * s; pos[i + 1] += t.d[j * 3 + 1] * s; pos[i + 2] += t.d[j * 3 + 2] * s;

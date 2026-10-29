@@ -10,22 +10,28 @@ hand-made any more.
 ## Contents
 - The pipeline
 - Body parameters
+- Age
 - Style knobs
 - Rules for stylizing
 - Dressing (always clothed)
+- Fitting cloth to the body
+- Render styles (how a person is drawn)
 - Hair, eyes, brows, face
+- Making many people (the Citizen Maker)
 - Posing
 - Bugs this pipeline already hit
 - Cost
 
 ## The pipeline
 ```
-tools/human/bake.mjs        MakeHuman (pinned commit) → models/human/makehuman.json
-js/anatomy.js               loadAnatomy · buildBody(params) · regionWeight · buildSkeleton
-js/stylize.js               STYLES.real / STYLES.town · stylize(body, style)
+tools/human/bake.mjs        MakeHuman (pinned commit) → models/human/makehuman.json (+ ages.json)
+js/anatomy.js               loadAnatomy · loadAges · buildBody(params) · statureFor · regionWeight · buildSkeleton
+js/stylize.js               STYLES.real / STYLES.town · stylize(body, style)   (proportions: the SHAPE)
 js/people.js                makePerson(spec): body → style → dress → hair & face → rig → pose → motion
+js/render-styles.js         applyRenderStyle(root, name) · applySceneStyle(renderer, scene, name)  (how it is DRAWN)
 js/motion.js                person.motion.pose('walk'|'run'|'sit'|'bike'|'idle', t) · makeBike(person)
 tools/human-lab.html        styles side by side: ?styles=real,town&yaw=&pitch=&focus=full|head|hands|feet&action=walk&phase=0.25
+                            &age=7 &top=sweater|tee|turtleneck &bottom=trousers|shorts|skirt &render=gouache|anime|clay|lowpoly|pixel|realistic
 ```
 `makePerson` is the only way to make a person. Never render `buildBody` output directly.
 
@@ -34,12 +40,29 @@ All 0..1, 0.5 = average adult: `sex` (0 female … 1 male), `muscle`, `weight`, 
 `proportions` (>0.5 idealised), `ancestry` {african, asian, caucasian} (normalised mix),
 `expression` (facial units by name: `mouth-corner-puller` is the smile muscle,
 `eye-*-slit` lifts the lower lids, `eye-*-opened-up` widens). `stature` sets the
-height in scene units. Vary people with these, not by editing meshes.
+height in scene units; leave it out and it comes from `statureFor(age, sex, height)`.
+Vary people with these, not by editing meshes.
+
+## Age
+`body.age` is in years, 1–90 (default 25). MakeHuman's age axis is not linear in years
+(1 yr = 0, 11 = 0.1875, 25 = 0.5, 90 = 1); `ageWeights()` converts it and blends its
+baby / child / young / old targets. Young adults use the full ancestry set (in
+makehuman.json); every other age uses the averaged-ancestry targets in `ages.json`,
+which `makePerson` loads on first use, with the young ancestry difference laid on top
+at 70%. Stature follows a growth table (`statureFor`), and the height slider moves it
+±6% for that age, so a "tall" seven-year-old is still a seven-year-old.
+- **Size-dependent numbers scale with stature** (`k = stature / 1.7`): cloth thickness,
+  ease, hang, shoe lift, and the fit smoothing's radius. One absolute 5 cm smoothing
+  radius was a third of a toddler's torso and pinched their sweater to the width of the
+  neck, with holes at the flanks.
+- The style's `head` multiplier is relative to that person's own head, so a child's
+  naturally big head stays a child's head, and isn't measured against an adult's.
+- Check ages 3, 7, 12, 16, 30, 45 and 70 together in the lab, and children in sit and bike.
 
 ## Style knobs
 | knob | what it does | real | town | storybook* | chibi* |
 |---|---|---|---|---|---|
-| `headsTall` | stature ÷ head height (vertex→chin); scales the head about the top of the neck | natural (≈7.3–7.8) | 6.8 | 5.4 | 3.6 |
+| `head` | × the person's natural head, scaled about the top of the neck | 1 | 1.15 | 1.55 | 2.6 |
 | `hands` / `feet` | size about the wrist / ankle | 1 | 1.02 / 1 | 1.12 / 1.06 | 1.25 / 1.15 |
 | `eyes` | eyeball + socket about each eye centre | 1 | 1.08 | 1.35 | 1.6 |
 | `soften` | Taubin smoothing passes (rounds off small anatomical detail) | 0 | 3 | 3 | 4 |
@@ -52,7 +75,7 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
 ## The proportion rules (enforced in code)
 - **People have human proportions unless a style is explicitly exaggerated.** The head
   must not be much bigger than the body just because a style was being tuned.
-- Ordinary styles are held to `HUMAN_RANGE` in js/stylize.js: `headsTall` 6.6–8,
+- Ordinary styles are held to `HUMAN_RANGE` in js/stylize.js: `head` 0.95–1.2 (× natural),
   `hands` 0.95–1.08, `feet` 0.95–1.06, `eyes` 0.95–1.15. `checkStyle()` clamps anything
   outside it and warns.
 - Only a style that declares `exaggerated: true` (storybook, chibi) may leave the range.
@@ -83,8 +106,65 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
 - **Drape, don't shrink-wrap:** lift the shell off the body (`thick` + `ease`), smooth it
   with the hem fixed, then push it back out wherever it sank inside. That smoothing is what
   turns anatomy into cloth.
+- **Options:** `topType` sweater / tee (sleeves end mid upper arm) / turtleneck (collar on
+  `neck02`), and `bottomType` trousers / shorts (just above the knee) / skirt. A skirt is
+  MakeHuman's helper-skirt surface cut at the knee, lifted 1.2 cm, with its waistband
+  tucked up under the top's hem, and it always has shorts under it (sitting and biking
+  show them, never a body). Short options add only `legs` / forearm skin.
+- **No top in a skin colour.** From across the plaza a tan top on tan skin reads as no
+  top. `TOP_COLOURS` (js/citizens.js) leaves out anything near a skin tone, and
+  generated people never get a top within reach of their own skin.
 - Shoes are the town's S-profile sneaker fitted to the real foot's measured length and
   width, riding the foot bone. The bare foot is never kept.
+
+## Fitting cloth to the body
+Cloth that hugs the real anatomy shows every rib, nipple and navel, and in clay or
+realistic light that reads as a painted-on body. The fit goes in three steps:
+1. **A smoothed, hidden copy of the torso** (`fitPos` in makePerson) is what clothes are
+   cut from and pushed out of. It is never drawn. `spatialSmooth` averages each torso
+   point with every point within 2σ (σ = 5 cm × k), Gaussian- and **area-weighted**
+   (otherwise the densely meshed navel outvotes the surface round it), moving only along
+   the averaged normal. Then a short `outOnly` pass fills remaining pits. The legs are
+   faded out just above the crotch, so two legs stay two legs.
+2. **Drape:** offset along the (neighbour-averaged) normals, Taubin-smoothed with the hem
+   fixed, pushed back out wherever it sank in.
+3. **Hang:** a top falls from the bust and shoulder blades instead of following the waist
+   in. It works in cylinder coordinates about the torso's axis. It fades in below the
+   armpits and out above the hem, because a hard start creased the bust and a push above
+   a fixed hem flared it.
+- **Bugs it hit:** (a) plain neighbour (Laplacian) smoothing barely moves a dense mesh: 22
+  passes moved the chest 7 mm. (b) Free spatial averaging collapsed vertices into fans,
+  and moving along each vertex's own normal dug craters. (c) The flattened navel became a
+  knot of tiny folded triangles whose normals pointed anywhere, so normals are averaged
+  over 8 rings of neighbours before anything is offset along them. (d) **The navel
+  bulge:** the hang measured each row's axis as the mean of its vertices, the navel's
+  dense vertices dragged it 2 cm forward, and radii falling from the row above (measured
+  round the old centre) pushed the belly out in a lump. The axis is now the middle of each
+  row's extent, smoothed between rows. When a dent or lump shows, print one column of
+  vertices (y, z) through it after each stage (fit → drape → hang). The stage that
+  changes it is the culprit. Looking at renders alone took several wrong guesses.
+
+## Render styles (how a person is drawn)
+Proportions (`style`, js/stylize.js) shape the body. The render style (`render`,
+js/render-styles.js) only changes how it's drawn, and can be swapped at any time with
+`person.setRender(name)`, no rebuild:
+| render | materials | outline | scene |
+|---|---|---|---|
+| gouache | cel bands, paper grain (style.js `paint`) | wobbling hand-drawn | flat |
+| anime | MeshToon, two hard tones | crisp, even width | flat |
+| clay | matte MeshStandard | none | RoomEnvironment, ACES |
+| lowpoly | flat-shaded Lambert on vertex-clustered geometry (finer cells for face, hands, brows) | none | flat |
+| pixel | MeshToon, three tones | thin | drawn at 0.3 pixel ratio, `image-rendering: pixelated`; faces keep only their silhouette |
+| realistic | MeshPhysical skin, cloth and hair sheen, clearcoat eyes | none | environment, ACES, soft shadows |
+- Meshes are tagged with `userData.role` (skin / cloth / hair / eye / glint / brow / shoe
+  / sole / prop) and keep their base colour in `userData.base`, so `recolor()` and style
+  swaps work both ways. Props (bench, bike, ground) go through `applyRenderStyle` too.
+- **three.js only tone-maps what is drawn to the screen.** A portrait rendered into a
+  `WebGLRenderTarget` came out blown white in clay and realistic. The maker draws
+  portraits into a corner of the screen, reads them back with `gl.readPixels`, then
+  redraws the frame in the same task.
+- The lit styles show what the toon styles hide: dents and lumps in cloth. Check clothing
+  in clay and realistic, front and side.
 
 ## Hair, eyes, brows, face
 - **Hair is one grid over the head (js/hair.js), never a sphere with triangles thrown away.**
@@ -118,12 +198,15 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
 ## Making many people (the Citizen Maker)
 - `citizens.html` + `js/maker.js` is the creator UI. Citizens are plain data
   (`js/citizens.js`): `toPersonSpec()` turns one into a `makePerson` spec.
-  `person.restyle({...})` changes colours and hair in place; body, face and style changes
-  rebuild the person.
-- **Batches:** `generateCitizens(n, { seed, style, women })` is seeded (the same seed always
-  makes the same people) and spreads variety on purpose: sexes in the requested share, and
-  skin tones, face shapes, hair colours and names dealt from shuffled decks so all appear
-  before any repeats. Top and trousers never match. The page takes `?batch=30&seed=harbour`;
+  `person.restyle({...})` changes colours and hair in place; body, age, face, clothing
+  type and proportion changes rebuild the person. The render style is one choice for the
+  whole roster (as in a game), kept in the browser and written into the export.
+- **Batches:** `generateCitizens(n, { seed, style, women, ageMin, ageMax })` is seeded (the
+  same seed always makes the same people) and spreads variety on purpose: sexes in the
+  requested share, ages one per slice of the range (shuffled), and skin tones, face shapes,
+  hair colours and names dealt from shuffled decks so all appear before any repeats. Grey
+  hair comes in from the mid forties, never on children. Top and bottoms never match. The
+  page takes `?batch=30&seed=harbour&ages=2-12&render=anime` (or `ages=kids|teens|young|adults|middle|seniors|all`);
   export gives `citizens.json` for a game.
 - Each person is still ~90k triangles. The plaza shows at most 16 at once.
 

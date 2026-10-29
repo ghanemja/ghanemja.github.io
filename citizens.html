@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Citizen Maker</title>
-<meta name="description" content="Make your own set of citizens for a game — one at a time or in seeded batches: body, face, hair, clothes and style, then watch them walk, run, sit and ride around the plaza." />
+<meta name="description" content="Make your own set of citizens for a game — one at a time or in seeded batches of any age range: body, age, face, hair, clothes, proportions and six drawing styles, then watch them walk, run, sit and ride around the plaza." />
 <link rel="preload" href="./fonts/caveat-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/patrick-hand-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -56,6 +56,12 @@
   .tile { background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; padding: 4px 2px 2px; font-size: 14px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px; }
   .tile svg { width: 42px; height: 42px; }
   .tile.on { background: var(--gold); box-shadow: 2px 3px 0 rgba(42,34,48,.8); }
+  .tiles.wide { grid-template-columns: repeat(2, 1fr); }
+  .tiles.wide .tile { align-items: flex-start; text-align: left; padding: 6px 10px; min-height: 0; }
+  .tiles.wide .tile b { font-weight: 400; font-size: 18px; }
+  .tiles.wide .tile small { font-size: 13px; color: var(--ink2); line-height: 1.15; }
+  .row output { color: var(--accent); }
+  .row label small { font-size: 14px; color: var(--ink2); }
   .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
   .sw { width: 34px; height: 34px; border-radius: 50%; border: 2.5px solid var(--ink); padding: 0; }
   .sw.on { outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -77,6 +83,7 @@
   .batch { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 17px; padding: 4px 10px; border: 2px dashed var(--ink2); border-radius: 14px; }
   .batch input[type=number] { width: 56px; }
   .batch input { font: inherit; font-size: 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--paper); color: var(--ink); padding: 1px 6px; }
+  .batch select { font: inherit; font-size: 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--paper); color: var(--ink); padding: 1px 4px; }
   .batch .chk { font-size: 15px; color: var(--ink2); }
   .batch .chk input { accent-color: var(--accent); }
   #count { font-size: 15px; color: var(--ink2); white-space: nowrap; }
@@ -98,6 +105,8 @@
   <div class="sp"></div>
   <form id="batchF" class="batch" aria-label="Make a batch of citizens">
     <label>make <input type="number" id="batchN" min="1" max="200" value="12" aria-label="How many citizens"> citizens</label>
+    <label>aged <select id="ages" aria-label="Age range preset"></select></label>
+    <input type="number" id="ageMin" min="2" max="90" aria-label="Youngest age"><span aria-hidden="true">–</span><input type="number" id="ageMax" min="2" max="90" aria-label="Oldest age">
     <input id="seed" placeholder="seed (optional)" size="11" aria-label="Seed: the same seed always makes the same batch">
     <label class="chk"><input type="checkbox" id="replace" checked> replace roster</label>
     <button class="sk" id="batch" type="submit">generate</button>
@@ -139,6 +148,6 @@
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="./js/maker.js?cb=2"></script>
+<script type="module" src="./js/maker.js?cb=3"></script>
 </body>
 </html>
