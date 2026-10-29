@@ -298,8 +298,8 @@ export function makeFolk(spec) {
   // with a full slope the yoke is a real shoulder line: from the neck a gentle, slightly
   // CONCAVE trapezius run out to a rounded shoulder point — a convex dome there reads hunched
   const prof = sl >= 1
-    ? [[0.001, -0.01], [0.112, 0.0], [0.122, 0.1], [0.12, 0.17], [0.123, 0.215], [0.12, 0.245],
-       [0.11, 0.272], [0.097, 0.297], [0.087, 0.32], [0.081, 0.337], [0.074, 0.352], [0.001, 0.366]]   // the neckline stays as wide as the collar ring (the torso is shallower front-to-back)
+    ? [[0.001, -0.01], [0.112, 0.0], [0.122, 0.1], [0.12, 0.17], [0.128, 0.215], [0.14, 0.248], [0.139, 0.272],
+       [0.125, 0.292], [0.105, 0.31], [0.087, 0.32], [0.081, 0.337], [0.074, 0.352], [0.001, 0.366]]   // the neckline stays as wide as the collar ring (the torso is shallower front-to-back)
     : [[0.001, -0.01], [0.112, 0.0], [0.125, 0.1], [0.122, 0.17],
        [0.132 - 0.006 * sl, 0.25 - 0.025 * sl], [0.134 - 0.016 * sl, 0.278 - 0.022 * sl], [0.12 - 0.022 * sl, 0.31 - 0.006 * sl],
        [0.088 - 0.012 * sl, 0.342], [0.05, 0.362], [0.001, 0.37]];
@@ -421,7 +421,7 @@ export function makeFolk(spec) {
 
   // ── arms: one skinned tube each, shoulder to wrist; a round shoulder caps the join ──
   for (const s of [-1, 1]) {
-    const k = s < 0 ? 'L' : 'R', x = s * (0.112 - 0.008 * (S.slope ?? 0)) * B, y = 0.287 - 0.022 * (S.slope ?? 0);   // the joint sits inside the shoulder curve
+    const k = s < 0 ? 'L' : 'R', x = s * (0.112 - 0.012 * (S.slope ?? 0)) * B, y = 0.287 - 0.028 * (S.slope ?? 0);   // the joint sits inside the shoulder curve
     const sh = J['arm' + k] = bone(J.spine, x, y, 0);
     const fa = J['fore' + k] = bone(sh, 0, -0.16, 0);
     const hd = J['hand' + k] = bone(fa, 0, -0.15, 0);
