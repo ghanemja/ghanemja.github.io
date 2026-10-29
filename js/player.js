@@ -24,8 +24,8 @@ const PLAYER_LOOK = {
   neck: 0.75,                                      // a shorter neck: with sloped shoulders the full one read giraffe-long                                       // soft sloped shoulders, not a square yoke
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { profile: 1, jaw: 0.28, chin: 0.55, cheeks: 0.5, long: -0.25, skull: 0.55, brow: 0.4 },
-    nose: 'cute', noseSize: 1.0, mouth: 'smile', eyes: 'round', eyeSize: 1.05, eyeTall: 0.88,
-    brows: 'soft', browW: 1.9, lashes: true, blush: 0.9 },
+    nose: 'cute', noseSize: 1.0, mouth: 'smile', eyes: 'round', eyeSize: 1.15, eyeTall: 0.8, mouthUp: 0.08,
+    brows: 'none', lids: true, lidLine: false, blush: 0.9 },
 };
 
 // the beret and the little mustard backpack, hung on the rig's own joints
@@ -114,8 +114,18 @@ function dressPlayer(g) {
       x0 + (x1 - x0) * t,
       0.66 + (y1 - 0.66) * t - 0.06 * Math.sin(Math.PI * t),
       1.105 + 0.018 * Math.sin(Math.PI * t)));
-    const lock = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 14, 0.0095, 6), lockM);
-    hairG.add(lock);
+    // taper each lock to a point at both ends: an open tube end is inked as a black hexagon
+    const curve = new THREE.CatmullRomCurve3(pts), T = 20, Rr = 8;
+    const tg = new THREE.TubeGeometry(curve, T, 0.0095, Rr, false);
+    const P = tg.attributes.position, c = new THREE.Vector3(), q = new THREE.Vector3();
+    for (let i = 0; i < P.count; i++) {
+      const t = Math.floor(i / (Rr + 1)) / T;
+      curve.getPointAt(Math.min(1, t), c);
+      q.fromBufferAttribute(P, i).sub(c).multiplyScalar(Math.pow(Math.sin(Math.PI * t), 0.6));
+      P.setXYZ(i, c.x + q.x, c.y + q.y, c.z + q.z);
+    }
+    tg.computeVertexNormals();
+    hairG.add(new THREE.Mesh(tg, lockM));
   }
   // a few drawn strands riding the finished hair surface (same pipeline as the
   // sculpt, lifted a hair's breadth), sweeping down and away from the part
