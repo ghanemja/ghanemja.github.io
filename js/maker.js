@@ -9,7 +9,7 @@ import { makeBike } from './motion.js';
 import { paint, ink, styleTick, blobShadow } from './style.js';
 import { HAIRSTYLES } from './hair.js';
 import { RENDER_STYLES, applyRenderStyle, applySceneStyle } from './render-styles.js';
-import { PALETTE, TOP_COLOURS, FACES, FEATURES, FACE_SHAPES, STYLE_NAMES, DEFAULT, TOPS, BOTTOMS, BODY_TYPES, AGE_MIN, AGE_MAX, AGE_RANGES, randomCitizen, generateCitizens, toPersonSpec, INSTANT, loadRoster, saveRoster, toJSON, fromJSON } from './citizens.js';
+import { PALETTE, TOP_COLOURS, FACES, FEATURES, FACE_SHAPES, DEFAULT, TOPS, BOTTOMS, BODY_TYPES, AGE_MIN, AGE_MAX, AGE_RANGES, randomCitizen, generateCitizens, toPersonSpec, INSTANT, loadRoster, saveRoster, toJSON, fromJSON } from './citizens.js';
 
 const $ = (s) => document.querySelector(s);
 const stageEl = $('#stage');
@@ -203,8 +203,6 @@ const TABS = {
     { swatches: 'shoes', label: 'Shoes', colours: [0xf1ebdf, 0x2f2b33, 0xd8584a, 0x8e2f3a, 0x5b4636, 0xe4b84f, 0x3f8f88, 0x6f8db0] },
   ],
   Style: [
-    { tiles: 'style', label: 'Proportions', options: Object.entries(STYLE_NAMES).map(([k, v]) => [k, v, '']) },
-    { note: 'Town and Natural keep real human proportions. Storybook and Chibi are deliberately exaggerated (bigger heads and eyes).' },
     { render: true, label: 'Drawn as (everyone)', options: Object.entries(RENDER_STYLES).map(([k, v]) => [k, v.label, v.note]) },
   ],
 };

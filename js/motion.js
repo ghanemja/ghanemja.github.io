@@ -153,6 +153,11 @@ export function relaxedPose(sk) {
     // back, the elbow soft and pointing BACK, the forearm carrying the hand slightly forward and out,
     // the palm toward the thigh, fingers gently curled. (Arms angled out from the shoulder bowed the
     // elbows sideways, a gunslinger's stance, and flat fingers read as claws.)
+    // Lowering the arm from the base mesh's A-pose is shared with the collarbone, as in a real
+    // shoulder: turned at the upper arm alone, skinning bulged the top of the shoulder into a pad.
+    { const ua = B['upperarm01.' + k], dir = wp(B['lowerarm01.' + k]).sub(wp(ua)).normalize();
+      const drop = Math.acos(THREE.MathUtils.clamp(dir.dot(new THREE.Vector3(s * 0.07, -1, -0.05).normalize()), -1, 1));
+      rotateBone(B['shoulder01.' + k], new THREE.Vector3(0, 0, 1), -s * drop * 0.5); B['shoulder01.' + k].updateMatrixWorld(true); }
     turnTo(B['upperarm01.' + k], wp(B['lowerarm01.' + k]).sub(wp(B['upperarm01.' + k])), new THREE.Vector3(s * 0.07, -1, -0.05));
     turnTo(B['lowerarm01.' + k], wp(B['wrist.' + k]).sub(wp(B['lowerarm01.' + k])), new THREE.Vector3(s * 0.12, -1, 0.2));
     palmTo(B, k, new THREE.Vector3(-s, 0, 0.2));                  // palm to the thigh

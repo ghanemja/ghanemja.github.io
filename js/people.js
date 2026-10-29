@@ -38,6 +38,27 @@ function vertexNormals(pos, tris) {
   return g.attributes.normal.array;
 }
 
+// blur a surface's skin weights over its own mesh where mask(i) > 0 (each pass moves halfway to
+// the neighbours' average); four strongest bones kept
+function smoothWeights(S, mask, passes) {
+  const n = S.P.length / 3, nb = Array.from({ length: n }, () => new Set());
+  for (let t = 0; t < S.T.length; t += 3) for (let e = 0; e < 3; e++) { const a = S.T[t + e], b = S.T[t + (e + 1) % 3]; nb[a].add(b); nb[b].add(a); }
+  const used = [...new Set(S.T)].filter(i => mask(i) > 0.02), m = new Map(used.map(i => [i, mask(i)]));
+  for (let p = 0; p < passes; p++) {
+    const next = new Map();
+    for (const i of used) {
+      const acc = new Map(), ns = nb[i]; if (!ns.size) continue;
+      for (const j of ns) for (const [b, w] of S.K[j]) acc.set(b, (acc.get(b) || 0) + w / ns.size);
+      const k = 0.5 * m.get(i), out = new Map();
+      for (const [b, w] of S.K[i]) out.set(b, w * (1 - k));
+      for (const [b, w] of acc) out.set(b, (out.get(b) || 0) + w * k);
+      const top = [...out].sort((x, y) => y[1] - x[1]).slice(0, 4), sum = top.reduce((a, x) => a + x[1], 0) || 1;
+      next.set(i, new Map(top.map(([b, w]) => [b, w / sum])));
+    }
+    for (const [i, K] of next) S.K[i] = K;
+  }
+}
+
 // ── a cuttable surface: positions, normals and skin per vertex, plus triangles ──
 // A garment is the body surface cut along smooth fields (the rig's own weight
 // falloffs, or a height), split exactly on the cut so hems are clean curves,
@@ -358,9 +379,9 @@ export const BOTTOMS = { trousers: 'Trousers', baggy: 'Baggy trousers', shorts: 
 // how loose each top is: ease off the body (torso, sleeves), how far it hangs out from the
 // chest, cloth thickness, and its hem (above the hip joint, × stature)
 const TOP_FIT = {
-  sweater: { ease: 0.02, sleeve: 0.006, push: 0.04, thick: 0.009, hem: 0.02 },
-  sweatshirt: { ease: 0.034, sleeve: 0.016, push: 0.06, thick: 0.013, hem: -0.005 },
-  tee: { ease: 0.018, sleeve: 0.01, push: 0.035, thick: 0.007, hem: 0.025 },
+  sweater: { ease: 0.02, sleeve: 0.005, push: 0.04, thick: 0.009, hem: 0.02 },
+  sweatshirt: { ease: 0.034, sleeve: 0.012, push: 0.06, thick: 0.013, hem: -0.005 },
+  tee: { ease: 0.018, sleeve: 0.005, push: 0.035, thick: 0.007, hem: 0.025 },
   turtleneck: { ease: 0.014, sleeve: 0.004, push: 0.03, thick: 0.008, hem: 0.02 },
 };
 function dress(body, N, look) {
@@ -438,6 +459,18 @@ function headMap(body) {
     }
     if (n) grid[e * NA + a] = s / n;
   }
+  const raw = Float32Array.from(grid);                // (before any smoothing: for the never-inside bound below)
+  // near the top the map's cells shrink to slivers and their radii are noisy round the pole: hair
+  // grown on them got ridges all running into the crown. The top rows are evened out round the head.
+  for (let e = NE - 8; e < NE; e++) {
+    let m = 0, c = 0; for (let a = 0; a < NA; a++) if (grid[e * NA + a]) { m += grid[e * NA + a]; c++; }
+    if (!c) continue; m /= c; const k = THREE.MathUtils.smoothstep(e, NE - 8, NE - 2);
+    for (let a = 0; a < NA; a++) grid[e * NA + a] = grid[e * NA + a] ? grid[e * NA + a] * (1 - k) + m * k : m;
+  }
+  for (let pass = 0; pass < 3; pass++) for (let e = NE - 10; e < NE; e++) {        // and smoothed round each row
+    const row = grid.slice(e * NA, e * NA + NA);
+    for (let a = 0; a < NA; a++) grid[e * NA + a] = (row[(a + NA - 1) % NA] + 2 * row[a] + row[(a + 1) % NA]) / 4;
+  }
   // hair doesn't follow the ears or the nose: a blurred copy of the map for it to grow from
   const soft = Float32Array.from(grid);
   for (let pass = 0; pass < 3; pass++) {
@@ -455,6 +488,14 @@ function headMap(body) {
     return (g(e0, a0) * (1 - ta) + g(e0, a0 + 1) * ta) * (1 - te) + (g(e0 + 1, a0) * (1 - ta) + g(e0 + 1, a0 + 1) * ta) * te;
   };
   const radius = (d) => bilerp(grid, d), scalp = (d) => bilerp(soft, d);
+  // the most the head reaches near a direction: the highest of the raw cells round it (blending
+  // between cells passed under a bump of the skull, and the scalp poked through short hair)
+  const reach = (d) => {
+    const fa = ((Math.atan2(d.x, d.z) / Math.PI + 1) / 2 * NA) - 0.5, fe = (Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)) / Math.PI + 0.5) * NE - 0.5;
+    const a0 = Math.floor(fa), e0 = THREE.MathUtils.clamp(Math.floor(fe), 0, NE - 2); let m = 0;
+    for (let de = -1; de <= 2; de++) for (let da = -1; da <= 2; da++) { const e = THREE.MathUtils.clamp(e0 + de, 0, NE - 1); m = Math.max(m, raw[e * NA + (((a0 + da) % NA) + NA) % NA]); }
+    return m;
+  };
   const Rside = (radius(new THREE.Vector3(1, 0, 0)) + radius(new THREE.Vector3(-1, 0, 0))) / 2;
   // where the hairline belongs, measured from the face: a quarter of the brow-to-chin height above
   // the brows. (Real average proportions, the face in thirds, put it near half, and on a drawn
@@ -464,7 +505,7 @@ function headMap(body) {
   const hairY = browY + 0.25 * (browY - chin);
   let lo2 = -0.2, hi2 = 0.999;
   for (let it = 0; it < 30; it++) { const e = (lo2 + hi2) / 2, d = new THREE.Vector3(0, e, Math.sqrt(1 - e * e)); if (C.y + d.y * scalp(d) < hairY) lo2 = e; else hi2 = e; }
-  return { C, radius, scalp, R: Rside, hairlineE: (lo2 + hi2) / 2 };
+  return { C, radius, scalp, reach, R: Rside, hairlineE: (lo2 + hi2) / 2 };
 }
 
 // eyes: an eyeball the size and place of the anatomical one (a smooth sphere so the
@@ -661,7 +702,15 @@ export async function makePerson(spec = {}) {
   const atCollar = (i) => THREE.MathUtils.smoothstep(D.neckline(top.P[i * 3 + 2]) - top.P[i * 3 + 1], 0, 0.045 * body.P.stature);
   const sleeveW = (i) => Math.min(1, top.f.arms[i]) * (1 - THREE.MathUtils.smoothstep(top.f.hands[i], 0, 0.45));   // (not at the cuff)
   // a top hangs from the shoulders and chest rather than following every curve: generous ease and drape over the torso
-  const topP = drape(top, { thick: F.thick, ease: (i) => (F.ease * upperW(i) + F.sleeve * sleeveW(i)) * atCollar(i), smooth: 40, k,
+  // the shirt is fitted with the arms out (the base mesh's A-pose) and skinned with the body's own
+  // weights, whose shoulder falloff is sharp: as the arm came down, cloth over the joint folded into a
+  // ridge and a peak at each shoulder (shoulder pads). Rigging guides smooth the weights round the
+  // shoulder so the turn spreads across it; the cloth gets that, the body's skin keeps its own.
+  smoothWeights(top, (i) => Math.exp(-(((top.f.arms[i] - 0.45) / 0.35) ** 2)), 14);
+  // the ease is the torso's: it fades out onto the shoulder (a shirt's shoulder seam lies within a
+  // centimetre of the shoulder; eased there, the sleeve cap ballooned like a shoulder pad)
+  const offShoulder = (i) => 1 - THREE.MathUtils.smoothstep(top.f.arms[i], 0.04, 0.4);
+  const topP = drape(top, { thick: F.thick, ease: (i) => (F.ease * upperW(i) * offShoulder(i) + F.sleeve * sleeveW(i) * (1 - offShoulder(i))) * atCollar(i), smooth: 40, k,
     smoothW: top.P.map((_, j) => j).filter(j => j % 3 === 0).map(j => 1 - 0.6 * Math.min(1, top.f.arms[j / 3])) });
   hang(topP, top, (i) => Math.min(1, Math.max(0, upperW(i) * 1.6 - 0.3)), { top: body.joints['upperarm01.L'].head.y - 0.05 * body.P.stature, band: 0.06 * body.P.stature, maxPush: F.push * k,
     hem: body.joints['upperleg01.L'].head.y + 0.02 * body.P.stature, hemBand: 0.07 * body.P.stature });

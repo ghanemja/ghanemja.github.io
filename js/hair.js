@@ -56,7 +56,9 @@ export function makeHair(H, { chin }, styleName, colour) {
     + 0.3 * Math.sin(p.x * 15 / R + p.z * 13 / R) * Math.sin(p.y * 14 / R)) : 0;
   // the hair's outer surface over the head at (θ, e): scalp + thickness + crown volume + strand grooves
   const onHead = (th, e) => {
-    const d = dirAt(th, e), r = H.scalp(d) + R * (S.th + S.vol * Math.max(0, e) ** 2 + 0.012 * (S.texture ?? 1) * strand(th) * ss(e, -0.6, 0.2) * (1 - ss(e, 0.75, 0.98)));   // (none at the crown: all the ripples meet there in a spike)
+    // (on whichever is higher above the ears, the smoothed scalp or the real head: the smoothed one dipped
+    // under a bump of the skull and the scalp showed through short hair)
+    const d = dirAt(th, e), r = (d.y > 0.25 && H.reach ? Math.max(H.scalp(d), H.reach(d)) : H.scalp(d)) + R * (S.th + S.vol * Math.max(0, e) ** 2 + 0.012 * (S.texture ?? 1) * strand(th) * ss(e, -0.6, 0.2) * (1 - ss(e, 0.75, 0.98)));   // (none at the crown: all the ripples meet there in a spike)
     const p = d.clone().multiplyScalar(r).add(C); return p.addScaledVector(d, curlN(p));   // (clone: multiplyScalar mutates d)
   };
   const faceW = (th) => 1 - ss(Math.abs(th), S.face, S.face + 0.32);                   // 1 across the face … 0 behind the temples
@@ -71,8 +73,8 @@ export function makeHair(H, { chin }, styleName, colour) {
   const hairline = (th) => {
     const a = Math.abs(th), f = fringeE(th), ear = S.side, burn = S.burn ?? THREE.MathUtils.clamp(ear - 0.12, -0.14, -0.02);
     // (over the ear it arches round the top of it, not a flat ledge)
-    // (the temple is a rounded corner, not a right angle)
-    const K = [[0, f], [0.5, f + 0.015], [0.78, f + 0.05], [0.97, (f + 0.05 + burn) / 2 + 0.05], [1.12, burn], [1.22, burn], [1.4, ear + 0.04], [1.62, ear + 0.1], [1.9, ear + 0.03], [2.4, ear + (S.back - ear) * 0.85], [Math.PI, S.back]];   // (the nape nearly level, not a V)
+    // (the temple is a rounded corner, not a right angle; the arch clears the top of the ear, which poked through)
+    const K = [[0, f], [0.5, f + 0.015], [0.78, f + 0.05], [0.97, (f + 0.05 + burn) / 2 + 0.05], [1.12, burn], [1.22, burn], [1.4, ear + 0.07], [1.62, ear + 0.17], [1.9, ear + 0.06], [2.4, ear + (S.back - ear) * 0.85], [Math.PI, S.back]];   // (the nape nearly level, not a V)
     return spline(K, a);
   };
   const back = (th) => (1 - Math.cos(th)) / 2;                                          // 0 front … 1 back
@@ -88,7 +90,7 @@ export function makeHair(H, { chin }, styleName, colour) {
     const endE = hang ? -0.08 : hairline(th);
     for (let i = 0; i <= SAMPLES; i++) {
       const e = 1 - (1 - endE) * (i / SAMPLES);
-      pts.push(onHead(th, Math.min(0.999, e)));
+      pts.push(onHead(th, i === 0 ? 1 : Math.min(0.999, e)));   // (every column starts at exactly one point: nearly meeting, they left slivers that drew a star)
     }
     if (hang) {                                                                         // below the ears the hair falls
       const cv = S.curtain, top = pts[pts.length - 1], hx = top.x - C.x, hz = top.z - C.z, r0 = Math.hypot(hx, hz);
@@ -114,7 +116,8 @@ export function makeHair(H, { chin }, styleName, colour) {
   // this same thinned surface.
   const taper = (p, th, u, extra = 0) => {
     if (!S.taper || !isHairline(th)) return p;
-    const d = p.clone().sub(C), r0 = H.scalp(d.clone().normalize()) + 0.02 * R + extra, k = ss(u, THREE.MathUtils.lerp(0.15, 0.62, faceW(th)), 1);
+    // (to just off the TRUE head above the ears too: the smoothed scalp dips under it in places, and the head showed through)
+    const d = p.clone().sub(C), dn = d.clone().normalize(), r0 = (dn.y > 0.15 && H.reach ? Math.max(H.scalp(dn), H.reach(dn)) : H.scalp(dn)) + 0.02 * R + extra, k = ss(u, THREE.MathUtils.lerp(0.15, 0.62, faceW(th)), 1);
     return p.copy(C).addScaledVector(d, THREE.MathUtils.lerp(d.length(), r0, k * 0.95) / d.length());
   };
   const at = (col, s) => {                                                              // point at arclength s along a column
@@ -133,7 +136,7 @@ export function makeHair(H, { chin }, styleName, colour) {
       const u = i / NR, p = at(col, len * u);
       taper(p, th, u);
       P.push(p.x, p.y, p.z);
-      const e = (p.y - C.y) / R, r = strand(th);
+      const e = (p.y - C.y) / R, r = strand(th) * (1 - ss(u, 0, 0.25));   // (no stripes at the top: they met in a star)
       c.copy(base).lerp(dark, 0.32 * Math.max(0, -r) + 0.25 * (1 - ss(u, 0, 0.12)))     // grooves, darker at the roots
         .lerp(shine, 0.55 * Math.exp(-((e - 0.5) ** 2) / 0.02) * THREE.MathUtils.clamp(0.4 + 0.6 * r, 0, 1));
       Cc.push(c.r, c.g, c.b);
@@ -155,13 +158,16 @@ export function makeHair(H, { chin }, styleName, colour) {
   geo.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3));
   geo.setIndex(idx);
   geo.computeVertexNormals();
-  { const T4 = new Float32Array(P.length), v = (k) => new THREE.Vector3(P[k * 3], P[k * 3 + 1], P[k * 3 + 2]);   // strand direction: down each column
-    for (let j = 0; j < NT; j++) for (let i = 0; i < row; i++) {
-      // (the lip is the last vertex: it takes the edge's direction; a zero vector made NaN, white slivers)
-      const ii = Math.min(i, NR), k = j * row + i, a = j * row + Math.max(0, ii - 1), b = j * row + Math.min(NR, ii + 1), t = v(b).sub(v(a)).normalize();
-      T4.set([t.x, t.y, t.z], k * 3);
-    }
-    geo.setAttribute('hairDir', new THREE.BufferAttribute(T4, 3)); }
+  { // the columns' copies of the top point (and the rows next to it) share one normal: each with its
+    // own, the outline and the shading creased round it into a star
+    const Nm = geo.attributes.normal;
+    for (let i = 0; i < 3; i++) {
+      const a = new THREE.Vector3(); for (let j = 0; j < NT; j++) a.add(new THREE.Vector3().fromBufferAttribute(Nm, j * row + i));
+      a.normalize();
+      for (let j = 0; j < NT; j++) { const k = j * row + i, n = new THREE.Vector3().fromBufferAttribute(Nm, k).lerp(a, [1, 0.6, 0.3][i]).normalize(); Nm.setXYZ(k, n.x, n.y, n.z); }
+    } }
+  // (no strand highlight on the base mass: it's a smooth cap, and a highlight on it only drew the cap's
+  // shape, a ring at the crown and blotches; the locks over it carry the strands and the highlight)
   const mat = paint(0xffffff, { vertexColors: true, soft: true, hatch: 0.3, side: THREE.DoubleSide });
   const shell = new THREE.Mesh(geo, mat);
   g.add(shell);
@@ -204,13 +210,27 @@ export function makeHair(H, { chin }, styleName, colour) {
     const e = at(col, Lend), d = e.clone().sub(at(col, Lend * 0.97)).normalize();
     return e.addScaledVector(d, s - Lend);
   };
+  // hair grows from a crown whorl a little behind the top of the head, not from the very top: each
+  // lock flows over the head from the whorl to where its column ends (front hair forward over the
+  // top, back hair down), then on down the curtain. Rooted at the pole, every lock met in one point
+  // and the top of the head was a pinwheel of outlines.
+  const whorl = dirAt(Math.PI, S.whorl ?? 0.8);
+  const surfAt = (d) => onHead(Math.atan2(d.x, d.z), THREE.MathUtils.clamp(d.y, -0.999, 0.999));
+  const flow = (col) => {
+    const Lhead = col.L[SAMPLES], onTop = col.end <= Lhead + 1e-6, target = onTop ? at(col, col.end) : col.pts[SAMPLES];
+    const q = new THREE.Quaternion().setFromUnitVectors(whorl, target.clone().sub(C).normalize()), id = new THREE.Quaternion(), pts = [];
+    for (let i = 0; i <= 60; i++) pts.push(surfAt(whorl.clone().applyQuaternion(id.clone().slerp(q, i / 60))));
+    if (!onTop) for (let i = SAMPLES + 1; i < col.pts.length; i++) pts.push(col.pts[i]);
+    const L = [0]; for (let i = 1; i < pts.length; i++) L.push(L[i - 1] + pts[i].distanceTo(pts[i - 1]));
+    return { pts, L, end: onTop ? L[60] : L[60] + (col.end - Lhead) };
+  };
   const NL = S.locks ?? 0;
   // Layered as hair artists build cards: the base mass hides the scalp; then big clumps (layer 0);
   // then a top layer over them with a little air between (1); then thin breakup locks (2) so it
   // isn't one width all over. Clumps vary in width; thick and thin together read as hair.
   const LAYER = [{ n: 1, w: 1.15, lift: 0.012, s0: [0.02, 0.06], shade: 0.86 }, { n: 1, w: 0.95, lift: 0.03, s0: [0.25, 0.2], shade: 1 }, { n: 0.6, w: 0.42, lift: 0.046, s0: [0.12, 0.35], shade: 1.07 }];
   if (NL && !S.curl && !S.extra) for (let layer = 0; layer < 3; layer++) for (let j = 0, nl = Math.round(NL * LAYER[layer].n); j < nl; j++) {
-    const Ly = LAYER[layer], th = -Math.PI + ((j + 0.5 * (layer % 2) + 0.35 * rnd(j * 7 + layer)) / nl) * Math.PI * 2, col = column(th), fw = faceW(th);
+    const Ly = LAYER[layer], th = -Math.PI + ((j + 0.5 * (layer % 2) + 0.35 * rnd(j * 7 + layer)) / nl) * Math.PI * 2, col = flow(column(th)), fw = faceW(th);
     const s0 = col.end * (Ly.s0[0] + Ly.s0[1] * rnd(j + 3 + layer * 5)), wv = 0.7 + 0.6 * rnd(j * 23 + layer);
     // at a hairline a lock stops just short of it and settles flat; a hanging fringe or the ends of
     // longer hair reach a little past the cut in soft points (locks spilling past a hairline onto
@@ -261,11 +281,17 @@ export function makeHair(H, { chin }, styleName, colour) {
     const sp = (2 * Math.PI * Math.hypot(start.x - C.x, start.z - C.z)) / 36;
     lock(pts, (t) => sp * 0.85 * (0.5 + 0.5 * ss(t, 0, 0.1)) * (1 - 0.55 * t), (t) => R * 0.022 * (1 - 0.5 * t) * ss(t, 0, 0.2), 0.92 + 0.16 * rnd(j));   // (rising out of the hairline, not a step)
   }
+  // …and over the crown, from the top of the head back to the tie (the mass showed through there)
+  if (tieDir) for (let j = 0; j < 18; j++) {
+    const d0 = dirAt(-1.5 + 3.0 * (j / 17), 0.8 + 0.12 * rnd(j * 3)), q = new THREE.Quaternion().setFromUnitVectors(d0, tieDir), id = new THREE.Quaternion(), pts = [];
+    for (let i = 0; i <= 16; i++) { const d = d0.clone().applyQuaternion(id.clone().slerp(q, i / 16)); pts.push(d.clone().multiplyScalar(H.scalp(d) + R * (S.th + 0.018)).add(C)); }
+    lock(pts, (t) => R * 0.12 * (0.4 + 0.6 * ss(t, 0, 0.25)) * (1 - 0.5 * t), (t) => R * 0.018 * ss(t, 0, 0.25), 0.96 + 0.1 * rnd(j));
+  }
   // curls: ringlets, locks that coil round their own path from the crown to the ends. (A
   // cloud of same-size balls, each outlined, read as bubble wrap on a bob.) Coils carry a
   // little further out than the mass, so the silhouette is springy, not a smooth helmet.
   if (S.curl) for (const layer of [0, 1]) for (let j = 0; j < 21; j++) {
-    const th = -Math.PI + ((j + 0.5 * layer + 0.25 * rnd(j * 7 + layer)) / 21) * Math.PI * 2, col = column(th), fw = faceW(th);
+    const th = -Math.PI + ((j + 0.5 * layer + 0.25 * rnd(j * 7 + layer)) / 21) * Math.PI * 2, col = flow(column(th)), fw = faceW(th);
     const s0 = col.end * (layer ? 0.35 + 0.15 * rnd(j) : 0.04 + 0.06 * rnd(j + 9)), s1 = col.end * (1.0 + 0.06 * rnd(j * 5 + layer)) + (fw > 0.3 ? 0.04 * R : 0);   // (the front ones over the mass's edge: short of it, a smooth band framed the face)
     const coil = R * (0.1 + 0.025 * rnd(j * 3 + layer)), pitch = R * (0.3 + 0.07 * rnd(j * 11)),   // (big, loose curls: tight little ones read as rope)
     phase = rnd(j * 13 + layer) * 6.28;

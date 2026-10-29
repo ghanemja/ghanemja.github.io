@@ -159,6 +159,11 @@ neighbouring body exactly the way the skin bends. No seams and no hinges.
   weights are its own, the pelvis at the waist going to the thigh it lies over (only the
   cloth between the legs shares both), because skinned like trousers it split open
   between the legs. Saved skirts show as trousers.
+- **No shoulder pads.** The pads were the posed body, not the cloth (the cloth stayed 1.2 cm
+  off it). Lowering the arms from the A-pose at the upper arm alone made skinning bulge
+  the shoulder top, so the collarbone takes half the drop (`relaxedPose`). Shoulders then
+  slope from the neck. The top's weights are also blurred round the shoulder
+  (`smoothWeights`), and its ease fades out onto the shoulder.
 - **Sleeves end on a plane across the arm** (mid upper arm for a tee, at the wrist for long
   sleeves), like necklines: a weight boundary wanders into a ragged hem.
 - **Necklines are a smooth tilted line round the neck** (lower at the front), not the
@@ -287,6 +292,15 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   shifted lobes, after Scheuermann 2004) drawn per style: soft in gouache, an angel ring
   in anime, two-lobe in realistic, none in clay. Keep it subtle (stronger read as metal or
   plastic), and never give a vertex a zero `hairDir`: NaN rendered as white slivers.
+- **Hair grows from a crown whorl**, a little behind the top of the head (`flow()` in
+  js/hair.js): each lock follows the head from the whorl to its column's end. Rooted at the
+  pole, every lock met in one point and the top of the head was a pinwheel of outlines.
+  The base shell's columns start at exactly one point with one shared normal (nearly
+  meeting, they drew a star), the head map's top rows are evened out round the head
+  (noisy pole cells made ridges), and the base shell has no strand highlight (on a smooth
+  cap it only drew a ring at the crown). Hair never goes inside the real head above the
+  ears: `headMap().reach()` is the highest raw cell round a direction (blending passed
+  under skull bumps and the scalp showed through short hair).
 - Styles are data (`HAIRSTYLES`): buzz, crop, pixie, bob, long bob, ponytail, bun, curls.
   A new style means new numbers (fringe height and sweep, face window, side/back ends,
   curtain cut / A-line / bell / tuck), plus an extra mesh for a tail or bun.
