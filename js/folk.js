@@ -320,7 +320,7 @@ export function makeFolk(spec) {
     const P = tg.attributes.position;
     for (let i = 0; i < P.count; i++) {
       const y = P.getY(i);
-      P.setZ(i, P.getZ(i) * (1 - 0.16 * THREE.MathUtils.smoothstep(y, 0.12, 0.24) * (1 - THREE.MathUtils.smoothstep(y, 0.29, 0.335))));   // eased off under the collar so it still fills the ring
+      P.setZ(i, P.getZ(i) * (1 - 0.22 * THREE.MathUtils.smoothstep(y, 0.1, 0.22) * (1 - THREE.MathUtils.smoothstep(y, 0.29, 0.335))));   // eased off under the collar so it still fills the ring
     }
     tg.computeVertexNormals();
   }
@@ -485,7 +485,8 @@ export function makeFolk(spec) {
   // arms hang just clear of the waist: solve the angle from this body's own widths
   const shoulderX = 0.112 * B, waistHalf = 0.125 * B, armR = 0.045 * Math.sqrt(B), drop = 0.19;
   const armOut = Math.atan2(waistHalf + armR * 0.55 - shoulderX, drop) + 0.03
-    + (S.outfit === 'coat' || S.outfit === 'dress' ? 0.09 : 0);
+    + (S.outfit === 'coat' || S.outfit === 'dress' ? 0.09 : 0)
+    + (S.armGap ?? 0);                                         // extra space between the arms and the body
   // arms twist about their own length first (XZY), so a forearm can cross the body
   for (const k of ['L', 'R']) J['arm' + k].rotation.order = 'XZY';
   const stance = STANCES[S.stance] || null;

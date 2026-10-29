@@ -21,7 +21,8 @@ const PLAYER_LOOK = {
   slope: 1,
   wideLeg: 1,
   flatTum: 1,
-  slimTop: 1,                                     // upper body as slim side-on as the waist                                     // a flat stomach under the sweater                                     // flowy wide-leg trousers to the shoe
+  slimTop: 1,
+  armGap: 0.09,                                   // a little air between her arms and her sides                                     // upper body as slim side-on as the waist                                     // a flat stomach under the sweater                                     // flowy wide-leg trousers to the shoe
   neck: 0.75,                                      // a shorter neck: with sloped shoulders the full one read giraffe-long                                       // soft sloped shoulders, not a square yoke
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { profile: 1, jaw: 0.28, chin: 0.55, cheeks: 0.5, long: -0.25, skull: 0.55, brow: 0.4 },
@@ -179,7 +180,7 @@ function dressPlayer(g) {
     const skinM = paint(skinHex, { soft: true, hatch: 0.3 });
     grip.visible = false;
     const H = new THREE.Group();
-    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.117, young: 1, res: 104 }), skinM));
+    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.13, young: 1, res: 104 }), skinM));
     ink(H, 'fine');
     hand.add(H);
     hand.rotation.x = -0.06;
