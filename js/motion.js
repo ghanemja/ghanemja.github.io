@@ -14,7 +14,7 @@
 // Conventions: the person faces +z with +y up in its own (rig) frame. Bones keep
 // world-aligned rest frames, so rotations are given about rig-frame axes.
 import * as THREE from 'three';
-import { rotateBone } from './anatomy.js';
+import { rotateBone, regionWeight } from './anatomy.js';
 import { paint, ink } from './style.js';
 
 // ── bone helpers (world space) ──
@@ -60,6 +60,10 @@ export function palmTo(B, k, want) {
   const pr = (v) => v.clone().addScaledVector(axis, -v.dot(axis)).normalize();
   turnTo(B['lowerarm02.' + k], pr(palmNormal(B, k)), pr(want));
 }
+// a finger is a hinge: every joint bends about the knuckle axis (palm direction × palm
+// normal). Bending each joint "toward the palm normal" instead stops working once the
+// first joint has turned the finger to face it — the middle and end joints then barely bend.
+const hingeOf = (B, k, N) => wp(B['finger3-1.' + k]).sub(wp(B['wrist.' + k])).normalize().cross(N).normalize();
 // grip 0 = a relaxed hand, 1 = a closed grip (round a handlebar)
 export function curlFingers(B, k, grip = 0) {
   const N = palmNormal(B, k), midDir = wp(B['finger3-2.' + k]).sub(wp(B['finger3-1.' + k])).normalize();
@@ -81,14 +85,52 @@ export function curlFingers(B, k, grip = 0) {
     for (let j = 1; j <= 3; j++) {
       const b = B[`finger${f}-${j}.` + k], nx = B[`finger${f}-${j + 1}.` + k];
       const dir = nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent)), a = THREE.MathUtils.degToRad(grip ? add[j - 1] : ang[j - 1]);
-      turnTo(b, dir, dir.clone().normalize().multiplyScalar(Math.cos(a)).addScaledVector(N, Math.sin(a)));
+      turnTo(b, dir, dir.clone().applyAxisAngle(hingeOf(B, k, N), a));
     }
   });
+  if (grip >= 0.5) {
+    // gripping a bar: the thumb wraps UNDER it from the inner side, toward the fingers —
+    // down past the palm, then across toward the pinky side and back toward the wrist
+    const F = wp(B['finger3-1.' + k]).sub(wp(B['wrist.' + k])).normalize();
+    const inward = wp(B['finger5-1.' + k]).sub(wp(B['finger2-1.' + k])).normalize();
+    const aims = [N.clone().addScaledVector(inward, 0.35).addScaledVector(F, -0.1),
+      N.clone().multiplyScalar(0.45).add(inward).addScaledVector(F, -0.35),
+      inward.clone().addScaledVector(F, -0.6).addScaledVector(N, -0.15)];
+    for (let j = 1; j <= 3; j++) {
+      const b = B[`finger1-${j}.` + k], nx = B[`finger1-${j + 1}.` + k];
+      turnTo(b, nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent)), aims[j - 1].normalize());
+    }
+    return;
+  }
   for (let j = 1; j <= 3; j++) {
     const b = B[`finger1-${j}.` + k], nx = B[`finger1-${j + 1}.` + k];
     const dir = nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent));
     turnTo(b, dir, dir.clone().normalize().addScaledVector(N, 0.18 + 0.5 * grip));
   }
+}
+
+// fingers laid out flat (amount 1 undoes the relaxed cascade): a hand resting ON something
+export function flattenFingers(B, k, amount = 0.8) {
+  const N = palmNormal(B, k);
+  [[2, [14, 26, 14]], [3, [18, 32, 16]], [4, [22, 38, 18]], [5, [28, 44, 20]]].forEach(([f, ang]) => {
+    for (let j = 1; j <= 3; j++) {
+      const b = B[`finger${f}-${j}.` + k], nx = B[`finger${f}-${j + 1}.` + k];
+      const dir = nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent)), a = -THREE.MathUtils.degToRad(ang[j - 1]) * amount;
+      turnTo(b, dir, dir.clone().applyAxisAngle(hingeOf(B, k, N), a));
+    }
+  });
+}
+// give the hand an exact world orientation: fingers along F (wrist → knuckles), palm facing N.
+// The forearm takes the twist first (palmTo), so the wrist only bends, as a real one does.
+const _basis = (f, n) => {
+  const F = f.clone().normalize(), Nn = n.clone().addScaledVector(F, -n.dot(F)).normalize();
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(F, Nn, F.clone().cross(Nn)));
+};
+export function orientHand(B, k, F, N) {
+  palmTo(B, k, N);
+  const wr = B['wrist.' + k], f0 = wp(B['finger3-1.' + k]).sub(wp(wr)), n0 = palmNormal(B, k);
+  const q = _basis(F, N).multiply(_basis(f0, n0).invert());
+  setWorldQuat(wr, q.multiply(wr.getWorldQuaternion(new THREE.Quaternion())));
 }
 
 // ── the relaxed stand every person is built in (then snapshotted as the base pose) ──
@@ -122,6 +164,10 @@ const GAITS = {
   run: { duty: 0.36, stride: 2.6, cadence: 1.4, lift: 0.3, drop: 0.08, bob: 0.03, arm: 0.6, elbow: 1.45, lean: 0.17, footX: 0.55, curl: 0.55 },
 };
 
+// a hand on a handlebar, in the rig frame: fingers forward and a little down, palm down onto the bar
+const GRIP_F = new THREE.Vector3(0, -0.28, 0.96).normalize();
+const GRIP_N = new THREE.Vector3(0, -1, -0.25).addScaledVector(GRIP_F, -new THREE.Vector3(0, -1, -0.25).dot(GRIP_F)).normalize();
+
 export function makeMotion(person) {
   const { sk, rig } = person, B = sk.byName;
   rig.updateMatrixWorld(true);
@@ -137,8 +183,24 @@ export function makeMotion(person) {
   M.arm = M.shoulder.L.distanceTo(M.elbow.L) + M.elbow.L.distanceTo(M.wrist.L);
   M.hipMid = M.hip.L.clone().add(M.hip.R).multiplyScalar(0.5);
   M.shoulderMid = M.shoulder.L.clone().add(M.shoulder.R).multiplyScalar(0.5);
+  M.palm = M.wrist.L.distanceTo(local(B['finger3-1.L']));       // wrist → middle knuckle
+  M.palmHalf = 0.13 * M.palm;                                    // joint line → palm skin
   M.ankleH = M.ankle.L.y; M.s = M.leg / 0.85;               // 1 for an average 1.7 m adult
   M.pendulum = Math.sqrt(0.85 / M.leg) * Math.sqrt(M.s);      // longer legs swing slower (in body-relative time)
+
+  // the thigh's front surface (its top, once seated), by fraction along it, measured on the
+  // body itself, plus the trousers over it — what a resting hand actually lands on
+  M.thighFront = (() => {
+    const { A, pos, joints } = person.body, w = regionWeight(A, 'upperleg01.L');
+    const h = joints['upperleg01.L'].head, ax = joints['lowerleg01.L'].head.clone().sub(h), L = ax.length(), bins = new Float32Array(11), p = new THREE.Vector3();
+    ax.normalize();
+    for (let i = 0; i < A.n; i++) {
+      if (w[i] < 0.5) continue;
+      p.fromArray(pos, i * 3).sub(h); const u = p.dot(ax) / L; if (u < 0 || u > 1) continue;
+      p.addScaledVector(ax, -p.dot(ax)); const b = Math.round(u * 10); bins[b] = Math.max(bins[b], p.z);
+    }
+    return (u) => bins[Math.round(THREE.MathUtils.clamp(u, 0, 1) * 10)] + 0.009 * M.s;
+  })();
 
   const X = new THREE.Vector3(), Y = new THREE.Vector3(), Z = new THREE.Vector3(), rq = new THREE.Quaternion();
   const frame = () => { rig.getWorldQuaternion(rq); X.set(1, 0, 0).applyQuaternion(rq); Y.set(0, 1, 0).applyQuaternion(rq); Z.set(0, 0, 1).applyQuaternion(rq); };
@@ -152,6 +214,16 @@ export function makeMotion(person) {
     footQ(k, pitch);
   };
   const arm = (k, wristLocal, pole) => ik2(B['upperarm01.' + k], B['lowerarm01.' + k], B['wrist.' + k], W(wristLocal), W(pole));
+  // put a hand's palm on `contact` (world), fingers along F, palm facing N (into what it
+  // touches), the palm's centre `along` of the way from wrist to knuckles, skin `gap` off
+  // the contact. The arm's IK targets the wrist that placement needs, then the hand is
+  // oriented — the wrist is never what touches.
+  const hand = (k, contact, F, N, pole, { along = 0.55, gap = 0 } = {}) => {
+    const f = F.clone().normalize(), n = N.clone().addScaledVector(f, -N.dot(f)).normalize();
+    const wrist = contact.clone().addScaledVector(f, -along * M.palm).addScaledVector(n, -(M.palmHalf + gap));
+    ik2(B['upperarm01.' + k], B['lowerarm01.' + k], B['wrist.' + k], wrist, pole);
+    orientHand(B, k, f, n);
+  };
   const lean = (a) => { for (const n of ['spine04', 'spine03', 'spine02']) rotateBone(B[n], X, a / 3); };
   const twist = (a) => { rotateBone(B.spine03, Y, a * 0.6); rotateBone(B.spine01, Y, a * 0.4); };
   const look = (a) => { rotateBone(B.neck01, X, a * 0.6); rotateBone(B.head, X, a * 0.4); };
@@ -204,16 +276,18 @@ export function makeMotion(person) {
       const s = k === 'L' ? 1 : -1, hip = M.hip[k].clone().sub(M.hipMid).add(hips);
       const knee = hip.clone().add(new THREE.Vector3(s * 0.025 * M.s, 0.015 * M.s, M.thigh * 0.98));
       leg(k, new THREE.Vector3(knee.x + s * 0.01 * M.s, M.ankleH, knee.z + 0.05 * M.s), new THREE.Vector3(s * 0.05, 0.4, 1), 0);
-      // hands rest on the thighs, palms down — as far along the thigh as the arm comfortably
-      // reaches (≈90% extended), never a target the arm can't reach
-      const sh = rig.worldToLocal(wp(B['upperarm01.' + k]));
-      let onThigh = null;
-      for (let u = 0.75; u >= 0.15; u -= 0.05) {
-        onThigh = hip.clone().lerp(knee, u).add(new THREE.Vector3(s * 0.01 * M.s, 0.07 * M.s, 0));
-        if (onThigh.distanceTo(sh) <= 0.9 * M.arm) break;
+      // hands rest ON the thighs: the palm on the measured top of the trousers, fingers
+      // laid along the thigh toward the knee — as far along it as the arm comfortably reaches
+      const hW = wp(B['upperleg01.' + k]), kW = wp(B['lowerleg01.' + k]), along = kW.clone().sub(hW).normalize();
+      const up = Y.clone().addScaledVector(along, -Y.dot(along)).normalize(), shW = wp(B['upperarm01.' + k]);
+      let contact = null;
+      for (let u = 0.7; u >= 0.2; u -= 0.05) {
+        contact = hW.clone().lerp(kW, u).addScaledVector(up, M.thighFront(u)).addScaledVector(X, s * 0.008 * M.s);
+        if (contact.clone().addScaledVector(along, -0.55 * M.palm).distanceTo(shW) <= 0.92 * M.arm) break;
       }
-      arm(k, onThigh, W(M.shoulder[k]).add(new THREE.Vector3(s * 0.6, -0.4, -0.6)));
-      palmTo(B, k, new THREE.Vector3(0, -1, 0).applyQuaternion(rq));
+      const F = along.clone().addScaledVector(X, -s * 0.06).addScaledVector(up, -0.04);  // fingers toward the knee, a touch inward
+      hand(k, contact, F, up.clone().negate(), W(M.shoulder[k]).add(new THREE.Vector3(s * 0.6, -0.4, -0.6)), { gap: 0.002 * M.s });
+      flattenFingers(B, k, 0.75);
     }
   }
 
@@ -226,9 +300,11 @@ export function makeMotion(person) {
       const s = k === 'L' ? 1 : -1, c = theta + off;
       const pedal = spec.bb.clone().add(new THREE.Vector3(s * spec.pedalX, -Math.cos(c) * spec.crank, -Math.sin(c) * spec.crank));
       leg(k, pedal.add(new THREE.Vector3(0, 0.065 * M.s, -0.03 * M.s)), new THREE.Vector3(s * 0.08, 0.3, 1), 0.12 + 0.18 * Math.sin(c + Math.PI / 2));
-      arm(k, spec.grip[k], W(M.shoulder[k]).add(new THREE.Vector3(s * 0.7, -0.6, -0.3)));
-      palmTo(B, k, new THREE.Vector3(0, -1, 0.2).applyQuaternion(rq));
-      curlFingers(B, k, 0.85);
+      // the grip lies across the palm just short of the knuckles; the fingers wrap round it
+      const g = W(spec.grip[k].clone().add(new THREE.Vector3(s * spec.gripLen * 0.5, 0, 0)));
+      const F = GRIP_F.clone().applyQuaternion(rq), N = GRIP_N.clone().applyQuaternion(rq);
+      hand(k, g, F, N, W(M.shoulder[k]).add(new THREE.Vector3(s * 0.7, -0.6, -0.3)), { along: 0.85, gap: spec.barR });
+      curlFingers(B, k, 0.85);                                      // wrapped round the bar (≈65° / 85° / 45°)
     }
     bk.spin(theta, (o.speed ?? 0) * t);
   }
@@ -245,6 +321,17 @@ export function makeMotion(person) {
       rig.updateMatrixWorld(true);
       return v;
     },
+    // where the shoulders really are for a riding posture (rig frame), so a bike's bars can be
+    // put where the hands will actually fall
+    shouldersFor(o) {
+      frame(); reset();
+      rotateBone(sk.root, X, o.pelvisTilt); placeHips(o.hips); lean(o.lean);
+      rig.updateMatrixWorld(true);
+      const r = { L: local(B['upperarm01.L']), R: local(B['upperarm01.R']) };
+      reset(); rig.updateMatrixWorld(true);
+      return r;
+    },
+    gripFrame: () => ({ F: GRIP_F.clone(), N: GRIP_N.clone() }),
     cycle: (action, o = {}) => (GAITS[action]?.cadence ?? o.cadence ?? 1.1) * M.pendulum,   // cycles (or crank turns) per second
     speed: (action) => GAITS[action] ? GAITS[action].stride * M.leg * GAITS[action].cadence * M.pendulum : 0,
   };
@@ -266,10 +353,18 @@ export function makeBike(person, { frame: frameCol = 0x3f8f88, saddle: saddleCol
   // shift everything so the hips sit at the rider's own hip position (the bike comes to the rider)
   const shift = new THREE.Vector3(0, 0, M.hipMid.z - hips.z); hips.add(shift); bb.add(shift);
   const pelvisTilt = 0.18, leanA = 0.24, tilt = pelvisTilt + leanA;
-  const sh = (k) => M.shoulder[k].clone().sub(M.hipMid).applyAxisAngle(new THREE.Vector3(1, 0, 0), tilt).add(hips);
-  const reach = new THREE.Vector3(0, -0.5, 0.86).normalize().multiplyScalar(0.9 * M.arm);
-  const grip = { L: sh('L').add(reach), R: sh('R').add(reach) };
-  grip.L.x = Math.max(grip.L.x, 0.2 * s); grip.R.x = Math.min(grip.R.x, -0.2 * s);
+  // the bars: pose the torso, measure the shoulders, reach the wrists ~85% of the arm
+  // forward and down, and put each grip where that hand's palm closes — across the palm,
+  // just short of the knuckles, a bar's radius under the skin
+  const sh = person.motion.shouldersFor({ pelvisTilt, lean: leanA, hips }), { F, N } = person.motion.gripFrame();
+  const tr = 0.017 * s, barR = tr * 1.1, gripLen = 0.06 * s, reach = new THREE.Vector3(0, -0.36, 0.93).normalize();   // bars clear of the knees
+  const grip = {};
+  for (const k of ['L', 'R']) {
+    const sg = k === 'L' ? 1 : -1, wrist = sh[k].clone().addScaledVector(reach, 0.85 * M.arm);
+    wrist.x = sg * Math.max(Math.abs(wrist.x), 0.2 * s);
+    const palmAt = wrist.addScaledVector(F, 0.85 * M.palm).addScaledVector(N, M.palmHalf + barR);
+    grip[k] = palmAt.add(new THREE.Vector3(-sg * gripLen * 0.5, 0, 0));          // grip[k] is the grip's inner end
+  }
   const bars = grip.L.clone().add(grip.R).multiplyScalar(0.5);
   const seatTop = hips.clone().add(new THREE.Vector3(0, -0.095 * s, -0.01 * s));
   const headTop = bars.clone().add(new THREE.Vector3(0, -0.06 * s, -0.08 * s)), htDir = new THREE.Vector3(0, -Math.cos(0.35), Math.sin(0.35));
@@ -282,7 +377,6 @@ export function makeBike(person, { frame: frameCol = 0x3f8f88, saddle: saddleCol
     const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, d.length(), 10), mat);
     m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); parent.add(m); return m;
   };
-  const tr = 0.017 * s;
   for (const x of [-0.05 * s, 0.05 * s]) {                        // chainstays and seatstays, a pair each
     tube(bb.clone().setX(x * 0.6), rear.clone().setX(x), tr * 0.6, fm);
     tube(cluster.clone().setX(x * 0.3), rear.clone().setX(x), tr * 0.55, fm);
@@ -319,7 +413,7 @@ export function makeBike(person, { frame: frameCol = 0x3f8f88, saddle: saddleCol
   ink(g, 'fine');
   return {
     group: g,
-    spec: { bb, crank, pedalX, hips, pelvisTilt, lean: leanA, grip },
+    spec: { bb, crank, pedalX, hips, pelvisTilt, lean: leanA, grip, barR, gripLen },
     // crank angle θ (pedals stay level as the cranks turn), distance rolled → wheel spin
     spin(theta, dist = 0) {
       crankG.rotation.x = theta;

@@ -10,7 +10,7 @@
 <!--
   The parametric human (js/people.js), dressed, under the town's own lights.
   ?styles=real,town (side by side)  &yaw=<deg, 0 = facing camera>  &pitch=<deg>
-  &focus=full|head|hands|feet  &sex=0..1 &muscle &weight &height
+  &focus=full|head|hands|feet|handL|handR  &sex=0..1 &muscle &weight &height
   &action=idle|walk|run|sit|bike  &phase=0..1 (of one cycle)
   Sets window.__ready once drawn.
 -->
@@ -64,10 +64,15 @@ console.log('LOG tris per person incl ink', Math.round(tris / people.length));
 const FOCI = { full: [0.5, H * 1.15], head: [0.91, H * 0.2], hands: [0.47, H * 0.28], feet: [0.04, H * 0.22] };
 const [fy, span] = FOCI[focus] || FOCI.full;
 const w = focus === 'full' ? Math.max(span, gap * people.length * 0.9) : span;
-const target = new THREE.Vector3(focus === 'full' ? 0 : people[0].group.position.x, H * fy, 0);
+let target = new THREE.Vector3(focus === 'full' ? 0 : people[0].group.position.x, H * fy, 0), wFrame = w;
+// handL / handR: a tight close-up on that hand wherever the pose put it
+if (/^hand[LR]$/.test(focus)) {
+  const b = people[0].sk.byName['wrist.' + focus.slice(-1)], f = people[0].sk.byName['finger3-2.' + focus.slice(-1)];
+  target = b.getWorldPosition(new THREE.Vector3()).lerp(f.getWorldPosition(new THREE.Vector3()), 0.5); wFrame = H * 0.16;
+}
 const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.01, 50);
-const dist = w / 2 / Math.tan(THREE.MathUtils.degToRad(15));
-camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist);
+const dist = wFrame / 2 / Math.tan(THREE.MathUtils.degToRad(15));
+camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
 camera.lookAt(target);
 styleTick(1.0, renderer.domElement.width, renderer.domElement.height);
 renderer.render(scene, camera);
