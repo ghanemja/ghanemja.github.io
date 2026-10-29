@@ -49,10 +49,9 @@ export function shoeGeo() {
   up.quadraticCurveTo(-0.047, 0.016, -0.045, 0.032);              // rounded heel
   up.quadraticCurveTo(-0.044, 0.05, -0.036, 0.052);               // back of the heel, up to the tab
   up.quadraticCurveTo(-0.022, 0.035, -0.006, 0.039);              // collar dips round the ankle bone
-  up.quadraticCurveTo(0.01, 0.059, 0.026, 0.053);                 // the tongue rises over the instep
-  up.quadraticCurveTo(0.044, 0.047, 0.058, 0.036);                // the instep rounds over (convex)…
-  up.quadraticCurveTo(0.068, 0.03, 0.08, 0.033);                // …the vamp dips (concave)…
-  up.quadraticCurveTo(0.098, 0.039, 0.103, 0.024);                // …a raised, round toe cap (convex)
+  up.quadraticCurveTo(0.01, 0.058, 0.026, 0.053);                 // the tongue rises over the instep
+  up.quadraticCurveTo(0.046, 0.046, 0.066, 0.038);                // one smooth sweep down the vamp (concave)…
+  up.quadraticCurveTo(0.094, 0.031, 0.103, 0.022);                // …easing into a low, round toe (convex): a gentle S
   up.quadraticCurveTo(0.105, 0.013, 0.088, 0.013);                // the toe turns down
   up.quadraticCurveTo(0.06, 0.012, 0.04, 0.012);                  // underside rides the toe spring
   up.lineTo(-0.034, 0.012);
@@ -264,7 +263,14 @@ export function makeFolk(spec) {
     const sh = J['shin' + k] = bone(th, 0, -0.27, 0);
     const ft = J['foot' + k] = bone(sh, 0, -0.25, 0);
     const legCol = S.outfit === 'dress' ? (d) => d > 0.24 ? skinHex : S.bottom : () => S.bottom;
-    limbs.push(limb(J.hips, x, 0, [th, sh, ft], 0.27, 0.25, [
+    // S.wideLeg: flowy wide-leg trousers — slim at the hip, flaring from the knee to a
+    // wide hem that falls past the shoe's collar. The hem rides the SHIN bone (not the
+    // foot), so it hangs instead of tilting with every step.
+    const wl = S.wideLeg ?? 0;
+    limbs.push(limb(J.hips, x, 0, wl ? [th, sh, sh] : [th, sh, ft], 0.27, 0.25, wl ? [
+      [-0.045, 0.001], [-0.032, 0.05 * B], [0, 0.066 * B], [0.1, 0.066 * B], [0.2, 0.06 * rB], [0.27, 0.058 * rB],
+      [0.35, 0.062 * rB], [0.43, 0.07], [0.5, 0.077], [0.545, 0.081], [0.552, 0.074], [0.554, 0.001]]
+      : [
       [-0.045, 0.001], [-0.032, 0.05 * B], [0, 0.066 * B], [0.1, 0.066 * B], [0.2, 0.056 * rB], [0.27, 0.047 * rB],
       [0.33, 0.05 * rB], [0.41, 0.044], [0.47, 0.037], [0.5, 0.036], [0.512, 0.001]], legCol));   // the hem ends just inside the shoe collar
     // a real shoe: heel counter, collar round the ankle, instep sloping to a round toe, on a sole
