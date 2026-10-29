@@ -241,6 +241,21 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   and its tail is locks twisting round a core. Curls are a cloud of rounded curls laid
   along the columns, not noise on a bob. Too many locks makes the outline busy: about
   32–40 per layer.
+- **A hairline thins to nothing.** Every edge of short hair (except a fringe that hangs over
+  the forehead) is a hairline: the shell and the locks ride the same tapered surface
+  (`taper()`), the sides and back thinning all the way down from the crown and the front
+  just at the forehead, with only a sliver of lip in the hair's own colour. Locks stop
+  just short of a hairline and settle flat. Before this: full-thickness edges and a dark
+  lip read as the rim of a wig, locks spilled past the edge onto temples and ears, and
+  tapering only near the end bulged then tucked in, a bowl cut.
+- **The head map must include the neck.** Built from head vertices only, the radius map had
+  no data below the skull and filled it from the back of the skull, so the nape hair
+  stood out at skull width over the neck. The nape hairline sits at e ≈ −0.55, nearly
+  level across the back.
+- **Interpolate a hairline with a spline, not a smoothstep per segment.** Smoothstep has
+  zero slope at every knot, so the line came out as steps and plateaus. `spline()` is a
+  monotone cubic, so it can't overshoot. The temple is a rounded corner. No strand ripples
+  at the crown, where they all meet in a spike.
 - Styles are data (`HAIRSTYLES`): buzz, crop, pixie, bob, long bob, ponytail, bun, curls.
   A new style means new numbers (fringe height and sweep, face window, side/back ends,
   curtain cut / A-line / bell / tuck), plus an extra mesh for a tail or bun.

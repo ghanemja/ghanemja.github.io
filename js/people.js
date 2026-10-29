@@ -414,7 +414,10 @@ function headMap(body) {
     const e = Math.min(NE - 1, Math.floor((Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)) / Math.PI + 0.5) * NE));
     return e * NA + a;
   };
-  for (const i of ids) { p.fromArray(pos, i * 3).sub(C); const r = p.length(); const c = cell(p.normalize()); grid[c] = Math.max(grid[c], r); }
+  // the map covers the neck too: below the skull it had no data and was filled in from the back of
+  // the skull, so short hair at the nape stood out at skull width over the neck (a bowl cut)
+  const wn = regionWeight(A, 'neck01'), mapIds = [...new Set(A.tris.body)].filter(i => w[i] > 0.9 || (wn[i] > 0.6 && pos[i * 3 + 1] < C.y));
+  for (const i of mapIds) { p.fromArray(pos, i * 3).sub(C); const r = p.length(); const c = cell(p.normalize()); grid[c] = Math.max(grid[c], r); }
   for (let pass = 0; pass < 12; pass++) for (let e = 0; e < NE; e++) for (let a = 0; a < NA; a++) {
     if (grid[e * NA + a]) continue;
     let s = 0, n = 0;

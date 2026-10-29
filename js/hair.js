@@ -20,17 +20,27 @@ import { paint } from './style.js';
 export const HAIRSTYLES = {
   //          thickness, crown volume,  fringe line (e at the centre, side sweep), face window (half-angle, rad),
   //          end on the head at the side / back (e), curtain (cut: 1 = chin level, more = longer; A-line rise at the back; bell; tuck), extras
-  buzz:     { label: 'Buzz', th: 0.05, vol: 0.0, fringe: [0.64, 0], face: 1.05, side: 0.1, back: -0.8, taper: true },
-  crop:     { label: 'Crop', th: 0.08, vol: 0.12, fringe: [0.5, 0.08], face: 1.0, side: 0.05, back: -0.8, texture: 0.6, taper: true, locks: 32, lockW: 1.05, lockH: 0.03, tip: 0.04 },
-  pixie:    { label: 'Pixie', th: 0.09, vol: 0.16, fringe: [0.3, 0.3], face: 0.95, side: -0.22, back: -0.82, texture: 0.8, taper: true, locks: 34, lockW: 1.05, lockH: 0.04, tip: 0.09 },
+  buzz:     { label: 'Buzz', th: 0.05, vol: 0.0, fringe: [0.64, 0], face: 1.05, side: 0.1, back: -0.55, taper: true },
+  crop:     { label: 'Crop', th: 0.08, vol: 0.12, fringe: [0.5, 0.08], face: 1.0, side: 0.05, back: -0.55, texture: 0.6, taper: true, locks: 32, lockW: 1.05, lockH: 0.03, tip: 0.04 },
+  pixie:    { label: 'Pixie', th: 0.09, vol: 0.16, fringe: [0.3, 0.3], face: 0.95, side: -0.22, back: -0.6, texture: 0.8, taper: true, locks: 34, lockW: 1.05, lockH: 0.04, tip: 0.09 },
   bob:      { label: 'Bob', th: 0.08, vol: 0.14, fringe: [0.3, 0.3], face: 0.92, curtain: { cut: 1.0, aline: 0.2, bell: 0.1, tuck: 0.06 }, locks: 36, lockW: 1.05, tip: 0.05 },
   lob:      { label: 'Long bob', th: 0.08, vol: 0.14, fringe: [0.55, 0.15], face: 0.88, curtain: { cut: 1.45, aline: 0.1, bell: 0.08, tuck: 0.03 }, locks: 40, lockW: 1.05, tip: 0.07 },
-  ponytail: { label: 'Ponytail', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.75, extra: 'ponytail', taper: true },
-  bun:      { label: 'Bun', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.75, extra: 'bun', taper: true },
+  ponytail: { label: 'Ponytail', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.55, extra: 'ponytail', taper: true },
+  bun:      { label: 'Bun', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.55, extra: 'bun', taper: true },
   curly:    { label: 'Curls', th: 0.24, vol: 0.2, fringe: [0.5, 0.06], face: 0.98, curtain: { cut: 0.5, aline: 0.12, bell: 0.2, tuck: 0.12 }, curl: 0.04 },
 };
 
 const ss = THREE.MathUtils.smoothstep;
+// a smooth curve through knots [[x, y], …] (monotone cubic: no overshoot). Smoothstepping
+// between knots put a flat spot at every one, and the hairline came out as little steps.
+function spline(K, x) {
+  const n = K.length; if (x <= K[0][0]) return K[0][1]; if (x >= K[n - 1][0]) return K[n - 1][1];
+  let k = 1; while (K[k][0] < x) k++;
+  const sl = (i) => (K[i + 1][1] - K[i][1]) / (K[i + 1][0] - K[i][0]);
+  const tan = (i) => { if (i === 0) return sl(0); if (i === n - 1) return sl(n - 2); const a = sl(i - 1), b = sl(i); return a * b <= 0 ? 0 : 2 / (1 / a + 1 / b); };
+  const [x0, y0] = K[k - 1], [x1, y1] = K[k], h = x1 - x0, t = (x - x0) / h, t2 = t * t, t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * y0 + (t3 - 2 * t2 + t) * h * tan(k - 1) + (-2 * t3 + 3 * t2) * y1 + (t3 - t2) * h * tan(k);
+}
 const dirAt = (th, e) => { const c = Math.sqrt(Math.max(0, 1 - e * e)); return new THREE.Vector3(Math.sin(th) * c, e, Math.cos(th) * c); };
 
 export function makeHair(H, { chin }, styleName, colour) {
@@ -46,7 +56,7 @@ export function makeHair(H, { chin }, styleName, colour) {
     + 0.3 * Math.sin(p.x * 15 / R + p.z * 13 / R) * Math.sin(p.y * 14 / R)) : 0;
   // the hair's outer surface over the head at (θ, e): scalp + thickness + crown volume + strand grooves
   const onHead = (th, e) => {
-    const d = dirAt(th, e), r = H.scalp(d) + R * (S.th + S.vol * Math.max(0, e) ** 2 + 0.012 * (S.texture ?? 1) * strand(th) * ss(e, -0.6, 0.2));
+    const d = dirAt(th, e), r = H.scalp(d) + R * (S.th + S.vol * Math.max(0, e) ** 2 + 0.012 * (S.texture ?? 1) * strand(th) * ss(e, -0.6, 0.2) * (1 - ss(e, 0.75, 0.98)));   // (none at the crown: all the ripples meet there in a spike)
     const p = d.clone().multiplyScalar(r).add(C); return p.addScaledVector(d, curlN(p));   // (clone: multiplyScalar mutates d)
   };
   const faceW = (th) => 1 - ss(Math.abs(th), S.face, S.face + 0.32);                   // 1 across the face … 0 behind the temples
@@ -58,12 +68,15 @@ export function makeHair(H, { chin }, styleName, colour) {
   const hairline = (th) => {
     const a = Math.abs(th), f = fringeE(th), ear = S.side, burn = S.burn ?? THREE.MathUtils.clamp(ear - 0.12, -0.14, -0.02);
     // (over the ear it arches round the top of it, not a flat ledge)
-    const K = [[0, f], [0.62, f + 0.02], [0.86, f + 0.06], [1.06, burn], [1.2, burn], [1.4, ear + 0.04], [1.62, ear + 0.1], [1.9, ear + 0.03], [2.45, ear + (S.back - ear) * 0.65], [Math.PI, S.back]];
-    let k = 1; while (k < K.length - 1 && K[k][0] < a) k++;
-    const [a0, e0] = K[k - 1], [a1, e1] = K[k];
-    return e0 + (e1 - e0) * ss(a, a0, a1);
+    // (the temple is a rounded corner, not a right angle)
+    const K = [[0, f], [0.5, f + 0.015], [0.78, f + 0.05], [0.97, (f + 0.05 + burn) / 2 + 0.05], [1.12, burn], [1.22, burn], [1.4, ear + 0.04], [1.62, ear + 0.1], [1.9, ear + 0.03], [2.4, ear + (S.back - ear) * 0.85], [Math.PI, S.back]];   // (the nape nearly level, not a V)
+    return spline(K, a);
   };
   const back = (th) => (1 - Math.cos(th)) / 2;                                          // 0 front … 1 back
+  // the edge of a fringe that hangs over the forehead keeps its thickness and tips; every other
+  // edge of short hair is a hairline, where the hair thins to nothing on the skin
+  const fringeHang = S.fringe[0] < 0.45;
+  const isHairline = (th) => !!S.taper && !(fringeHang && faceW(th) > 0.5);
 
   // one column: the path from the crown down, as points, and where it ends (index)
   const column = (th) => {
@@ -92,6 +105,15 @@ export function makeHair(H, { chin }, styleName, colour) {
     const end = hang ? THREE.MathUtils.lerp(L[L.length - 1], L[Math.max(1, fi)], faceW(th)) : L[L.length - 1];
     return { pts, L, end };
   };
+  // short hair thins out to the hairline: the sides and back all the way down from the crown
+  // (tapering only near the end, it bulged and tucked in, a bowl), the front just at the forehead;
+  // to just OFF the skin (flush with it, the two z-fought into a ragged hairline). The locks ride
+  // this same thinned surface.
+  const taper = (p, th, u, extra = 0) => {
+    if (!S.taper || !isHairline(th)) return p;
+    const d = p.clone().sub(C), r0 = H.scalp(d.clone().normalize()) + 0.02 * R + extra, k = ss(u, THREE.MathUtils.lerp(0.15, 0.62, faceW(th)), 1);
+    return p.copy(C).addScaledVector(d, THREE.MathUtils.lerp(d.length(), r0, k * 0.95) / d.length());
+  };
   const at = (col, s) => {                                                              // point at arclength s along a column
     const { pts, L } = col; let i = 1; while (i < L.length - 1 && L[i] < s) i++;
     return pts[i - 1].clone().lerp(pts[i], THREE.MathUtils.clamp((s - L[i - 1]) / ((L[i] - L[i - 1]) || 1), 0, 1));
@@ -105,20 +127,18 @@ export function makeHair(H, { chin }, styleName, colour) {
     const th = -Math.PI + (j / NT) * Math.PI * 2, col = cols[j], len = col.end;
     for (let i = 0; i <= NR; i++) {
       const u = i / NR, p = at(col, len * u);
-      if (S.taper) {                                                                    // short hair thins out to the hairline at the sides and nape
-        // (to just OFF the skin: flush with it, the two z-fought into a ragged hairline)
-        const d = p.clone().sub(C), r0 = H.scalp(d.clone().normalize()) + 0.025 * R, k = ss(u, 0.55, 1);
-        p.copy(C).addScaledVector(d, THREE.MathUtils.lerp(d.length(), r0, k * 0.85) / d.length());
-      }
+      taper(p, th, u);
       P.push(p.x, p.y, p.z);
       const e = (p.y - C.y) / R, r = strand(th);
       c.copy(base).lerp(dark, 0.32 * Math.max(0, -r) + 0.25 * (1 - ss(u, 0, 0.12)))     // grooves, darker at the roots
         .lerp(shine, 0.55 * Math.exp(-((e - 0.5) ** 2) / 0.02) * THREE.MathUtils.clamp(0.4 + 0.6 * r, 0, 1));
       Cc.push(c.r, c.g, c.b);
     }
-    const last = at(col, len), prev = at(col, len * 0.97), inward = C.clone().sub(last).setY(0).normalize();
-    const lip = last.clone().addScaledVector(inward, S.th * R * 0.9).add(prev.clone().sub(last).multiplyScalar(0.6));
-    P.push(lip.x, lip.y, lip.z); c.copy(dark); Cc.push(c.r, c.g, c.b);
+    const last = P.slice(-3), lastV = new THREE.Vector3(...last), prev = at(col, len * 0.97), inward = C.clone().sub(lastV).normalize();
+    // the cut edge's lip: a dark, thick one where hair is cut; at a hairline (already thinned
+    // onto the skin) just a sliver tucked under, in the hair's own colour (a dark band read as a ledge)
+    const hlE = S.taper && isHairline(th), lip = lastV.clone().addScaledVector(inward, hlE ? 0.012 * R : S.th * R * 0.9).add(prev.clone().sub(lastV).multiplyScalar(hlE ? 0.1 : 0.6));
+    P.push(lip.x, lip.y, lip.z); c.copy(hlE ? base.clone().lerp(dark, 0.3) : dark); Cc.push(c.r, c.g, c.b);
   }
   const row = NR + 2;
   for (let j = 0; j < NT; j++) {
@@ -175,13 +195,20 @@ export function makeHair(H, { chin }, styleName, colour) {
   if (NL && !S.curl && !S.extra) for (const layer of [0, 1]) for (let j = 0; j < NL; j++) {
     const th = -Math.PI + ((j + 0.5 * layer + 0.3 * rnd(j * 7 + layer)) / NL) * Math.PI * 2, col = column(th), fw = faceW(th);
     const s0 = col.end * (layer ? 0.28 + 0.2 * rnd(j + 3) : 0.02 + 0.06 * rnd(j + 5));
-    const s1 = col.end * (1 - 0.05 * rnd(j * 3 + layer)) + R * (S.tip ?? 0.05) * (0.5 + rnd(j * 11 + layer)) * (0.4 + 0.6 * fw);   // the fringe's points reach a little past the cut
+    // at a hairline a lock stops just short of it and settles flat; a hanging fringe or the ends of
+    // longer hair reach a little past the cut in soft points (locks spilling past a hairline onto
+    // the temples and ears, at full thickness, made the edge a ragged ledge)
+    const hl = isHairline(th);
+    const s1 = hl ? col.end * (0.97 - 0.03 * rnd(j * 3 + layer)) : col.end * (1 - 0.05 * rnd(j * 3 + layer)) + R * (S.tip ?? 0.05) * (0.5 + rnd(j * 11 + layer)) * (0.4 + 0.6 * fw);
     const pts = [], lift = R * (0.012 + 0.016 * layer + 0.006 * (j % 3));   // (each a little above its neighbour: at one height they z-fought into stripes)
-    for (let i = 0; i <= 24; i++) { const p = along(col, s0 + (s1 - s0) * (i / 24)); pts.push(p.addScaledVector(outOf(p), lift * (1 - 0.5 * (i / 24)))); }
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24, sAt = s0 + (s1 - s0) * t, p = taper(along(col, sAt), th, Math.min(1, sAt / col.end));
+      pts.push(p.addScaledVector(outOf(p), lift * (hl ? 1 - ss(t, 0.45, 1) : 1 - 0.5 * t)));
+    }
     const ring = (p) => Math.hypot(p.x - C.x, p.z - C.z);
     const spacing = (i) => (2 * Math.PI * ring(pts[i])) / NL;
     lock(pts, (t) => spacing(Math.round(t * 24)) * (S.lockW ?? 0.85) * (0.35 + 0.65 * ss(t, 0, 0.12)) * (1 - 0.85 * ss(t, 0.62, 1)),
-      (t) => R * (S.lockH ?? 0.035) * (1 - 0.6 * t), 0.9 + 0.2 * rnd(j * 13 + layer));
+      (t) => R * (S.lockH ?? 0.035) * (1 - 0.6 * t) * (hl ? 1 - 0.9 * ss(t, 0.45, 1) : 1), 0.9 + 0.2 * rnd(j * 13 + layer));
   }
   // pulled back (ponytail, bun): locks from the hairline over the head to the tie
   const tieDir = S.extra === 'bun' ? dirAt(Math.PI, 0.5) : S.extra === 'ponytail' ? dirAt(Math.PI, 0.3) : null;
@@ -193,7 +220,7 @@ export function makeHair(H, { chin }, styleName, colour) {
       pts.push(d.clone().multiplyScalar(H.scalp(d) + R * (S.th + 0.01)).add(C));
     }
     const sp = (2 * Math.PI * Math.hypot(start.x - C.x, start.z - C.z)) / 36;
-    lock(pts, (t) => sp * 0.85 * (0.5 + 0.5 * ss(t, 0, 0.1)) * (1 - 0.55 * t), (t) => R * 0.022 * (1 - 0.5 * t), 0.92 + 0.16 * rnd(j));
+    lock(pts, (t) => sp * 0.85 * (0.5 + 0.5 * ss(t, 0, 0.1)) * (1 - 0.55 * t), (t) => R * 0.022 * (1 - 0.5 * t) * ss(t, 0, 0.2), 0.92 + 0.16 * rnd(j));   // (rising out of the hairline, not a step)
   }
   // curls: a cloud of rounded curls over the whole mass, not a lumpy bob
   if (S.curl) {
