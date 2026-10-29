@@ -17,10 +17,11 @@ const PLAYER_LOOK = {
   folk: true, skin: 'fair', hair: 0xc9a06a, hairStyle: 'bob',
   top: 0x4a4550, bottom: 0x7d9cc0,
   shoes: 0xf0ece2, sole: 0xc9a87c,                // white sneakers on a gum sole — the contrast makes the shoe shape read
-  height: 1.02, build: 1.0,
+  height: 1.02, build: 0.9,
   slope: 1,
   wideLeg: 1,
-  flatTum: 1,                                     // a flat stomach under the sweater                                     // flowy wide-leg trousers to the shoe
+  flatTum: 1,
+  slimTop: 1,                                     // upper body as slim side-on as the waist                                     // a flat stomach under the sweater                                     // flowy wide-leg trousers to the shoe
   neck: 0.75,                                      // a shorter neck: with sloped shoulders the full one read giraffe-long                                       // soft sloped shoulders, not a square yoke
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { profile: 1, jaw: 0.28, chin: 0.55, cheeks: 0.5, long: -0.25, skull: 0.55, brow: 0.4 },
@@ -217,7 +218,7 @@ function dressPlayer(g) {
   bp.add(handle);
   for (const s of [-1, 1]) {                    // straps hugging over the shoulders to the chest
     const strap = new THREE.Mesh(rbox(0.028, 0.16, 0.013, 0.005), flapM);
-    strap.position.set(s * 0.057, 0.052, 0.068);   // seated on the sloped shoulder line
+    strap.position.set(s * 0.053, 0.062, 0.062);   // seated on the sloped shoulder line
     strap.rotation.x = -0.3;
     bp.add(strap);
   }

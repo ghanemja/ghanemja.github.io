@@ -298,8 +298,8 @@ export function makeFolk(spec) {
   // with a full slope the yoke is a real shoulder line: from the neck a gentle, slightly
   // CONCAVE trapezius run out to a rounded shoulder point — a convex dome there reads hunched
   const prof = sl >= 1
-    ? [[0.001, -0.01], [0.112, 0.0], [0.122, 0.1], [0.12, 0.17], [0.128, 0.215], [0.14, 0.248], [0.139, 0.272],
-       [0.125, 0.292], [0.105, 0.31], [0.087, 0.32], [0.081, 0.337], [0.074, 0.352], [0.001, 0.366]]   // the neckline stays as wide as the collar ring (the torso is shallower front-to-back)
+    ? [[0.001, -0.01], [0.112, 0.0], [0.122, 0.1], [0.12, 0.17], [0.128, 0.228], [0.14, 0.264], [0.138, 0.288],
+       [0.124, 0.306], [0.104, 0.32], [0.088, 0.33], [0.081, 0.337], [0.074, 0.352], [0.001, 0.366]]   // the neckline stays as wide as the collar ring (the torso is shallower front-to-back)
     : [[0.001, -0.01], [0.112, 0.0], [0.125, 0.1], [0.122, 0.17],
        [0.132 - 0.006 * sl, 0.25 - 0.025 * sl], [0.134 - 0.016 * sl, 0.278 - 0.022 * sl], [0.12 - 0.022 * sl, 0.31 - 0.006 * sl],
        [0.088 - 0.012 * sl, 0.342], [0.05, 0.362], [0.001, 0.37]];
@@ -311,6 +311,16 @@ export function makeFolk(spec) {
     for (let i = 0; i < P.count; i++) {
       const y = P.getY(i), z = P.getZ(i);
       if (z > 0) P.setZ(i, z * (1 - 0.3 * S.flatTum * Math.exp(-((y - 0.07) ** 2) / 0.008)));
+    }
+    tg.computeVertexNormals();
+  }
+  // S.slimTop: the shoulders widen the torso (good from the front) but a lathe widens it
+  // front-to-back too; keep the upper body's depth the same as the waist's
+  if (S.slimTop) {
+    const P = tg.attributes.position;
+    for (let i = 0; i < P.count; i++) {
+      const y = P.getY(i);
+      P.setZ(i, P.getZ(i) * (1 - 0.16 * THREE.MathUtils.smoothstep(y, 0.12, 0.24) * (1 - THREE.MathUtils.smoothstep(y, 0.29, 0.335))));   // eased off under the collar so it still fills the ring
     }
     tg.computeVertexNormals();
   }
@@ -421,7 +431,7 @@ export function makeFolk(spec) {
 
   // ── arms: one skinned tube each, shoulder to wrist; a round shoulder caps the join ──
   for (const s of [-1, 1]) {
-    const k = s < 0 ? 'L' : 'R', x = s * (0.112 - 0.012 * (S.slope ?? 0)) * B, y = 0.287 - 0.028 * (S.slope ?? 0);   // the joint sits inside the shoulder curve
+    const k = s < 0 ? 'L' : 'R', x = s * (0.112 - 0.012 * (S.slope ?? 0)) * B, y = 0.287 - 0.01 * (S.slope ?? 0);   // the joint sits inside the shoulder curve
     const sh = J['arm' + k] = bone(J.spine, x, y, 0);
     const fa = J['fore' + k] = bone(sh, 0, -0.16, 0);
     const hd = J['hand' + k] = bone(fa, 0, -0.15, 0);
