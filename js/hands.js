@@ -54,13 +54,13 @@ const FINGERS = [
 ];
 const PHAL = [0.5, 0.29, 0.21];                 // proximal / middle / distal share of a finger
 
-function skeleton(curl) {
+function skeleton(curl, Y = 0) {
   const palm = [], fingers = [];
   // wrist: an oval, wider across than thick, running up inside the sleeve
   palm.push({ wrist: true, a: [0.0, -0.32, 0.02], b: [0.0, 0.05, 0.03], r1: 0.14, r2: 0.15 });
   // metacarpals fan from the carpus to the knuckles
   const bases = [[0.08, 0.07], [0.025, 0.07], [-0.03, 0.07], [-0.08, 0.08]];
-  FINGERS.forEach((f, i) => palm.push({ a: [bases[i][0], bases[i][1], 0.0], b: [f.mcp[0], f.mcp[1], 0.0], r1: 0.058, r2: f.r0 * 1.02 }));
+  FINGERS.forEach((f, i) => palm.push({ a: [bases[i][0], bases[i][1], 0.0], b: [f.mcp[0], f.mcp[1], 0.0], r1: 0.058 + 0.01 * Y, r2: f.r0 * (1.02 - 0.2 * Y) }));   // young: knuckle heads don't stand proud
   // the palm's soft pads: thenar (thumb ball), hypothenar (heel under the pinky), centre, and the
   // ridge under the knuckles that the finger creases sit on
   palm.push({ e: [0.10, 0.19, 0.055], r: [0.095, 0.15, 0.072] });
@@ -69,14 +69,15 @@ function skeleton(curl) {
   palm.push({ e: [0.0, 0.44, 0.03], r: [0.18, 0.055, 0.045] });
 
   for (const f of FINGERS) {
-    const ab = f.splay * D2R, d0 = [Math.sin(ab), Math.cos(ab), 0];
-    let p = [f.mcp[0], f.mcp[1], 0.0], th = 0, r = f.r0;
+    const ab = f.splay * (1 + 0.4 * Y) * D2R, d0 = [Math.sin(ab), Math.cos(ab), 0];
+    const r0 = f.r0 * (1 + 0.08 * Y), len = f.len * (1 - 0.02 * Y);   // young: plumper, shorter fingers
+    let p = [f.mcp[0], f.mcp[1], 0.0], th = 0, r = r0;
     const segs = [];
     for (let j = 0; j < 3; j++) {
-      th += (f.flex[j] + curl * [55, 60, 35][j]) * D2R;     // each joint bends further toward the palm
+      th += (f.flex[j] * (1 - 0.3 * Y) + curl * [55, 60, 35][j]) * D2R;   // young: a looser, more open rest     // each joint bends further toward the palm
       const dir = [d0[0] * Math.cos(th), d0[1] * Math.cos(th), Math.sin(th)];
-      const q = add(p, dir, f.len * PHAL[j]);
-      const r2 = f.r0 * [0.9, 0.82, 0.7][j];
+      const q = add(p, dir, len * PHAL[j]);
+      const r2 = r0 * (Y ? [0.93, 0.87, 0.78] : [0.9, 0.82, 0.7])[j];   // young fingers barely taper
       segs.push({ a: p, b: q, r1: r, r2 });
       p = q; r = r2;
     }
@@ -98,20 +99,20 @@ function skeleton(curl) {
   return { palm, fingers, thumb };
 }
 
-function sdHand(S, r, d, p) {
+function sdHand(S, r, d, p, Y = 0) {
   let palm = 1e9;
   for (const o of S.palm) {
     const v = o.e ? ellipsoid(r, d, p, o.e, o.r)
       : o.wrist ? roundCone(r, d, p / 0.68, o.a, o.b, o.r1, o.r2) * 0.68      // oval section
       : roundCone(r, d, p, o.a, o.b, o.r1, o.r2);
-    palm = smin(palm, v, 0.07);
+    palm = smin(palm, v, 0.07 + 0.04 * Y);                  // young: the back of the hand is one smooth plane
   }
   let thumb = 1e9;
   for (const s of S.thumb) thumb = smin(thumb, roundCone(r, d, p, s.a, s.b, s.r1, s.r2), 0.02);
   let hand = smin(palm, thumb, 0.07);
   for (const segs of S.fingers) {
     let f = 1e9;
-    for (const s of segs) f = smin(f, roundCone(r, d, p, s.a, s.b, s.r1, s.r2), 0.015);
+    for (const s of segs) f = smin(f, roundCone(r, d, p, s.a, s.b, s.r1, s.r2), 0.015 + 0.012 * Y);   // young: joints melt, no knobbly knuckles
     hand = Math.min(hand, smin(palm, f, 0.045));            // melts into the palm, never into the next finger
   }
   return hand;
@@ -120,10 +121,11 @@ function sdHand(S, r, d, p) {
 // makeHandGeometry(s, { length, curl, res }) → BufferGeometry in the hand group's frame
 //   s: −1 left, +1 right · length: wrist crease → middle fingertip · curl: 0 relaxed … 1 a loose fist
 const _cache = new Map();
-export function makeHandGeometry(s, { length = 0.105, curl = 0, res = 68 } = {}) {
-  const key = [s, length, curl, res].join('|');
+//   young: 0 adult … 1 a young person's hand — smooth knuckles, plumper, shorter, barely tapered fingers
+export function makeHandGeometry(s, { length = 0.105, curl = 0, res = 68, young = 0 } = {}) {
+  const key = [s, length, curl, res, young].join('|');
   if (_cache.has(key)) return _cache.get(key);
-  const S = skeleton(curl);
+  const S = skeleton(curl, young);
   // the grid: a cube around the hand (in HL units, centred on the hand's bulk)
   const C = [0.0, 0.36, 0.12], half = 0.72;               // r, d, p
   const mc = new MarchingCubes(res, new THREE.MeshBasicMaterial(), false, false, 60000);
@@ -135,7 +137,7 @@ export function makeHandGeometry(s, { length = 0.105, curl = 0, res = 68 } = {})
     const r = C[0] + toHL(x), d = C[1] + toHL(y), p = C[2] + toHL(z);
     // open where the wrist runs into the sleeve; skip the empty corners of the cube
     const out = d < -0.3 || d > 1.02 || r < -0.32 || r > 0.36 || p < -0.2 || p > 0.55;
-    F[x + y * N + z * N * N] = out ? -1 : -sdHand(S, r, d, p);
+    F[x + y * N + z * N * N] = out ? -1 : -sdHand(S, r, d, p, young);
   }
   mc.update();
   const n = mc.count, P = mc.positionArray, Nn = mc.normalArray;

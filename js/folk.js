@@ -518,7 +518,10 @@ export function poseFolk(inst, dt, k, { talk = 0 } = {}) {
   // the knee folds on the forward swing (the left thigh travels forward while c > 0)
   // …and never locks: a soft bend at heel strike and through stance (a knee
   // straight at the front of the stride reads as a stiff, kicking leg)
-  J.shinL.rotation.x = k * (0.16 + 0.8 * Math.max(0, c)); J.shinR.rotation.x = k * (0.16 + 0.8 * Math.max(0, -c));
+  // …and the trailing leg bends BEFORE it lifts (pre-swing): as the thigh goes
+  // behind the body the knee flexes, so the back leg never locks straight
+  J.shinL.rotation.x = k * (0.16 + 0.8 * Math.max(0, c) + 0.5 * Math.max(0, -s));
+  J.shinR.rotation.x = k * (0.16 + 0.8 * Math.max(0, -c) + 0.5 * Math.max(0, s));
   // the foot stays near level instead of hanging off the end of the shin:
   // toes up as the leg reaches forward, heel lifting as it trails
   if (J.footL) { J.footL.rotation.x = -0.7 * (J.thighL.rotation.x + J.shinL.rotation.x); J.footR.rotation.x = -0.7 * (J.thighR.rotation.x + J.shinR.rotation.x); }
