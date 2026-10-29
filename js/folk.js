@@ -273,8 +273,12 @@ export function makeFolk(spec) {
   // ── spine + torso ──
   J.spine = joint(J.hips, 0, 0.02, 0);
   // the shoulder line slopes from the neck into the arms (no bolt-on shoulder balls)
+  // S.slope (0…1) drops and rounds the shoulder line toward the neck — 0 is the
+  // original broad, square shoulder; the player uses a soft sloped one
+  const sl = S.slope ?? 0;
   const torso = new THREE.Mesh(lathe(smooth([[0.001, -0.01], [0.112, 0.0], [0.125, 0.1], [0.122, 0.17],
-    [0.132, 0.25], [0.134, 0.278], [0.12, 0.31], [0.088, 0.342], [0.05, 0.362], [0.001, 0.37]], 36), 32), top);
+    [0.132 - 0.006 * sl, 0.25 - 0.025 * sl], [0.134 - 0.016 * sl, 0.278 - 0.022 * sl], [0.12 - 0.022 * sl, 0.31 - 0.006 * sl],
+    [0.088 - 0.012 * sl, 0.342], [0.05, 0.362], [0.001, 0.37]], 36), 32), top);
   const TZ = 0.78 + 0.08 * S.belly;                  // torso depth
   torso.scale.set(B, 1, TZ);
   J.spine.add(torso);
@@ -381,7 +385,7 @@ export function makeFolk(spec) {
 
   // ── arms: one skinned tube each, shoulder to wrist; a round shoulder caps the join ──
   for (const s of [-1, 1]) {
-    const k = s < 0 ? 'L' : 'R', x = s * 0.112 * B, y = 0.287;   // the joint sits inside the shoulder curve
+    const k = s < 0 ? 'L' : 'R', x = s * (0.112 - 0.008 * (S.slope ?? 0)) * B, y = 0.287 - 0.022 * (S.slope ?? 0);   // the joint sits inside the shoulder curve
     const sh = J['arm' + k] = bone(J.spine, x, y, 0);
     const fa = J['fore' + k] = bone(sh, 0, -0.16, 0);
     const hd = J['hand' + k] = bone(fa, 0, -0.15, 0);
