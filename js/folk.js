@@ -25,14 +25,23 @@ let _shoe = null;
 export function shoeGeo() {
   if (_shoe) return _shoe;
   const y0 = -ANK;
-  const ext = (sh, depth, bev) => {
+  const ext = (sh, depth, bev, dome = 0) => {
     const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bev, bevelSize: bev * 0.8, bevelSegments: 4, curveSegments: 14 });
     g.translate(0, 0, -depth / 2).rotateY(-Math.PI / 2);          // silhouette x → +Z (forward), extrusion → X (width)
     g.deleteAttribute('uv');
     const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {                             // flare: wider at the toe
-      const k = THREE.MathUtils.clamp((p.getZ(i) + 0.02) / 0.09, 0, 1);
-      p.setX(i, p.getX(i) * (1 + 0.28 * k));
+    g.computeBoundingBox();
+    const yb = g.boundingBox.min.y, yt = g.boundingBox.max.y, zt = g.boundingBox.max.z;
+    for (let i = 0; i < p.count; i++) {
+      const z = p.getZ(i), y = p.getY(i);
+      let sx = 1 + 0.28 * THREE.MathUtils.clamp((z + 0.02) / 0.09, 0, 1);   // flare: wider at the toe
+      // a round toe seen from above (an extruded outline has a square one)
+      const tz = THREE.MathUtils.clamp((z - (zt - 0.05)) / 0.05, 0, 1);
+      sx *= Math.sqrt(Math.max(0.12, 1 - tz * tz));
+      // domed across the top like a real toe box (an extrusion has flat walls and a flat roof)
+      const ty = THREE.MathUtils.clamp((y - yb) / (yt - yb), 0, 1);
+      sx *= 1 - dome * ty * ty;
+      p.setX(i, p.getX(i) * sx);
     }
     const w = mergeVertices(g, 1e-5); w.computeVertexNormals();     // weld → smooth, rounded shading
     w.computeBoundingBox(); w.translate(0, y0 - w.boundingBox.min.y, 0);
@@ -49,10 +58,9 @@ export function shoeGeo() {
   up.quadraticCurveTo(-0.047, 0.016, -0.045, 0.032);              // rounded heel
   up.quadraticCurveTo(-0.044, 0.05, -0.036, 0.052);               // back of the heel, up to the tab
   up.quadraticCurveTo(-0.022, 0.035, -0.006, 0.039);              // collar dips round the ankle bone
-  up.quadraticCurveTo(0.01, 0.059, 0.026, 0.053);                 // the tongue rises over the instep
-  up.quadraticCurveTo(0.044, 0.047, 0.058, 0.036);                // the instep rounds over (convex)…
-  up.quadraticCurveTo(0.068, 0.03, 0.08, 0.033);                // …the vamp dips (concave)…
-  up.quadraticCurveTo(0.098, 0.039, 0.103, 0.024);                // …a raised, round toe cap (convex)
+  up.quadraticCurveTo(0.01, 0.058, 0.026, 0.053);                 // the tongue rises over the instep
+  up.quadraticCurveTo(0.046, 0.046, 0.066, 0.038);                // one smooth sweep down the vamp (concave)…
+  up.quadraticCurveTo(0.094, 0.031, 0.103, 0.022);                // …easing into a low, round toe (convex): a gentle S
   up.quadraticCurveTo(0.105, 0.013, 0.088, 0.013);                // the toe turns down
   up.quadraticCurveTo(0.06, 0.012, 0.04, 0.012);                  // underside rides the toe spring
   up.lineTo(-0.034, 0.012);
@@ -66,7 +74,7 @@ export function shoeGeo() {
   so.quadraticCurveTo(0.086, 0.016, 0.048, 0.013);                // top of the sole follows it
   so.lineTo(-0.036, 0.013);
   so.quadraticCurveTo(-0.047, 0.011, -0.04, 0.004);
-  const upper = ext(up, 0.046, 0.011), sole = ext(so, 0.056, 0.005);
+  const upper = ext(up, 0.05, 0.011, 0.55), sole = ext(so, 0.05, 0.004);   // sole as wide as the upper's base, so its top never shows as a ledge
   // a foot is ~15% of a person's height: scale up so the collar rises above the ankle
   for (const g of [upper, sole]) { g.translate(0, ANK, 0); g.scale(1.2, 1.2, 1.2); g.translate(0, -ANK, 0); }
   upper.translate(0, 0.009, 0);                                   // the upper sits in the sole
@@ -264,7 +272,14 @@ export function makeFolk(spec) {
     const sh = J['shin' + k] = bone(th, 0, -0.27, 0);
     const ft = J['foot' + k] = bone(sh, 0, -0.25, 0);
     const legCol = S.outfit === 'dress' ? (d) => d > 0.24 ? skinHex : S.bottom : () => S.bottom;
-    limbs.push(limb(J.hips, x, 0, [th, sh, ft], 0.27, 0.25, [
+    // S.wideLeg: flowy wide-leg trousers — slim at the hip, flaring from the knee to a
+    // wide hem that falls past the shoe's collar. The hem rides the SHIN bone (not the
+    // foot), so it hangs instead of tilting with every step.
+    const wl = S.wideLeg ?? 0;
+    limbs.push(limb(J.hips, x, 0, wl ? [th, sh, sh] : [th, sh, ft], 0.27, 0.25, wl ? [
+      [-0.045, 0.001], [-0.032, 0.05 * B], [0, 0.066 * B], [0.1, 0.066 * B], [0.2, 0.06 * rB], [0.27, 0.058 * rB],
+      [0.35, 0.062 * rB], [0.42, 0.069], [0.48, 0.075], [0.515, 0.078], [0.522, 0.071], [0.524, 0.001]]   // the hem breaks a little above the ground
+      : [
       [-0.045, 0.001], [-0.032, 0.05 * B], [0, 0.066 * B], [0.1, 0.066 * B], [0.2, 0.056 * rB], [0.27, 0.047 * rB],
       [0.33, 0.05 * rB], [0.41, 0.044], [0.47, 0.037], [0.5, 0.036], [0.512, 0.001]], legCol));   // the hem ends just inside the shoe collar
     // a real shoe: heel counter, collar round the ankle, instep sloping to a round toe, on a sole
@@ -272,7 +287,7 @@ export function makeFolk(spec) {
     ft.add(new THREE.Mesh(sg.upper, shoe), new THREE.Mesh(sg.sole, soleM));
   }
   // pelvis
-  const pel = ball(0.12 * B, bottom); pel.scale.set(1.05, 0.62, 0.8); J.hips.add(pel);
+  const pel = ball(0.12 * B, bottom); pel.scale.set(1.05, 0.62, 0.8 - 0.1 * (S.flatTum ?? 0)); J.hips.add(pel);
 
   // ── spine + torso ──
   J.spine = joint(J.hips, 0, 0.02, 0);
@@ -280,9 +295,26 @@ export function makeFolk(spec) {
   // S.slope (0…1) drops and rounds the shoulder line toward the neck — 0 is the
   // original broad, square shoulder; the player uses a soft sloped one
   const sl = S.slope ?? 0;
-  const torso = new THREE.Mesh(lathe(smooth([[0.001, -0.01], [0.112, 0.0], [0.125, 0.1], [0.122, 0.17],
-    [0.132 - 0.006 * sl, 0.25 - 0.025 * sl], [0.134 - 0.016 * sl, 0.278 - 0.022 * sl], [0.12 - 0.022 * sl, 0.31 - 0.006 * sl],
-    [0.088 - 0.012 * sl, 0.342], [0.05, 0.362], [0.001, 0.37]], 36), 32), top);
+  // with a full slope the yoke is a real shoulder line: from the neck a gentle, slightly
+  // CONCAVE trapezius run out to a rounded shoulder point — a convex dome there reads hunched
+  const prof = sl >= 1
+    ? [[0.001, -0.01], [0.112, 0.0], [0.122, 0.1], [0.12, 0.17], [0.126, 0.225], [0.124, 0.262],
+       [0.112, 0.29], [0.1, 0.31], [0.089, 0.328], [0.079, 0.343], [0.06, 0.36], [0.001, 0.368]]   // the neckline stays as wide as the collar ring (the torso is shallower front-to-back)
+    : [[0.001, -0.01], [0.112, 0.0], [0.125, 0.1], [0.122, 0.17],
+       [0.132 - 0.006 * sl, 0.25 - 0.025 * sl], [0.134 - 0.016 * sl, 0.278 - 0.022 * sl], [0.12 - 0.022 * sl, 0.31 - 0.006 * sl],
+       [0.088 - 0.012 * sl, 0.342], [0.05, 0.362], [0.001, 0.37]];
+  const tg = lathe(smooth(prof, 36), 32);
+  // S.flatTum (0…1): a lathe is as round in front as at the sides — flatten the FRONT of
+  // the lower torso so the stomach doesn't push out past the waistband
+  if (S.flatTum) {
+    const P = tg.attributes.position;
+    for (let i = 0; i < P.count; i++) {
+      const y = P.getY(i), z = P.getZ(i);
+      if (z > 0) P.setZ(i, z * (1 - 0.3 * S.flatTum * Math.exp(-((y - 0.07) ** 2) / 0.008)));
+    }
+    tg.computeVertexNormals();
+  }
+  const torso = new THREE.Mesh(tg, top);
   const TZ = 0.78 + 0.08 * S.belly;                  // torso depth
   torso.scale.set(B, 1, TZ);
   J.spine.add(torso);
