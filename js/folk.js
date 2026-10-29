@@ -314,6 +314,16 @@ export function makeFolk(spec) {
     }
     tg.computeVertexNormals();
   }
+  // S.slimTop: the shoulders widen the torso (good from the front) but a lathe widens it
+  // front-to-back too; keep the upper body's depth the same as the waist's
+  if (S.slimTop) {
+    const P = tg.attributes.position;
+    for (let i = 0; i < P.count; i++) {
+      const y = P.getY(i);
+      P.setZ(i, P.getZ(i) * (1 - 0.16 * THREE.MathUtils.smoothstep(y, 0.12, 0.24) * (1 - THREE.MathUtils.smoothstep(y, 0.29, 0.335))));   // eased off under the collar so it still fills the ring
+    }
+    tg.computeVertexNormals();
+  }
   const torso = new THREE.Mesh(tg, top);
   const TZ = 0.78 + 0.08 * S.belly;                  // torso depth
   torso.scale.set(B, 1, TZ);
