@@ -228,7 +228,11 @@ export function buildHead(J, S, F, mats) {
       const iris = new THREE.Mesh(new THREE.SphereGeometry(0.0078 * es, 20, 14), paint(irisCol, { hatch: 0 }));
       iris.scale.set(1, 1, 0.35); iris.position.copy(ic); iris.lookAt(ic.clone().add(fwd)); bits.push(add(iris));
       const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.0038 * es, 14, 10), paint(new THREE.Color(irisCol).multiplyScalar(0.45).getHex(), { hatch: 0 }));
-      pupil.scale.set(1, 1, 0.3); pupil.position.copy(ic).addScaledVector(fwd, 0.0008); pupil.lookAt(pupil.position.clone().add(fwd)); bits.push(add(pupil));
+      pupil.scale.set(1, 1, 0.3); pupil.position.copy(ic).addScaledVector(fwd, 0.0008); pupil.lookAt(pupil.position.clone().add(fwd));
+      if (!F.pupilDot) bits.push(add(pupil));
+      // a small black dot at the centre of the pupil
+      const dot = new THREE.Mesh(new THREE.SphereGeometry((F.pupilDot ?? 0.0018) * es, 12, 8), paint(0x111014, { hatch: 0 }));
+      dot.scale.set(1, 1, 0.3); dot.position.copy(pupil.position).addScaledVector(fwd, 0.0006); dot.lookAt(dot.position.clone().add(fwd)); dot.userData.noInk = true; bits.push(add(dot));
       iris.userData.noInk = pupil.userData.noInk = true;
       hlAt = ic.clone().addScaledVector(fwd, 0.0018).add(new THREE.Vector3(-0.0025, 0.0029, 0));
     }
@@ -286,7 +290,7 @@ export function buildHead(J, S, F, mats) {
   switch (F.mouth) {
     case 'smile':             // a simple closed smile: one soft arc, slightly tucked at the corners
       // F.mouthUp raises the smile toward the nose
-      bits.push(add(stroke(shape, arc(-0.17, 0.17, vm + 0.025 + (F.mouthUp ?? 0), 0.045, 11), 0.0034, lineM, 0.0035)));
+      bits.push(add(stroke(shape, arc(-(F.smileW ?? 0.17), F.smileW ?? 0.17, vm + 0.025 + (F.mouthUp ?? 0), 0.045 * (F.smileW ?? 0.17) / 0.17, 13), 0.0034, lineM, 0.0035)));
       break;
     case 'grin': {            // an open smile with teeth
       const top = arc(-0.2, 0.2, vm + 0.015, 0.02), bot = arc(-0.2, 0.2, vm + 0.015, 0.11);
