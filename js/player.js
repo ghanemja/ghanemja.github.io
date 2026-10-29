@@ -21,7 +21,8 @@ const PLAYER_LOOK = {
   slope: 1,
   wideLeg: 1,
   flatTum: 1,
-  slimTop: 1,                                     // upper body as slim side-on as the waist                                     // a flat stomach under the sweater                                     // flowy wide-leg trousers to the shoe
+  slimTop: 1,
+  armGap: 0.09,                                   // a little air between her arms and her sides                                     // upper body as slim side-on as the waist                                     // a flat stomach under the sweater                                     // flowy wide-leg trousers to the shoe
   neck: 0.75,                                      // a shorter neck: with sloped shoulders the full one read giraffe-long                                       // soft sloped shoulders, not a square yoke
   cuff: 0.33,                                     // a sweater sleeve comes down to the hand, no bare wrist tube
   face: { shape: { profile: 1, jaw: 0.28, chin: 0.55, cheeks: 0.5, long: -0.25, skull: 0.55, brow: 0.4 },
@@ -179,7 +180,7 @@ function dressPlayer(g) {
     const skinM = paint(skinHex, { soft: true, hatch: 0.3 });
     grip.visible = false;
     const H = new THREE.Group();
-    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.117, young: 1, res: 104 }), skinM));
+    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.13, young: 1, res: 104 }), skinM));
     ink(H, 'fine');
     hand.add(H);
     hand.rotation.x = -0.06;
@@ -216,14 +217,51 @@ function dressPlayer(g) {
   const handle = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.009, 7, 14, Math.PI), flapM);
   handle.position.set(0, 0.148, -0.01);
   bp.add(handle);
-  for (const s of [-1, 1]) {                    // straps hugging over the shoulders to the chest
-    const strap = new THREE.Mesh(rbox(0.028, 0.16, 0.013, 0.005), flapM);
-    strap.position.set(s * 0.053, 0.062, 0.062);   // seated on the sloped shoulder line
-    strap.rotation.x = -0.3;
-    bp.add(strap);
+  // measure her actual torso (it changes with build/slimTop), so the pack rests ON her back
+  // and the straps ride her surface instead of floating at hand-tuned offsets
+  g.updateMatrixWorld(true);
+  let torso = null, best = 0;
+  J.spine.children.forEach(o => {
+    if (!o.isMesh || o.geometry.type === 'TorusGeometry') return;
+    o.geometry.computeBoundingBox();
+    const v = o.geometry.boundingBox.getSize(new THREE.Vector3()).length();
+    if (v > best) { best = v; torso = o; }
+  });
+  const rc = new THREE.Raycaster(), M = J.spine.matrixWorld, Mi = M.clone().invert();
+  const hit = (from, dir) => {             // spine-local ray → spine-local hit point
+    const o = from.clone().applyMatrix4(M), d = dir.clone().transformDirection(M);
+    rc.set(o, d);
+    const h = rc.intersectObject(torso, false)[0];
+    return h ? h.point.applyMatrix4(Mi) : null;
+  };
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const backZ = (x, y) => hit(V(x, y, -1), V(0, 0, 1))?.z ?? -0.08;
+  const frontZ = (x, y) => hit(V(x, y, 1), V(0, 0, -1))?.z ?? 0.08;
+  const topY = (x, z) => hit(V(x, 1, z), V(0, -1, 0))?.y ?? 0.32;
+  const packY = 0.16, packHalfD = 0.05 * 1.12;
+  bp.rotation.x = 0;
+  bp.position.set(0, packY, backZ(0, packY) - packHalfD + 0.008);      // resting on her back
+  // straps: from under the pack's flap, over each shoulder, down her front, and under the arm
+  // back to the bottom corner of the pack — one continuous band each
+  const strapM = paint(0xd8584a);
+  for (const s of [-1, 1]) {
+    const x = s * 0.056, lift = 0.007;
+    const pts = [
+      V(x * 0.95, packY + 0.09, bp.position.z + packHalfD * 0.6),
+      V(x, 0.29, backZ(x, 0.29) - lift),
+      V(x * 1.05, topY(x * 1.05, 0) + lift, 0),
+      V(x * 1.1, 0.28, frontZ(x * 1.1, 0.28) + lift),
+      V(x * 1.25, 0.2, frontZ(x * 1.25, 0.2) + lift),
+      V(s * 0.1, 0.11, frontZ(s * 0.1, 0.11) * 0.2),
+      V(s * 0.085, packY - 0.1, bp.position.z + packHalfD * 0.7),
+    ];
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const geo = new THREE.TubeGeometry(curve, 48, 0.0075, 6, false);
+    geo.scale(1, 1, 1);
+    const strap = new THREE.Mesh(geo, strapM);
+    ink(strap, 'fine');
+    J.spine.add(strap);
   }
-  bp.position.set(0, 0.16, -0.165);             // riding her back (torso front is +z)
-  bp.rotation.x = 0.1;                          // following the curve of her back
   ink(bp, 'fine');
   J.spine.add(bp);
 }
