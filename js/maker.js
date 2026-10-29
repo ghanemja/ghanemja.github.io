@@ -9,7 +9,7 @@ import { makeBike } from './motion.js';
 import { paint, ink, styleTick, blobShadow } from './style.js';
 import { HAIRSTYLES } from './hair.js';
 import { RENDER_STYLES, applyRenderStyle, applySceneStyle } from './render-styles.js';
-import { PALETTE, TOP_COLOURS, FACES, STYLE_NAMES, DEFAULT, TOPS, BOTTOMS, BODY_TYPES, AGE_MIN, AGE_MAX, AGE_RANGES, randomCitizen, generateCitizens, toPersonSpec, INSTANT, loadRoster, saveRoster, toJSON, fromJSON } from './citizens.js';
+import { PALETTE, TOP_COLOURS, FACES, FEATURES, FACE_SHAPES, STYLE_NAMES, DEFAULT, TOPS, BOTTOMS, BODY_TYPES, AGE_MIN, AGE_MAX, AGE_RANGES, randomCitizen, generateCitizens, toPersonSpec, INSTANT, loadRoster, saveRoster, toJSON, fromJSON } from './citizens.js';
 
 const $ = (s) => document.querySelector(s);
 const stageEl = $('#stage');
@@ -119,7 +119,9 @@ function portrait(p, c) {
 
 // ── editing ──
 function change(key, value, rebuild = !INSTANT.includes(key)) {
-  cur()[key] = value; saveRoster(roster);
+  cur()[key] = value;
+  if (key === 'bodyType' && BODY_TYPES[value]) Object.assign(cur(), { build: BODY_TYPES[value].build, muscle: BODY_TYPES[value].muscle });   // a type is a whole body
+  saveRoster(roster);
   if (rebuild || !current) { queueRebuild(); return; }
   const s = toPersonSpec(cur());
   const map = { skin: { skin: s.skin, lips: s.lips, blush: s.blush }, hair: { hair: s.hair, brows: s.brows }, hairStyle: { hairStyle: s.hairStyle },
@@ -154,6 +156,17 @@ const CLOTHES_ICON = {
   shorts: CL('M11 8h20l3 18h-9l-4-9-4 9H8z', '#b98a5e'),
   skirt: CL('M13 7h16l6 26H7z', '#c98fb5'),
 };
+// face outlines for the face-shape tiles
+const FO = (d) => `<svg viewBox="0 0 42 42" aria-hidden="true"><path d="${d}" fill="#efc3a2" stroke="#2a2230" stroke-width="2" stroke-linejoin="round"/><circle cx="16.5" cy="20" r="1.6" fill="#2a2230"/><circle cx="25.5" cy="20" r="1.6" fill="#2a2230"/><path d="M17.5 28q3.5 2.5 7 0" fill="none" stroke="#2a2230" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+const FACE_ICON = {
+  oval: FO('M21 5c8 0 11 7 11 15s-4 17-11 17-11-9-11-17S13 5 21 5z'),
+  round: FO('M21 6c9 0 13 6 13 15s-5 15-13 15S8 30 8 21 12 6 21 6z'),
+  square: FO('M11 9c2-3 6-4 10-4s8 1 10 4c1 4 1 12 0 18-1 6-6 9-10 9s-9-3-10-9c-1-6-1-14 0-18z'),
+  long: FO('M21 3c7 0 10 6 10 13v10c0 8-5 13-10 13s-10-5-10-13V16c0-7 3-13 10-13z'),
+  heart: FO('M21 6c10 0 13 6 12 13-1 9-7 17-12 18-5-1-11-9-12-18C8 12 11 6 21 6z'),
+  diamond: FO('M21 4c4 0 7 6 11 15-3 9-7 17-11 18-4-1-8-9-11-18C14 10 17 4 21 4z'),
+  soft: FO('M21 6c7 0 10 5 11 12 1 8-2 18-11 18S9 26 10 18c1-7 4-12 11-12z'),
+};
 const icon = (inner, face = true) => `<svg viewBox="0 0 42 42" aria-hidden="true">${face ? HEAD : ''}${inner}</svg>`;
 const BODY_ICON = (w, h) => `<svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="${10 + (1 - h) * 4}" r="5" fill="#efc3a2" stroke="#2a2230" stroke-width="1.5"/><rect x="${21 - w}" y="${16 + (1 - h) * 4}" width="${w * 2}" height="${24 - (1 - h) * 4}" rx="${w * 0.7}" fill="#6f8db0" stroke="#2a2230" stroke-width="1.5"/></svg>`;
 
@@ -173,7 +186,8 @@ const TABS = {
   ],
   Face: [
     { swatches: 'skin', label: 'Skin', colours: PALETTE.skin },
-    { tiles: 'face', label: 'Face shape', options: Object.keys(FACES).map((k, i) => [k, k === 'mix' ? 'Blend' : 'Shape ' + i, icon('', true)]) },
+    { tiles: 'faceShape', label: 'Face shape', options: Object.entries(FACE_SHAPES).map(([k, v]) => [k, v.label, FACE_ICON[k]]) },
+    ...Object.entries(FEATURES).map(([k, ends]) => ({ slider: k, label: { nose: 'Nose', noseWidth: 'Nose width', lips: 'Lips', jaw: 'Jaw', cheekbones: 'Cheekbones', eyeSize: 'Eyes' }[k], ends })),
     { swatches: 'eyes', label: 'Eyes', colours: PALETTE.eyes },
     { slider: 'smile', label: 'Smile', ends: ['calm', 'beaming'] },
   ],

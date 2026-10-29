@@ -74,20 +74,42 @@ export function statureFor(years, sex = 0, height = 0.5) {
 // and men). Where one set has no version of a type, the nearest one stands in.
 // The measured silhouettes alone move a girth only 2–4 cm (they read as "everyone the same"),
 // so each type also carries a girth recipe: where the body is wider or narrower.
+// A type is a whole body: its silhouette, its girths AND its build and muscle (set separately,
+// a "lean" type could be heavy and an "athletic" one soft, which made no sense).
 export const BODY_TYPES = {
-  rectangle: { label: 'Straight', fem: { rectangle: 1 }, man: { rectangle: 1 }, girth: { waist: 0.35, hips: -0.2 } },
-  hourglass: { label: 'Hourglass', women: true, fem: { 'neat-hourglass': 1 }, man: { rectangle: 0.5 }, girth: { waist: -0.5, hips: 0.45, bust: 0.3, shoulders: 0.1 } },
-  curvy: { label: 'Curvy', women: true, fem: { 'full-hourglass': 1 }, man: { triangle: 0.5, apple: 0.3 }, girth: { hips: 0.6, seat: 0.25, bust: 0.45, waist: -0.1 } },
-  pear: { label: 'Pear', fem: { triangle: 1 }, man: { triangle: 1 }, girth: { hips: 0.75, seat: 0.15, shoulders: -0.4, bust: -0.15 } },
-  apple: { label: 'Round', fem: { apple: 1 }, man: { apple: 1 }, girth: { belly: 0.45, waist: 0.6, hips: 0.1 } },
-  diamond: { label: 'Diamond', fem: { diamond: 1 }, man: { apple: 0.6, rectangle: 0.4 }, girth: { waist: 0.45, belly: 0.25, hips: 0.25, shoulders: -0.35 } },
-  wedge: { label: 'Broad shoulders', fem: { 'invert-triangle': 1 }, man: { 'invert-triangle': 1 }, girth: { shoulders: 0.75, hips: -0.4, waist: -0.15 } },
-  trapezoid: { label: 'Athletic', fem: { 'invert-triangle': 0.5, rectangle: 0.5 }, man: { trapezoid: 1 }, girth: { shoulders: 0.5, waist: -0.35, seat: 0.2 } },
-  column: { label: 'Lean', fem: { 'lean-column': 1 }, man: { 'lean-column': 1 }, girth: { waist: -0.3, hips: -0.45, bust: -0.35, seat: -0.3 } },
+  slim: { label: 'Slim', build: 0.12, muscle: 0.35, fem: { 'lean-column': 1 }, man: { 'lean-column': 1 }, girth: { waist: -0.2, hips: -0.3, seat: -0.2 } },
+  average: { label: 'Average', build: 0.45, muscle: 0.45, fem: { rectangle: 0.4 }, man: { rectangle: 0.4 }, girth: {} },
+  athletic: { label: 'Athletic', build: 0.3, muscle: 0.88, fem: { 'invert-triangle': 0.5, rectangle: 0.5 }, man: { trapezoid: 1 }, girth: { shoulders: 0.45, waist: -0.35, seat: 0.15 } },
+  broad: { label: 'Broad', build: 0.65, muscle: 0.72, fem: { 'invert-triangle': 1 }, man: { 'invert-triangle': 1 }, girth: { shoulders: 0.7, waist: 0.15, hips: -0.15 } },
+  curvy: { label: 'Curvy', women: true, build: 0.6, muscle: 0.4, fem: { 'full-hourglass': 1 }, man: { triangle: 0.5, apple: 0.3 }, girth: { hips: 0.6, seat: 0.25, bust: 0.45, waist: -0.1 } },
+  hourglass: { label: 'Hourglass', women: true, build: 0.42, muscle: 0.45, fem: { 'neat-hourglass': 1 }, man: { rectangle: 0.5 }, girth: { waist: -0.5, hips: 0.45, bust: 0.3, shoulders: 0.1 } },
+  pear: { label: 'Pear', build: 0.55, muscle: 0.4, fem: { triangle: 1 }, man: { triangle: 1 }, girth: { hips: 0.75, seat: 0.15, shoulders: -0.4, bust: -0.15 } },
+  round: { label: 'Round', build: 0.8, muscle: 0.35, fem: { apple: 1 }, man: { apple: 1 }, girth: { belly: 0.45, waist: 0.6, hips: 0.1 } },
+  plus: { label: 'Plus size', build: 0.97, muscle: 0.45, fem: { 'full-hourglass': 0.5, apple: 0.4 }, man: { apple: 0.7, rectangle: 0.3 }, girth: { waist: 0.3, hips: 0.35, belly: 0.2, bust: 0.25 } },
 };
+// the earlier names, for saved citizens
+export const BODY_ALIASES = { rectangle: 'average', column: 'slim', diamond: 'round', wedge: 'broad', trapezoid: 'athletic' };
 // (belly is MakeHuman's "pregnant" target, so it is kept to half: a tummy, not a pregnancy)
 const GIRTH_MAX = { belly: 0.5 };
 const GIRTHS = { bust: 'measure/bust-circ', waist: 'measure/waist-circ', hips: 'measure/hips-circ', shoulders: 'measure/shoulder-dist', belly: 'stomach/stomach-pregnant', seat: 'buttocks/buttocks-volume' };
+
+// faces: a head shape (MakeHuman's head-shape targets) and features, each −1..1. The three
+// measured ancestry sets alone differ only subtly — nose and lips — so faces looked alike.
+export const FACE_FEATURES = {
+  jaw: ['chin-width'], chin: ['chin-prominent'], chinLength: ['chin-height'], cheekbones: ['cheek-bones'], cheeks: ['cheek-volume'],
+  fullness: ['head-fat'], nose: ['nose-scale-vert', 'nose-scale-horiz'], noseWidth: ['nose-point-width'], noseBridge: ['nose-hump'],
+  mouth: ['mouth-scale-horiz'], lips: ['mouth-upperlip-volume', 'mouth-lowerlip-volume'], eyes: ['eye-scale'], forehead: ['forehead-scale-vert'],
+};
+export const FACE_SHAPES = {
+  oval: { label: 'Oval', head: 'oval' },
+  round: { label: 'Round', head: 'round', f: { fullness: 0.3, cheeks: 0.2, jaw: -0.1 } },
+  square: { label: 'Square', head: 'square', f: { jaw: 0.45, chin: 0.15 } },
+  long: { label: 'Long', head: 'rectangular', f: { chinLength: 0.35, forehead: 0.2 } },
+  heart: { label: 'Heart', head: 'invertedtriangular', f: { jaw: -0.35, chin: -0.1, cheekbones: 0.25, forehead: 0.15 } },
+  diamond: { label: 'Diamond', head: 'diamond', f: { cheekbones: 0.5, jaw: -0.15 } },
+  soft: { label: 'Soft', head: 'triangular', f: { fullness: 0.35, jaw: 0.1, chin: -0.25 } },
+};
+const pair = (add, base, v) => { if (v) add(`face/${base}-${v > 0 ? 'incr' : 'decr'}`, Math.min(1, Math.abs(v))); };
 
 // MakeHuman's macro blend: which targets, how much, for a set of parameters
 function macroWeights(P) {
@@ -125,11 +147,24 @@ function macroWeights(P) {
   }
   // body type and girths: grown-up shapes, so they come in through the teens
   const grown = THREE.MathUtils.smoothstep(P.age ?? 25, 11, 18);
-  const T = BODY_TYPES[P.shape], amt = (P.shapeAmount ?? 1) * grown, girth = { ...(T?.girth || {}) };
+  const T = BODY_TYPES[BODY_ALIASES[P.shape] ?? P.shape], amt = (P.shapeAmount ?? 1) * grown, girth = { ...(T?.girth || {}) };
   if (T) for (const [set, gw] of [['fem', 1 - P.sex], ['man', P.sex]]) for (const [k, v] of Object.entries(T[set])) add(`shape/${set}-${k}`, gw * v * amt * 1.3);
   for (const g of Object.keys(GIRTHS)) girth[g] = (girth[g] || 0) * amt + (P[g] || 0) * Math.max(0.35, grown);
   if (girth.bust > 0) girth.bust *= 1 - P.sex;                     // (a fuller bust is a woman's)
+  { const kid = 1 - THREE.MathUtils.smoothstep(P.age ?? 25, 4, 15); girth.waist = (girth.waist || 0) + 0.45 * kid; girth.belly = (girth.belly || 0) + 0.2 * kid; girth.hips = (girth.hips || 0) - 0.2 * kid; }   // a child's straight little tummy, not a waist
   for (const [g, v] of Object.entries(girth)) if (v) add(`${GIRTHS[g]}-${v > 0 ? 'incr' : 'decr'}`, Math.min(GIRTH_MAX[g] ?? 1, Math.abs(v)));
+  // the face: head shape and features, plus a child's face (big eyes, a small button nose,
+  // full cheeks, a soft small chin, a high forehead) that grows out through the teens —
+  // without it children were adults' faces on small bodies
+  const F = P.face || {}, FS = FACE_SHAPES[F.shape], young = 1 - THREE.MathUtils.smoothstep(P.age ?? 25, 3, 16);
+  if (FS) add(`face/head-${FS.head}`, (F.amount ?? 0.8) * (0.4 + 0.6 * grown));
+  const feat = { ...(FS?.f || {}) };
+  for (const k of Object.keys(FACE_FEATURES)) feat[k] = (feat[k] || 0) * (0.5 + 0.5 * grown) + (F[k] || 0) * (0.5 + 0.5 * grown);
+  feat.eyes += 0.6 * young; feat.nose -= 0.6 * young; feat.noseBridge -= 0.5 * young; feat.fullness += 0.25 * young; feat.cheeks += 0.15 * young;   // (more read as puffy and jowly)
+  feat.chin -= 0.5 * young; feat.jaw -= 0.4 * young; feat.chinLength -= 0.4 * young; feat.forehead += 0.35 * young; feat.lips += 0.15 * young;
+  for (const [k, v] of Object.entries(feat)) for (const t of FACE_FEATURES[k]) pair(add, t, v);
+  if (young) for (const e of ['left', 'right']) add(`expr/eye-${e}-opened-up`, 0.22 * young);   // a child's eyes are open wide
+  if (P.face?.tilt) add(`face/eye-corner2-${P.face.tilt > 0 ? 'up' : 'down'}`, Math.min(1, Math.abs(P.face.tilt)));
   for (const [k, v] of Object.entries(P.expression || {})) add('expr/' + k, v);   // e.g. { 'mouth-corner-puller': 0.6 }
   return w;
 }

@@ -476,15 +476,17 @@ function eyes(body, look) {
 
 // brows: a tapered stroke laid on the brow ridge above each eye
 function brows(body, H, look) {
-  const out = new THREE.Group(), [l, r] = eyeCentres(body), E = l.distanceTo(r), mat = paint(look.brows, { hatch: 0 });
+  // a young child's brows are fine, fair and set a little higher (heavy ones low over the eyes made every child frown)
+  const young = 1 - THREE.MathUtils.smoothstep(body.P.age ?? 25, 3, 14);
+  const out = new THREE.Group(), [l, r] = eyeCentres(body), E = l.distanceTo(r), mat = paint(new THREE.Color(look.brows).lerp(new THREE.Color(look.skin), 0.45 * young).getHex(), { hatch: 0 });
   for (const c of [l, r]) {
     const s = Math.sign(c.x), pts = [];
     for (let i = 0; i <= 8; i++) {
-      const t = i / 8, p = c.clone().add(new THREE.Vector3(s * E * (-0.28 + 0.62 * t), E * (0.27 + 0.07 * Math.sin(Math.PI * t * 0.9) - 0.05 * t), 0));   // on the brow ridge, not up on the forehead
+      const t = i / 8, p = c.clone().add(new THREE.Vector3(s * E * (-0.28 + 0.62 * t), E * (0.27 + 0.05 * young + 0.07 * Math.sin(Math.PI * t * 0.9) - 0.05 * t), 0));   // on the brow ridge, not up on the forehead
       const d = p.clone().sub(H.C).normalize();
       pts.push(d.multiplyScalar(H.radius(d) * 1.012).add(H.C));
     }
-    const curve = new THREE.CatmullRomCurve3(pts), g = new THREE.TubeGeometry(curve, 24, E * 0.036, 6);
+    const curve = new THREE.CatmullRomCurve3(pts), g = new THREE.TubeGeometry(curve, 24, E * (0.036 - 0.012 * young), 6);
     const P = g.attributes.position, q = new THREE.Vector3(), cc = new THREE.Vector3();
     for (let i = 0; i < P.count; i++) {                    // taper: full at the inner end, fine at the tail
       const t = Math.floor(i / 7) / 24; curve.getPointAt(Math.min(1, t), cc);

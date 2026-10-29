@@ -11,8 +11,8 @@
 // and sex, and topType / bottomType are keys of TOPS / BOTTOMS (js/people.js).
 import { HAIRSTYLES } from './hair.js';
 import { TOPS, BOTTOMS } from './people.js';
-import { BODY_TYPES } from './anatomy.js';
-export { TOPS, BOTTOMS, BODY_TYPES };
+import { BODY_TYPES, BODY_ALIASES, FACE_SHAPES } from './anatomy.js';
+export { TOPS, BOTTOMS, BODY_TYPES, FACE_SHAPES };
 
 export const PALETTE = {
   skin: [0xf7dcc8, 0xf0c8a8, 0xe3b08a, 0xcf9670, 0xb47a52, 0x93603e, 0x744a2f, 0x553422],
@@ -27,7 +27,15 @@ const dist = (a, b) => Math.hypot(((a >> 16) & 255) - ((b >> 16) & 255), ((a >> 
 export const skinLike = (c) => PALETTE.skin.some(s => dist(c, s) < 27);
 export const TOP_COLOURS = PALETTE.clothes.filter(c => !skinLike(c));
 export const BOTTOM_SWATCHES = TOP_COLOURS;
-// face shapes: blends of MakeHuman's three measured face sets (shown as shapes, not labels)
+// a face: its shape (FACE_SHAPES) and feature sliders (0..1, 0.5 = as the shape has it),
+// over a blend of MakeHuman's three measured face sets (`face`, dealt out for variety)
+export const FEATURES = { nose: ['small', 'large'], noseWidth: ['narrow', 'wide'], lips: ['thin', 'full'], jaw: ['soft', 'strong'], cheekbones: ['soft', 'high'], eyeSize: ['smaller', 'bigger'] };
+const faceOf = (c) => {
+  const f = { shape: c.faceShape ?? 'oval' };
+  for (const k of Object.keys(FEATURES)) f[k === 'eyeSize' ? 'eyes' : k] = ((c[k] ?? 0.5) - 0.5) * 1.6;
+  return f;
+};
+// (the three face sets)
 export const FACES = {
   mix: { african: 1, asian: 1, caucasian: 1 },
   one: { african: 1, asian: 0.15, caucasian: 0.15 },
@@ -41,7 +49,7 @@ export const AGE_MIN = 2, AGE_MAX = 90;
 export const AGE_RANGES = { all: [2, 90], kids: [2, 12], teens: [13, 19], young: [20, 35], adults: [20, 65], middle: [40, 60], seniors: [65, 90] };
 
 export const DEFAULT = {
-  name: 'Rosa', style: 'town', sex: 0, age: 30, height: 0.45, build: 0.42, bodyType: 'hourglass', muscle: 0.45, face: 'mix',
+  name: 'Rosa', style: 'town', sex: 0, age: 30, height: 0.45, build: 0.42, bodyType: 'hourglass', muscle: 0.45, face: 'mix', faceShape: 'heart',
   skin: 0xefc3a2, eyes: 0x4a3226, smile: 0.7, hairStyle: 'bob', hair: 0xc9a06a,
   topType: 'sweater', top: 0x2f2b33, bottomType: 'trousers', bottom: 0x6f8db0, shoes: 0xf1ebdf,
 };
@@ -62,6 +70,7 @@ const MAN_HAIR = ['buzz', 'crop', 'crop', 'pixie', 'curly', 'bob'], WOMAN_HAIR =
 const BOTTOM_COLOURS = [0x6f8db0, 0x3f5a7a, 0x2f2b33, 0x9aa3a8, 0x6f8a6a, 0x7a5a8e], SHOES = [0xf1ebdf, 0x2f2b33, 0xd8584a, 0x8e2f3a, 0x5b4636];
 
 // (anyone can be given any type; a batch deals men the types that occur in men)
+const clamp01 = (v) => Math.max(0.02, Math.min(0.98, v));
 const typesFor = (sex) => Object.keys(BODY_TYPES).filter(k => sex < 0.5 || !BODY_TYPES[k].women);
 // one citizen; `o` can pin anything (sex, skin, …) — the batch uses that to spread variety evenly
 export function randomCitizen(rand = Math.random, o = {}) {
@@ -71,11 +80,15 @@ export function randomCitizen(rand = Math.random, o = {}) {
   const age = Math.round(o.age ?? r(o.ageMin ?? 18, o.ageMax ?? 65));
   // grey comes in from the mid forties; by eighty most people are grey or white
   const grey = rand() < Math.min(0.85, Math.max(0, (age - 45) / 38)), skin = o.skin ?? pick(PALETTE.skin);
+  const bodyType = o.bodyType ?? pick(typesFor(sex)), BT = BODY_TYPES[bodyType];
   return {
     name: o.name ?? pick(NAMES), style: o.style ?? 'town', sex, age,
-    height: o.height ?? 0.05 + 0.9 * bell(), build: o.build ?? 0.02 + 0.96 * bell(), muscle: o.muscle ?? 0.05 + 0.9 * bell(),
-    bodyType: o.bodyType ?? pick(typesFor(sex)),
-    face: o.face ?? pick(Object.keys(FACES)), skin, eyes: o.eyes ?? pick(PALETTE.eyes), smile: o.smile ?? r(0.25, 0.95),
+    height: o.height ?? 0.05 + 0.9 * bell(), bodyType,
+    // build and muscle come from the body type, varied a little round it
+    build: o.build ?? clamp01(BT.build + (rand() - 0.5) * 0.2), muscle: o.muscle ?? clamp01(BT.muscle + (rand() - 0.5) * 0.2),
+    face: o.face ?? pick(Object.keys(FACES)), faceShape: o.faceShape ?? pick(Object.keys(FACE_SHAPES)),
+    ...Object.fromEntries(Object.keys(FEATURES).map(k => [k, o[k] ?? 0.5 + (bell() - 0.5) * 0.9])),
+    skin, eyes: o.eyes ?? pick(PALETTE.eyes), smile: o.smile ?? r(0.25, 0.95),
     hairStyle: o.hairStyle ?? pick(sex > 0.5 ? MAN_HAIR : WOMAN_HAIR),
     hair: o.hair ?? (grey ? pick([0xd6d0c6, 0xd6d0c6, 0xb9b3ab]) : rand() < 0.08 && age < 60 ? pick(PALETTE.hair.slice(8)) : pick(PALETTE.hair.slice(0, 7))),
     ...outfit(pick, o, rand, sex, skin),
@@ -100,7 +113,7 @@ function outfit(pick, o, rand, sex, skin) {
 export function generateCitizens(n, { seed = null, style = 'town', women = 0.5, ageMin = 18, ageMax = 65 } = {}) {
   ageMin = Math.max(AGE_MIN, Math.min(AGE_MAX, ageMin)); ageMax = Math.max(ageMin, Math.min(AGE_MAX, ageMax));
   const rand = rng(seed), deck = (a) => { const d = a.slice(); for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; } return d; };
-  const decks = { skin: [], face: [], hair: [], name: [], bodyW: [], bodyM: [] }, src = { bodyW: typesFor(0), bodyM: typesFor(1), skin: PALETTE.skin, face: Object.keys(FACES), hair: PALETTE.hair.slice(0, 7), name: NAMES };
+  const decks = { skin: [], face: [], hair: [], name: [], bodyW: [], bodyM: [], shape: [] }, src = { shape: Object.keys(FACE_SHAPES), bodyW: typesFor(0), bodyM: typesFor(1), skin: PALETTE.skin, face: Object.keys(FACES), hair: PALETTE.hair.slice(0, 7), name: NAMES };
   const draw = (k) => { if (!decks[k].length) decks[k] = deck(src[k]); return decks[k].pop(); };
   const out = [], used = new Map();
   const ages = deck(Array.from({ length: n }, (_, i) => ageMin + (i + rand()) / n * (ageMax - ageMin)));
@@ -109,7 +122,7 @@ export function generateCitizens(n, { seed = null, style = 'town', women = 0.5, 
     const woman = (w + 1) / (i + 1) <= women + 1e-9 ? (w++, true) : false;     // keep the running share on target
     let name = draw('name'); const k = used.get(name) || 0; used.set(name, k + 1); if (k) name += ' ' + (k + 1);
     out.push({ id: `c${seed ?? Date.now()}-${i}`, ...randomCitizen(rand, {
-      name, style, sex: woman ? rand() * 0.12 : 0.88 + rand() * 0.12, age: ages[i], bodyType: draw(woman ? 'bodyW' : 'bodyM'), skin: draw('skin'), face: draw('face'),
+      name, style, sex: woman ? rand() * 0.12 : 0.88 + rand() * 0.12, age: ages[i], bodyType: draw(woman ? 'bodyW' : 'bodyM'), skin: draw('skin'), face: draw('face'), faceShape: draw('shape'),
       ...(rand() < 0.9 && ages[i] < 50 ? { hair: draw('hair') } : {}),
     }) });
   }
@@ -127,7 +140,7 @@ export function toPersonSpec(c, { render } = {}) {
   c = { ...DEFAULT, ...c };
   return {
     style: c.style, hairStyle: c.hairStyle, hair: c.hair, topType: c.topType, bottomType: BOTTOMS[c.bottomType] ? c.bottomType : 'trousers',   // (saved skirts: trousers for now) ...(render ? { render } : {}),
-    body: { sex: c.sex, age: c.age, shape: c.bodyType, muscle: c.muscle, weight: c.build, height: c.height, proportions: 0.55, ancestry: FACES[c.face] ?? FACES.mix },
+    body: { sex: c.sex, age: c.age, shape: BODY_ALIASES[c.bodyType] ?? c.bodyType, face: faceOf(c), muscle: c.muscle, weight: c.build, height: c.height, proportions: 0.55, ancestry: FACES[c.face] ?? FACES.mix },
     expression: { 'mouth-corner-puller': 0.1 + 0.6 * c.smile, 'mouth-elevation': 0.2 * c.smile, 'eye-left-slit': 0.05 * c.smile, 'eye-right-slit': 0.05 * c.smile, 'eye-left-opened-up': 0.08, 'eye-right-opened-up': 0.08 },
     skin: c.skin, lips: mix(c.skin, 0xc0606a, 0.6), blush: mix(c.skin, 0xe58a80, 0.55), eyes: c.eyes,
     brows: mix(c.hair, 0x1a1214, 0.35), top: c.top, bottom: c.bottom, shoes: c.shoes, sole: c.shoes === 0xf1ebdf ? 0xc98f5a : mix(c.shoes, 0xffffff, 0.55),

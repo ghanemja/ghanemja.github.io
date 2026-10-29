@@ -48,6 +48,14 @@ export const SHAPES = {
 for (const [g, list] of Object.entries(SHAPES)) for (const sh of list) TARGETS.push(`bodyshapes/bodyshapes-elvs-${g}-${sh}`);
 for (const m of ['bust', 'underbust', 'waist', 'hips', 'thigh', 'upperarm']) for (const d of ['decr', 'incr']) TARGETS.push(`measure/measure-${m}-circ-${d}`);
 for (const d of ['decr', 'incr']) TARGETS.push(`measure/measure-shoulder-dist-${d}`, `stomach/stomach-pregnant-${d}`, `buttocks/buttocks-volume-${d}`);
+// face structure: head shapes, and the features that make faces differ (left + right summed into one)
+for (const h of ['oval', 'round', 'square', 'rectangular', 'triangular', 'invertedtriangular', 'diamond']) TARGETS.push(`head/head-${h}`);
+for (const d of ['decr', 'incr']) {
+  for (const t of ['head/head-fat', 'chin/chin-width', 'chin/chin-prominent', 'chin/chin-height', 'nose/nose-scale-horiz', 'nose/nose-scale-vert', 'nose/nose-hump',
+    'nose/nose-point-width', 'mouth/mouth-scale-horiz', 'mouth/mouth-upperlip-volume', 'mouth/mouth-lowerlip-volume', 'forehead/forehead-scale-vert']) TARGETS.push(`${t}-${d}`);
+  for (const t of ['cheek/{s}-cheek-bones', 'cheek/{s}-cheek-volume', 'eyes/{s}-eye-scale']) TARGETS.push({ sum: t.replace('{s}-', '').replace(/^\w+\//, 'face/') + '-' + d, of: ['l', 'r'].map(sd => t.replace('{s}', sd) + '-' + d) });
+}
+for (const d of ['up', 'down']) TARGETS.push({ sum: `face/eye-corner2-${d}`, of: ['l', 'r'].map(sd => `eyes/${sd}-eye-corner2-${d}`) });
 const KEEP_GROUPS = new Set(['body', 'helper-hair', 'helper-l-eye', 'helper-r-eye', 'helper-skirt']);
 
 async function get(path) {
@@ -147,14 +155,14 @@ async function pack(list) {
   };
   for (const item of list) {
     let t = item, m;
-    if (typeof item === 'object') {                                 // an average of several targets
-      t = item.avg; m = new Map();
-      for (const src of item.of) for (const [i, d] of await read(src)) { const a = m.get(i) || [0, 0, 0]; m.set(i, a.map((x, k) => x + d[k] / item.of.length)); }
+    if (typeof item === 'object') {                                 // an average (avg) or a sum (sum) of several targets
+      t = item.avg ?? item.sum; m = new Map(); const w = item.avg ? 1 / item.of.length : 1;
+      for (const src of item.of) for (const [i, d] of await read(src)) { const a = m.get(i) || [0, 0, 0]; m.set(i, a.map((x, k) => x + d[k] * w)); }
     } else m = await read(t);
     const rows = []; let maxD = 1e-9;
     for (const [i, [dx, dy, dz]] of m) { rows.push([i, dx, dy, dz]); maxD = Math.max(maxD, Math.abs(dx), Math.abs(dy), Math.abs(dz)); }
     const q = maxD / 32767;
-    out[t.replace(/^macrodetails\/(height\/|proportions\/)?/, '').replace(/^expression\/units\/caucasian\//, 'expr/').replace(/^bodyshapes\/bodyshapes-elvs-/, 'shape/').replace(/^measure\/measure-/, 'measure/')] = {
+    out[t.replace(/^macrodetails\/(height\/|proportions\/)?/, '').replace(/^expression\/units\/caucasian\//, 'expr/').replace(/^bodyshapes\/bodyshapes-elvs-/, 'shape/').replace(/^measure\/measure-/, 'measure/').replace(/^(head|chin|nose|mouth|forehead)\//, 'face/')] = {
       q, idx: b64(Uint16Array.from(rows.map(r => r[0]))),
       d: b64(Int16Array.from(rows.flatMap(r => [r[1], r[2], r[3]].map(x => Math.round(x / q))))),
     };

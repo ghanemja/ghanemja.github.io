@@ -45,8 +45,11 @@ Vary people with these, not by editing meshes.
 
 ## Body types
 People are not one body scaled. `body.shape` picks a body type (`BODY_TYPES` in
-js/anatomy.js): straight, hourglass, curvy, pear, round, diamond, broad shoulders,
-athletic, lean. Each is MakeHuman's measured silhouette for that type (`bodyshapes`,
+js/anatomy.js): slim, average, athletic, broad, curvy, hourglass, pear, round, plus size.
+**A type is a whole body: its own build and muscle as well as its shape.** With the
+silhouette chosen separately from the Build and Muscle sliders, a "lean" type could be
+heavy and an "athletic" one soft, which made no sense. Picking a type in the maker sets
+both sliders, which still fine-tune; batches vary them a little round the type. Each is MakeHuman's measured silhouette for that type (`bodyshapes`,
 separate female and male sculpts; a missing one borrows the nearest) **plus a girth
 recipe**, because the silhouettes alone move a girth only 2–4 cm and every type read as
 the same. Girths are their own parameters too, −1..1: `bust`, `waist`, `hips`,
@@ -56,6 +59,19 @@ fade in through the teens; children don't have them.
   `build` and `muscle` over almost the whole range, two-dice rather than three. With a
   three-dice bell everyone came out near average and the crowd looked cloned.
 - Check a new type in the lab: `?shape=pear&weight=0.7&top=tee&bottom=skirt`, front AND side.
+
+## Faces
+`body.face = { shape, nose, noseWidth, lips, jaw, chin, cheekbones, cheeks, eyes, … }`
+(−1..1). The shape is one of MakeHuman's head-shape targets (oval, round, square, long,
+heart, diamond, soft; `FACE_SHAPES`) with a few features of its own, and the features
+are MakeHuman's measured local targets (`FACE_FEATURES`). The three ancestry face sets
+alone differ only subtly, mostly nose and lips, so on their own every citizen's face
+looked the same.
+- **Children have children's faces**, which fade out through the teens: bigger, wider-open
+  eyes, a small button nose, fuller cheeks, a soft small chin, a high forehead, and fine,
+  fair brows set a little higher. Without these they were adult faces on small bodies;
+  proportions alone (heads tall, leg length) were already right. Keep the cheeks modest:
+  more reads as puffy and jowly. Children also get a straight little tummy, not a waist.
 
 ## Age
 `body.age` is in years, 1–90 (default 25). MakeHuman's age axis is not linear in years

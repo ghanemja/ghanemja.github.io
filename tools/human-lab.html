@@ -36,6 +36,9 @@ const yaw = THREE.MathUtils.degToRad(+(q.get('yaw') ?? 0)), pitch = THREE.MathUt
 const focus = q.get('focus') || 'full';
 const body = {}; for (const k of ['sex', 'age', 'muscle', 'weight', 'height', 'proportions']) if (q.has(k)) body[k] = +q.get(k);
 if (q.has('shape')) body.shape = q.get('shape');
+if (q.has('face')) body.face = { shape: q.get('face') };
+for (const [k, v] of q) if (k.startsWith('f_')) (body.face ??= {})[k.slice(2)] = +v;
+if (q.has('anc')) { const [a, b, c] = q.get('anc').split(',').map(Number); body.ancestry = { african: a, asian: b, caucasian: c }; }
 for (const k of ['shapeAmount', 'bust', 'waist', 'hips', 'shoulders', 'belly', 'seat']) if (q.has(k)) body[k] = +q.get(k);
 const render = q.get('render') || 'gouache';
 
@@ -71,6 +74,8 @@ const FOCI = { full: [0.5, H * 1.15], head: [0.91, H * 0.2], hands: [0.47, H * 0
 const [fy, span] = FOCI[focus] || FOCI.full;
 const w = focus === 'full' ? Math.max(span, gap * people.length * 0.9) : span;
 let target = new THREE.Vector3(focus === 'full' ? 0 : people[0].group.position.x, H * fy, 0), wFrame = w;
+// head: on this person's own head (children are shorter and their heads a larger share)
+if (focus === 'head') { const P0 = people[0], hd = P0.sk.byName.head.getWorldPosition(new THREE.Vector3()); target = hd.add(new THREE.Vector3(0, 0.035 * P0.body.P.stature / 1.7 + 0.04, 0)); wFrame = 0.36; }
 // handL / handR: a tight close-up on that hand wherever the pose put it
 if (/^hand[LR]$/.test(focus)) {
   const b = people[0].sk.byName['wrist.' + focus.slice(-1)], f = people[0].sk.byName['finger3-2.' + focus.slice(-1)];
