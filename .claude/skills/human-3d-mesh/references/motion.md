@@ -4,7 +4,8 @@
 Nothing in it is tuned to one body: it measures the person (thigh, shin, leg, arm,
 hip width, ankle height, shoulder and hip positions) and drives the skeleton from
 those numbers. A tall man, a short woman, a storybook figure and a chibi all walk,
-sit and ride without adjustment.
+sit and ride without adjustment, and so do a five-year-old and an eighty-year-old (the
+bike is sized from the rider's own leg and reach).
 
 ```js
 const m = person.motion;

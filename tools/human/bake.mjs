@@ -17,22 +17,29 @@ const COMMIT = 'a8bc2d54ff0ac92e78ff71431b1023eda42bf482';   // makehumancommuni
 const RAW = `https://raw.githubusercontent.com/makehumancommunity/makehuman/${COMMIT}/makehuman/data/`;
 const here = dirname(fileURLToPath(import.meta.url));
 const CACHE = join(here, '.cache');
-const OUT = join(here, '../../models/human/makehuman.json');
+const OUT = join(here, '../../models/human/makehuman.json'), OUT_AGES = join(here, '../../models/human/ages.json');
 
 const MW = ['minmuscle-averageweight', 'maxmuscle-averageweight', 'averagemuscle-minweight', 'averagemuscle-maxweight',
   'minmuscle-minweight', 'minmuscle-maxweight', 'maxmuscle-minweight', 'maxmuscle-maxweight'];
-const TARGETS = [];
+// core (adults, loaded with the page) and ages (baby / child / old, loaded only when someone isn't an adult)
+const TARGETS = [], AGES = [];
 for (const g of ['female', 'male']) {
   for (const e of ['african', 'asian', 'caucasian']) TARGETS.push(`macrodetails/${e}-${g}-young`);
   for (const mw of MW) TARGETS.push(`macrodetails/universal-${g}-young-${mw}`);
   for (const h of ['minheight', 'maxheight']) TARGETS.push(`macrodetails/height/${g}-young-averagemuscle-averageweight-${h}`);
   for (const p of ['idealproportions', 'uncommonproportions']) TARGETS.push(`macrodetails/proportions/${g}-young-averagemuscle-averageweight-${p}`);
+  for (const a of ['baby', 'child', 'old']) {
+    AGES.push({ avg: `avg-${g}-${a}`, of: ['african', 'asian', 'caucasian'].map(e => `macrodetails/${e}-${g}-${a}`) });   // one averaged face set per age
+    for (const mw of MW.slice(0, 4)) AGES.push(`macrodetails/universal-${g}-${a}-${mw}`);     // the four axes (no diagonals) keep the file small
+    // (no per-age height or proportion targets: stature comes from a growth curve, and the adult
+    //  height / proportion targets carry that variation — the per-age ones were 2 MB of the file)
+  }
 }
 // facial expression units (caucasian set; small, local deltas)
 for (const u of ['mouth-corner-puller', 'mouth-elevation', 'mouth-upward-retraction', 'mouth-compression',
   'eyebrows-left-up', 'eyebrows-right-up', 'eyebrows-left-inner-up', 'eyebrows-right-inner-up',
   'eye-left-slit', 'eye-right-slit', 'eye-left-opened-up', 'eye-right-opened-up']) TARGETS.push(`expression/units/caucasian/${u}`);
-const KEEP_GROUPS = new Set(['body', 'helper-hair', 'helper-l-eye', 'helper-r-eye']);
+const KEEP_GROUPS = new Set(['body', 'helper-hair', 'helper-l-eye', 'helper-r-eye', 'helper-skirt']);
 
 async function get(path) {
   const f = join(CACHE, path.replace(/\//g, '__'));
@@ -117,32 +124,42 @@ perV.forEach((m, i) => {
   if (!top.length) { skinI[i * 4] = bix.get('root'); skinW[i * 4] = 255; }
 });
 
-// ── targets ──
-const targets = {};
-let maxD = 0;
-const parsed = {};
-for (const t of TARGETS) {
-  const rows = [];
-  for (const line of (await get(`targets/${t}.target`)).split('\n')) {
-    if (!line || line[0] === '#') continue;
-    const [v, dx, dy, dz] = line.trim().split(/\s+/).map(Number);
-    const i = remap.get(v);
-    if (i == null) continue;
-    rows.push([i, dx, dy, dz]); maxD = Math.max(maxD, Math.abs(dx), Math.abs(dy), Math.abs(dz));
-  }
-  parsed[t] = rows;
-}
-const Q = maxD / 32767;
-for (const [t, rows] of Object.entries(parsed)) {
-  targets[t.replace(/^macrodetails\/(height\/|proportions\/)?/, '').replace(/^expression\/units\/caucasian\//, 'expr/')] = {
-    idx: b64(Uint16Array.from(rows.map(r => r[0]))),
-    d: b64(Int16Array.from(rows.flatMap(r => [r[1], r[2], r[3]].map(x => Math.round(x / Q))))),
+// ── targets: each with its own quantization scale (so big child shapes don't cost the adults precision) ──
+async function pack(list) {
+  const out = {};
+  const read = async (t) => {
+    const m = new Map();
+    for (const line of (await get(`targets/${t}.target`)).split('\n')) {
+      if (!line || line[0] === '#') continue;
+      const [v, dx, dy, dz] = line.trim().split(/\s+/).map(Number);
+      const i = remap.get(v); if (i != null) m.set(i, [dx, dy, dz]);
+    }
+    return m;
   };
+  for (const item of list) {
+    let t = item, m;
+    if (typeof item === 'object') {                                 // an average of several targets
+      t = item.avg; m = new Map();
+      for (const src of item.of) for (const [i, d] of await read(src)) { const a = m.get(i) || [0, 0, 0]; m.set(i, a.map((x, k) => x + d[k] / item.of.length)); }
+    } else m = await read(t);
+    const rows = []; let maxD = 1e-9;
+    for (const [i, [dx, dy, dz]] of m) { rows.push([i, dx, dy, dz]); maxD = Math.max(maxD, Math.abs(dx), Math.abs(dy), Math.abs(dz)); }
+    const q = maxD / 32767;
+    out[t.replace(/^macrodetails\/(height\/|proportions\/)?/, '').replace(/^expression\/units\/caucasian\//, 'expr/')] = {
+      q, idx: b64(Uint16Array.from(rows.map(r => r[0]))),
+      d: b64(Int16Array.from(rows.flatMap(r => [r[1], r[2], r[3]].map(x => Math.round(x / q))))),
+    };
+  }
+  return out;
 }
+const targets = await pack(TARGETS), ageTargets = await pack(AGES);
+const skirtW = [...new Set(groups['helper-skirt'].flat())].filter(v => perV[remap.get(v)].size).length;
+console.log(`skirt helper: ${skirtW} of ${new Set(groups['helper-skirt'].flat()).size} vertices carry skin weights`);
 
 await mkdir(dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify({
   source: `MakeHuman ${COMMIT.slice(0, 7)} (makehumancommunity/makehuman) — base mesh, targets, rig and weights are CC0 1.0`,
-  units: 'decimetres', n: N, pos: b64(pos), tris, bones, joints, skinI: b64(skinI), skinW: b64(skinW), q: Q, targets,
+  units: 'decimetres', n: N, pos: b64(pos), tris, bones, joints, skinI: b64(skinI), skinW: b64(skinW), targets,
 }));
-console.log(`verts ${N}, tris ${Object.entries(groups).map(([k, f]) => k + ' ' + f.length).join(', ')} quads, bones ${bones.length}, targets ${Object.keys(targets).length}, max delta ${maxD.toFixed(3)}`);
+await writeFile(OUT_AGES, JSON.stringify({ source: 'MakeHuman ' + COMMIT.slice(0, 7) + ' age targets (CC0 1.0)', n: N, targets: ageTargets }));
+console.log(`verts ${N}, tris ${Object.entries(groups).map(([k, f]) => k + ' ' + f.length).join(', ')} quads, bones ${bones.length}, targets ${Object.keys(targets).length} + ${Object.keys(ageTargets).length} age targets`);

@@ -12,7 +12,8 @@
 // Garments are smoothed so they drape over the body instead of shrink-wrapping
 // it, then pushed back out wherever smoothing sank them inside.
 import * as THREE from 'three';
-import { loadAnatomy, buildBody, buildSkeleton, regionWeight } from './anatomy.js';
+import { loadAnatomy, loadAges, needsAges, statureFor, buildBody, buildSkeleton, regionWeight } from './anatomy.js';
+import { applyRenderStyle, recolor } from './render-styles.js';
 import { stylize, STYLES, smoothSurface, eyeCentres, headHeight } from './stylize.js';
 import { paint, ink } from './style.js';
 import { shoeGeo } from './folk.js';
@@ -41,8 +42,8 @@ function vertexNormals(pos, tris) {
 // A garment is the body surface cut along smooth fields (the rig's own weight
 // falloffs, or a height), split exactly on the cut so hems are clean curves,
 // not the stair-step of whole triangles.
-function surface(body, N) {
-  const { A } = body, S = { P: [], N: [], K: [], T: Array.from(A.tris.body), f: {} };
+function surface(body, N, tris = body.A.tris.body) {
+  const { A } = body, S = { P: [], N: [], K: [], T: Array.from(tris), f: {} };
   for (let i = 0; i < A.n; i++) {
     S.P.push(body.pos[i * 3], body.pos[i * 3 + 1], body.pos[i * 3 + 2]);
     S.N.push(N[i * 3], N[i * 3 + 1], N[i * 3 + 2]);
@@ -126,26 +127,158 @@ function drape(S, { thick, ease = () => 0, smooth = 10, smoothW = null, min = th
   return Pf;
 }
 
+// ── soften the hidden torso the clothes are fitted to: smoothing by DISTANCE, not by mesh
+// neighbour. MakeHuman's mesh is dense where the anatomy is detailed, so neighbour smoothing
+// barely moves it (22 Laplacian passes moved the chest 7 mm). Each torso vertex looks at every
+// torso point within ~2σ (a spatial hash finds them) and moves toward their Gaussian- and
+// area-weighted average — but only along their averaged normal. Moving freely bunched dense patches into flat
+// fans; moving along each vertex's own normal dug craters where those normals are noisy. Blended by w.
+function spatialSmooth(pos, tris, w, { sigma = 0.05, rounds = 4, outOnly = false } = {}) {
+  const ids = [...new Set(tris)].filter(i => w[i] > 0.01), R = sigma * 2, inv = 1 / (2 * sigma * sigma);
+  for (let round = 0; round < rounds; round++) {
+    const Nn = vertexNormals(Float32Array.from(pos), tris);
+    // each point counts by the surface area it stands for (a third of its triangles), not once
+    // per vertex — otherwise a densely meshed pit (the navel) outvotes the surface round it
+    const area = new Float32Array(pos.length / 3), e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), p0 = new THREE.Vector3();
+    for (let t = 0; t < tris.length; t += 3) {
+      p0.fromArray(pos, tris[t] * 3); e1.fromArray(pos, tris[t + 1] * 3).sub(p0); e2.fromArray(pos, tris[t + 2] * 3).sub(p0);
+      const a = e1.cross(e2).length() / 6; area[tris[t]] += a; area[tris[t + 1]] += a; area[tris[t + 2]] += a;
+    }
+    const grid = new Map(), key = (x, y, z) => `${Math.floor(x / R)},${Math.floor(y / R)},${Math.floor(z / R)}`;
+    for (const i of ids) { const k = key(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]); (grid.get(k) || grid.set(k, []).get(k)).push(i); }
+    const out = new Float32Array(ids.length * 3);
+    ids.forEach((i, n) => {
+      const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2], cx = Math.floor(x / R), cy = Math.floor(y / R), cz = Math.floor(z / R);
+      let sx = 0, sy = 0, sz = 0, nx = 0, ny = 0, nz = 0, sw = 0;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+        const cell = grid.get(`${cx + a},${cy + b},${cz + c}`); if (!cell) continue;
+        for (const j of cell) {
+          const dx = pos[j * 3] - x, dy = pos[j * 3 + 1] - y, dz = pos[j * 3 + 2] - z, d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 > R * R) continue;
+          const g = Math.exp(-d2 * inv) * area[j];
+          sx += pos[j * 3] * g; sy += pos[j * 3 + 1] * g; sz += pos[j * 3 + 2] * g;
+          nx += Nn[j * 3] * g; ny += Nn[j * 3 + 1] * g; nz += Nn[j * 3 + 2] * g; sw += g;
+        }
+      }
+      const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+      let d = ((sx / sw - x) * nx + (sy / sw - y) * ny + (sz / sw - z) * nz) * w[i];
+      if (outOnly && d < 0) d = 0;                                     // (filling pits only)
+      out[n * 3] = x + nx * d; out[n * 3 + 1] = y + ny * d; out[n * 3 + 2] = z + nz * d;
+    });
+    ids.forEach((i, n) => pos.set(out.subarray(n * 3, n * 3 + 3), i * 3));
+  }
+}
+
+// ── cloth hangs: it is carried down from the high points and bridges the hollows ──
+// Around the torso (cylinder coordinates about its axis), the fabric's radius at each
+// height is at least what it was above it, tapering gently (a top falls from the bust
+// and shoulder blades instead of following the waist in), and at least its neighbours'
+// round the torso (it spans hollows rather than dipping into them). Only ever pushed
+// outward. w(i) = how much vertex i is torso (1) rather than sleeve (0).
+function hang(P, S, w, { NT = 48, NY = 36, fall = 0.975, top = Infinity, band = 0.15, maxPush = 0.03, hem = -Infinity, hemBand = 0.06 } = {}) {
+  // only below the armpits: above them the top follows the shoulders (hanging from the shoulder
+  // ring pushed the whole sweater out to shoulder width)
+  const ids = [...new Set(S.T)].filter(i => w(i) > 0.05 && P[i * 3 + 1] < top);
+  if (!ids.length) return P;
+  let y0 = 1e9, y1 = -1e9;
+  for (const i of ids) { y0 = Math.min(y0, P[i * 3 + 1]); y1 = Math.max(y1, P[i * 3 + 1]); }
+  // each row's axis is the middle of its extent, smoothed between rows — NOT the mean of its
+  // vertices: a densely meshed spot (the navel) dragged the mean forward, and since the radii
+  // falling from above were measured round a different centre, the front bulged out there
+  const cx = new Float32Array(NY), cz = new Float32Array(NY), lo = new Float32Array(NY * 2).fill(1e9), hi = new Float32Array(NY * 2).fill(-1e9);
+  const row = (y) => Math.min(NY - 1, Math.max(0, Math.floor((y - y0) / (y1 - y0 + 1e-6) * NY)));
+  for (const i of ids) {
+    if (w(i) < 0.7) continue; const r = row(P[i * 3 + 1]);
+    lo[r * 2] = Math.min(lo[r * 2], P[i * 3]); hi[r * 2] = Math.max(hi[r * 2], P[i * 3]); lo[r * 2 + 1] = Math.min(lo[r * 2 + 1], P[i * 3 + 2]); hi[r * 2 + 1] = Math.max(hi[r * 2 + 1], P[i * 3 + 2]);
+  }
+  for (let r = 0; r < NY; r++) { if (hi[r * 2] > -1e9) { cx[r] = (lo[r * 2] + hi[r * 2]) / 2; cz[r] = (lo[r * 2 + 1] + hi[r * 2 + 1]) / 2; } else if (r) { cx[r] = cx[r - 1]; cz[r] = cz[r - 1]; } }
+  for (let pass = 0; pass < 4; pass++) for (const C of [cx, cz]) { const s = C.slice(); for (let r = 1; r < NY - 1; r++) C[r] = (s[r - 1] + 2 * s[r] + s[r + 1]) / 4; }
+  const col = (x, z, r) => ((Math.floor((Math.atan2(x - cx[r], z - cz[r]) / Math.PI + 1) / 2 * NT) % NT) + NT) % NT;
+  const env = new Float32Array(NT * NY);
+  for (const i of ids) {                                                                     // measured on the torso only (sleeves hang beside it)
+    if (w(i) < 0.7) continue;
+    const r = row(P[i * 3 + 1]), x = P[i * 3], z = P[i * 3 + 2], c = col(x, z, r);
+    env[r * NT + c] = Math.max(env[r * NT + c], Math.hypot(x - cx[r], z - cz[r]));
+  }
+  for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) if (!env[r * NT + c]) {          // fill gaps from neighbours round the ring
+    for (let d = 1; d < NT / 2 && !env[r * NT + c]; d++) env[r * NT + c] = Math.max(env[r * NT + (c + d) % NT], env[r * NT + (c - d + NT) % NT]);
+  }
+  for (let r = NY - 2; r >= 0; r--) for (let c = 0; c < NT; c++) env[r * NT + c] = Math.max(env[r * NT + c], env[(r + 1) * NT + c] * fall);   // falls from above
+  for (let pass = 0; pass < 3; pass++) {                                                     // spans hollows round the torso
+    const src = env.slice();
+    for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) {
+      let m = src[r * NT + c];
+      for (const d of [-2, -1, 1, 2]) m = Math.max(m, src[r * NT + (c + d + NT) % NT] * (1 - 0.004 * Math.abs(d)));
+      env[r * NT + c] = m;
+    }
+  }
+  for (let pass = 0; pass < 8; pass++) {                                                     // then soften it, so the cloth is smooth
+    const src = env.slice();
+    for (let r = 0; r < NY; r++) for (let c = 0; c < NT; c++) {
+      let a = 0, n = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const rr = r + dr; if (rr < 0 || rr >= NY) continue;
+        a += src[rr * NT + (c + dc + NT) % NT]; n++;
+      }
+      env[r * NT + c] = a / n;
+    }
+  }
+  // sampled smoothly between rows and columns (snapping to a cell made the cloth stepped and lumpy)
+  const fr = (y) => THREE.MathUtils.clamp((y - y0) / (y1 - y0 + 1e-6) * NY - 0.5, 0, NY - 1);
+  const lerpRow = (A, f) => { const r = Math.floor(f), t = f - r; return A[r] + ((A[Math.min(NY - 1, r + 1)] ?? A[r]) - A[r]) * t; };
+  for (const i of ids) {
+    const f = fr(P[i * 3 + 1]), x0 = lerpRow(cx, f), z0 = lerpRow(cz, f), x = P[i * 3], z = P[i * 3 + 2], dx = x - x0, dz = z - z0, cur = Math.hypot(dx, dz);
+    const fc = ((Math.atan2(dx, dz) / Math.PI + 1) / 2 * NT - 0.5 + NT) % NT, c0 = Math.floor(fc), tc = fc - c0, r0 = Math.floor(f), tr = f - r0, r1 = Math.min(NY - 1, r0 + 1);
+    const g = (r, c) => env[r * NT + ((c % NT) + NT) % NT];
+    // fades in over a band below the armpits: switching on at a line left a crease (two points
+    // and a shelf) right across the bust
+    // (and fades out just above the hem, which stays put — pushed out above a fixed hem it flared)
+    const fade = (1 - THREE.MathUtils.smoothstep(P[i * 3 + 1], top - band, top)) * THREE.MathUtils.smoothstep(P[i * 3 + 1], hem, hem + hemBand);
+    const want = (g(r0, c0) * (1 - tc) + g(r0, c0 + 1) * tc) * (1 - tr) + (g(r1, c0) * (1 - tc) + g(r1, c0 + 1) * tc) * tr, k = w(i) * fade;
+    if (want > cur && cur > 1e-6) { const s = 1 + (Math.min(want, cur + maxPush) / cur - 1) * k; P[i * 3] = x0 + dx * s; P[i * 3 + 2] = z0 + dz * s; }
+  }
+  smoothSurface(P, S.T, 4);
+  return P;
+}
+
 // ── dressing ──
-// fields: neck (head+neck weight), hands, feet, arms, and height. The garments:
-//   skin   face & neck above a line just under the collar; hands below a line just inside the cuff
-//   top    below the collar line, above the cuffs, down to the hip hem (arms are never hemmed)
-//   bottom from above the top's hem (tucked under it) down to the ankle
-//   shoes  modelled separately on the foot bone; the bare foot is never kept
+// Clothes are the body surface cut along smooth fields — the rig's own weight falloffs
+// (neck, wrist, mid upper arm, knee, mid thigh, foot) and heights (hems) — so every
+// edge is a clean curve, and skin is ONLY what the chosen clothes leave uncovered
+// (face and neck, hands, plus forearms under short sleeves and lower legs under shorts
+// or a skirt), overlapping a little under each edge. Every option covers the torso and
+// hips: short sleeves end mid upper arm, shorts just above the knee, and a skirt always
+// has shorts under it. People are always clothed.
+export const TOPS = { sweater: 'Sweater', tee: 'T-shirt', turtleneck: 'Turtleneck' };
+export const BOTTOMS = { trousers: 'Trousers', shorts: 'Shorts', skirt: 'Skirt' };
 function dress(body, N, look) {
   const { A } = body, R = (b) => regionWeight(A, b), J = body.joints, H = body.P.stature;
   const both = (b) => { const l = R(b + '.L'), r = R(b + '.R'); return l.map((v, i) => v + r[i]); };
   const S = surface(body, N);
-  S.f = { neck: Array.from(R('neck01')), hands: Array.from(both('wrist')), feet: Array.from(both('foot')), arms: Array.from(both('shoulder01')) };
-  const y = (i, s) => s.P[i * 3 + 1];
+  S.f = { neck: Array.from(R('neck01')), neck2: Array.from(R('neck02')), hands: Array.from(both('wrist')), feet: Array.from(both('foot')),
+    arms: Array.from(both('shoulder01')), ua2: Array.from(both('upperarm02')), shin: Array.from(both('lowerleg01')), ul2: Array.from(both('upperleg02')) };
+  const y = (i, s) => s.P[i * 3 + 1], top = look.topType ?? 'sweater', bottom = look.bottomType ?? 'trousers';
   const hemY = J['upperleg01.L'].head.y + (look.hem ?? 0.02) * H, waistY = hemY + 0.08 * H;
-  const cuff = look.cuff ?? 0.5, collar = look.collar ?? 0.5;
-  const out = {};
-  out.face = cut(copySurface(S), (i, s) => s.f.neck[i] - (collar - 0.18));
-  out.hands = cut(copySurface(S), (i, s) => s.f.hands[i] - (cuff - 0.2));
-  out.top = cut(cut(cut(copySurface(S), (i, s) => collar - s.f.neck[i]), (i, s) => cuff - s.f.hands[i]),
+  const collarF = top === 'turtleneck' ? 'neck2' : 'neck', collar = 0.5;
+  const sleeveF = top === 'tee' ? 'ua2' : 'hands', cuff = 0.5;
+  const out = { top, bottom };
+  out.face = cut(copySurface(S), (i, s) => s.f[collarF][i] - (collar - 0.18));
+  out.hands = cut(copySurface(S), (i, s) => s.f[sleeveF][i] - (cuff - 0.2));            // hands — and forearms under short sleeves
+  out.top = cut(cut(cut(copySurface(S), (i, s) => collar - s.f[collarF][i]), (i, s) => cuff - s.f[sleeveF][i]),
     (i, s) => s.f.arms[i] > 0.5 ? 1 : y(i, s) - hemY);
-  out.bottom = cut(cut(cut(copySurface(S), (i, s) => 0.5 - s.f.arms[i]), (i, s) => waistY - y(i, s)), (i, s) => 0.45 - s.f.feet[i]);
+  const legEnd = bottom === 'trousers' ? (i, s) => 0.45 - s.f.feet[i]                    // to the ankle
+    : bottom === 'shorts' ? (i, s) => 0.3 - s.f.shin[i]                                  // to just above the knee
+    : (i, s) => 0.5 - s.f.ul2[i];                                                         // under a skirt: to mid thigh
+  out.bottom = cut(cut(cut(copySurface(S), (i, s) => 0.5 - s.f.arms[i]), (i, s) => waistY - y(i, s)), legEnd);
+  if (bottom !== 'trousers') {                                                            // bare legs below, never the feet (shoes)
+    const from = bottom === 'shorts' ? (i, s) => s.f.shin[i] - 0.12 : (i, s) => s.f.ul2[i] - 0.3;
+    out.legs = cut(cut(copySurface(S), from), (i, s) => 0.6 - s.f.feet[i]);
+  }
+  if (bottom === 'skirt') {                                                               // MakeHuman's fitted skirt surface, cut at the knee
+    const tris = A.tris['helper-skirt'], Ns = vertexNormals(Float32Array.from(body.pos), tris), kneeY = J['lowerleg01.L'].head.y;
+    // its waistband is tucked a little way up under the top's hem (worn over it, the top's hang poked through it)
+    out.skirt = cut(cut(surface(body, Ns, tris), (i, s) => y(i, s) - (kneeY + 0.01 * H)), (i, s) => hemY + 0.025 * H - y(i, s));
+  }
   return out;
 }
 // ── the head as a radius map around its centre, for hair and brows ──
@@ -283,28 +416,53 @@ function shoes(body, look, sk) {
 
 export async function makePerson(spec = {}) {
   const look = { ...LOOK_JANELLE, ...spec };
-  const A = await loadAnatomy(spec.url);
+  const A = await loadAnatomy(spec.url), age = spec.body?.age ?? 25;
+  if (needsAges(age)) await loadAges(A);                 // children and older people: their shapes load on first use
   const style = STYLES[spec.style] ?? spec.style ?? STYLES.real;
   const expression = { ...look.expression }; for (const [k, v] of Object.entries(style.expression || {})) expression[k] = (expression[k] || 0) + v;
-  const body = stylize(buildBody(A, { ...LOOK_JANELLE.body, ...spec.body, expression, stature: spec.stature ?? 1.7 }), style);
-  const N = vertexNormals(Float32Array.from(body.pos), A.tris.body);
-  const D = dress(body, N, look), k = body.P.stature / 1.7;
+  const bodyP = { ...LOOK_JANELLE.body, ...spec.body, expression };
+  const body = stylize(buildBody(A, { ...bodyP, stature: spec.stature ?? statureFor(age, bodyP.sex, bodyP.height ?? 0.5) }), style);
+  // clothes are fitted to a SMOOTHED copy of the torso: that skin is never shown, and cloth
+  // fitted to (and pushed back out to) the raw anatomy re-copied every small detail of it
+  const fitPos = Float32Array.from(body.pos);
+  { const R = (b) => regionWeight(A, b), arm = R('shoulder01.L'), arm2 = R('shoulder01.R'), nk = R('neck01');
+    const ul = R('upperleg02.L'), ur = R('upperleg02.R'), ft = R('lowerleg01.L'), ft2 = R('lowerleg01.R');
+    // the torso and hips (not arms, neck, lower thighs or legs) are softened before anything is fitted to them
+    const wT = Float32Array.from(arm, (_, i) => Math.max(0, Math.min(1, (1 - arm[i] - arm2[i] - nk[i] - ul[i] - ur[i] - ft[i] - ft2[i]) * 1.4 - 0.2)));
+    // the strong softening is for the torso only — at the hips the two legs must stay two legs
+    const hipY = body.joints['upperleg01.L'].head.y, H0 = body.P.stature;
+    const wUp = Float32Array.from(wT, (v, i) => v * THREE.MathUtils.smoothstep(fitPos[i * 3 + 1], hipY - 0.035 * H0, hipY + 0.005 * H0));   // down to just above the crotch
+    const kS = H0 / 1.7;                                   // (sizes scale with the person: a child's torso is a third as wide)
+    spatialSmooth(fitPos, A.tris.body, wUp, { sigma: 0.05 * kS }); spatialSmooth(fitPos, A.tris.body, wUp, { sigma: 0.025 * kS, rounds: 6, outOnly: true });   // then fill what's left of any pit (the navel)
+    smoothSurface(fitPos, A.tris.body, 8, { weight: wT }); }
+  const fitBody = { ...body, pos: fitPos };
+  // the smoothing flattens the navel into a knot of tiny folded triangles whose normals point
+  // anywhere — and the cloth is lifted along those normals. Average them with their neighbours.
+  const N = vertexNormals(Float32Array.from(fitPos), A.tris.body);
+  { const T = A.tris.body, acc = new Float32Array(N.length);
+    for (let pass = 0; pass < 8; pass++) {
+      acc.set(N);
+      for (let t = 0; t < T.length; t += 3) for (let e = 0; e < 3; e++) { const a = T[t + e], b = T[t + (e + 1) % 3]; for (let c = 0; c < 3; c++) { acc[a * 3 + c] += N[b * 3 + c]; acc[b * 3 + c] += N[a * 3 + c]; } }
+      for (let i = 0; i < N.length; i += 3) { const l = Math.hypot(acc[i], acc[i + 1], acc[i + 2]) || 1; for (let c = 0; c < 3; c++) N[i + c] = acc[i + c] / l; }
+    } }
+  const D = dress(fitBody, N, look), k = body.P.stature / 1.7;
   const [el, er] = eyeCentres(body), eyeR = el.distanceTo(er) * 0.3;
 
   const sk = buildSkeleton(body);
   const group = new THREE.Group(), rig = new THREE.Group();
   group.add(rig); rig.add(sk.root);
   const parts = [];
-  const add = (geo, mat) => { const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; parts.push(m); return m; };
+  const add = (geo, mat, role) => { const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; m.userData.role = role; parts.push(m); return m; };
 
   // skin: face & neck, and hands — nothing else of the body is ever drawn
   const skinCol = skinColours(body, look), skinParts = [];
-  for (const key of ['face', 'hands']) {
+  for (const key of ['face', 'hands', 'legs']) {
+    if (!D[key]) continue;
     const geo = geometryOf(D[key]), used = geo.userData.used;
     const col = new Float32Array(used.length * 3), c = new THREE.Color(look.skin);
     used.forEach((v, i) => { if (v < A.n) col.set(skinCol.subarray(v * 3, v * 3 + 3), i * 3); else col.set([c.r, c.g, c.b], i * 3); });
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const m = add(geo, paint(0xffffff, { vertexColors: true, soft: true }));
+    const m = add(geo, paint(0xffffff, { vertexColors: true, soft: true }), 'skin'); m.userData.part = key;
     skinParts.push({ m, used });
     if (key === 'face') {                                   // no outline from inside the eye sockets
       const P = geo.attributes.position, idx = geo.index.array, keep = [], p = new THREE.Vector3();
@@ -319,10 +477,23 @@ export async function makePerson(spec = {}) {
   // garments
   const top = D.top, bot = D.bottom;
   const upperW = (i) => Math.max(0, 1 - top.f.arms[i] - top.f.neck[i]);
-  const topM = add(geometryOf(top, drape(top, { thick: 0.008, ease: (i) => 0.012 * upperW(i), smooth: 30, k,
-    smoothW: top.P.map((_, j) => j).filter(j => j % 3 === 0).map(j => 1 - 0.6 * Math.min(1, top.f.arms[j / 3])) })),
-    paint(look.top, { soft: true, side: THREE.DoubleSide }));
-  const botM = add(geometryOf(bot, drape(bot, { thick: 0.006, ease: () => 0.003, smooth: 18, k })), paint(look.bottom, { side: THREE.DoubleSide }));
+  // a top hangs from the shoulders and chest rather than following every curve: generous ease and drape over the torso
+  const topP = drape(top, { thick: 0.008, ease: (i) => 0.014 * upperW(i), smooth: 40, k,
+    smoothW: top.P.map((_, j) => j).filter(j => j % 3 === 0).map(j => 1 - 0.6 * Math.min(1, top.f.arms[j / 3])) });
+  hang(topP, top, (i) => Math.min(1, Math.max(0, upperW(i) * 1.6 - 0.3)), { top: body.joints['upperarm01.L'].head.y - 0.05 * body.P.stature, band: 0.06 * body.P.stature, maxPush: 0.035 * k,
+    hem: body.joints['upperleg01.L'].head.y + 0.02 * body.P.stature, hemBand: 0.07 * body.P.stature });
+  const topM = add(geometryOf(top, topP),
+    paint(look.top, { soft: true, side: THREE.DoubleSide }), 'cloth');
+  const botM = add(geometryOf(bot, drape(bot, { thick: 0.006, ease: () => 0.003, smooth: 18, k })), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth');
+  const cloth = { top: [topM], bottom: [botM] };
+  if (D.skirt) {                                        // the skirt: lifted a little off the fitted surface, the same colour as the bottoms
+    const sk2 = D.skirt, P = sk2.P.slice(), used = new Set(sk2.T), c = body.joints.root?.head ?? new THREE.Vector3();
+    for (const i of used) {                             // its normals may face in: lift away from the body's axis either way
+      const nx = sk2.N[i * 3], nz = sk2.N[i * 3 + 2], ox = P[i * 3] - c.x, oz = P[i * 3 + 2] - c.z, sg = nx * ox + nz * oz >= 0 ? 1 : -1;
+      add3(P, i, sg * nx * 0.012 * k, sg * sk2.N[i * 3 + 1] * 0.012 * k, sg * nz * 0.012 * k);
+    }
+    cloth.bottom.push(add(geometryOf(sk2, P), paint(look.bottom, { side: THREE.DoubleSide }), 'cloth'));
+  }
   for (const m of parts) { rig.add(m); m.bind(sk.skeleton); }
   const shoeGroups = shoes(body, look, sk);
 
@@ -334,28 +505,36 @@ export async function makePerson(spec = {}) {
   sk.byName.head.add(atHead);
 
   relaxedPose(sk);
-  ink(group, 'fine');
-  const person = { group, rig, sk, body, look };
+  const tag = (g, role) => g.traverse(o => { if (o.isMesh && !o.userData.role) o.userData.role = role; });
+  for (const g of shoeGroups) { g.children[0].userData.role = 'shoe'; g.children[1].userData.role = 'sole'; }
+  const tagHead = () => { eyeG.traverse(o => { if (o.isMesh) o.userData.role = o.geometry.attributes.color ? 'eye' : 'glint'; }); tag(browG, 'brow'); if (hairG) hairG.traverse(o => { if (o.isMesh) o.userData.role = o.geometry.type === 'TorusGeometry' ? 'prop' : 'hair'; }); };
+  tagHead();
+  let render = spec.render ?? 'gouache';
+  applyRenderStyle(group, render);
+  const person = { group, rig, sk, body, look, get render() { return render; } };
+  person.setRender = (name) => { render = name; applyRenderStyle(group, name); };
   person.motion = makeMotion(person);     // every person comes rigged for idle, walk, run, sit and bike
   // restyle(changes): colours and hairstyle change in place, instantly (a creator UI calls
   // this on every click). Body shape, style and expression need a new makePerson.
   person.restyle = (ch = {}) => {
     Object.assign(look, ch);
-    if (ch.top != null) topM.material = paint(look.top, { soft: true, side: THREE.DoubleSide });
-    if (ch.bottom != null) botM.material = paint(look.bottom, { side: THREE.DoubleSide });
-    if (ch.shoes != null || ch.sole != null) for (const g of shoeGroups) { g.children[0].material = paint(look.shoes); g.children[1].material = paint(look.sole); }
+    if (ch.top != null) for (const m of cloth.top) recolor(m, look.top, render);
+    if (ch.bottom != null) for (const m of cloth.bottom) recolor(m, look.bottom, render);
+    if (ch.shoes != null || ch.sole != null) for (const g of shoeGroups) { recolor(g.children[0], look.shoes, render); recolor(g.children[1], look.sole, render); }
     if (ch.skin != null || ch.lips != null || ch.blush != null) {
       const col = skinColours(body, look);
       for (const { m, used } of skinParts) {
         const a = m.geometry.attributes.color;
         used.forEach((v, i) => { if (v < A.n) a.array.set(col.subarray(v * 3, v * 3 + 3), i * 3); });
         a.needsUpdate = true;
+        if (m.userData.geoLow) { delete m.userData.geoLow; if (render === 'lowpoly') applyRenderStyle(m, render); }
       }
     }
-    const swap = (old, fresh) => { atHead.remove(old); atHead.add(fresh); ink(fresh, 'fine'); return fresh; };
+    const swap = (old, fresh) => { atHead.remove(old); atHead.add(fresh); return fresh; };
     if (ch.eyes != null) eyeG = swap(eyeG, eyes(body, look));
     if (ch.brows != null) browG = swap(browG, brows(body, H, look));
     if ((ch.hair != null || ch.hairStyle != null) && hairG) hairG = swap(hairG, makeHair(H, headHeight(body), look.hairStyle, look.hair));
+    if (ch.eyes != null || ch.brows != null || ch.hair != null || ch.hairStyle != null) { tagHead(); for (const g of [eyeG, browG, hairG]) if (g) applyRenderStyle(g, render); }
   };
   return person;
 }

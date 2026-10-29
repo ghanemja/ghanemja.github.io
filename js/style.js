@@ -71,7 +71,7 @@ export function paint(color, o = {}) {
     vertexColors: !!o.vertexColors,
     emissive: o.emissive ?? 0x000000, emissiveIntensity: o.emissive ? 1 : 0,
   });
-  m.userData.hatch = o.hatch ?? 1;
+  m.userData.hatch = o.hatch ?? 1; m.userData.soft = !!o.soft;
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uHatch = { value: m.userData.hatch };
     sh.fragmentShader = 'uniform float uHatch;\n' + sh.fragmentShader
@@ -90,7 +90,8 @@ export const inkUniforms = {
   uRes: { value: new THREE.Vector2(1280, 800) },
   uWidth: { value: 1.7 },                    // px at weight 1
 };
-function makeInk(weight = 1, color = PAL.ink) {
+// wobble 1 = the hand-drawn boil; 0 = a crisp, even line (anime, pixel)
+function makeInk(weight = 1, color = PAL.ink, wobble = 1) {
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     uniforms: { ...inkUniforms, uWeight: { value: weight }, uColor: { value: new THREE.Color(color) } },
@@ -105,7 +106,7 @@ function makeInk(weight = 1, color = PAL.ink) {
         // weight swells/thins slowly along the stroke (low-frequency, per area)
         float along = h(floor(position * 2.5) + 0.37);
         float boil = h(position * 7.0 + tick) - 0.5;
-        float w = uWidth * uWeight * (0.8 + 0.45 * along + 0.12 * boil);
+        float w = uWidth * uWeight * (1.0 + ${wobble.toFixed(2)} * (-0.2 + 0.45 * along + 0.12 * boil));
         clip.xy += n2 * w * 2.0 / uRes * clip.w;
         gl_Position = clip;
       }`,
@@ -114,7 +115,7 @@ function makeInk(weight = 1, color = PAL.ink) {
       void main() { gl_FragColor = vec4(uColor, 1.0); }`,
   });
 }
-const INK = { heavy: makeInk(1.25), mid: makeInk(1.0), fine: makeInk(0.7) };
+const INK = { heavy: makeInk(1.25), mid: makeInk(1.0), fine: makeInk(0.7), crisp: makeInk(0.85, 0x1a1418, 0), pixel: makeInk(0.6, 0x1a1418, 0) };
 // the same stroke, faded per vertex by an `inkW` attribute (no line where one part grows out of another)
 const INK_FADE = {};
 function fadeInk(weight) {

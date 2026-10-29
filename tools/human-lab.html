@@ -12,6 +12,8 @@
   ?styles=real,town (side by side)  &yaw=<deg, 0 = facing camera>  &pitch=<deg>
   &focus=full|head|hands|feet|handL|handR  &sex=0..1 &muscle &weight &height
   &action=idle|walk|run|sit|bike  &phase=0..1 (of one cycle)
+  &age=<years> &top=sweater|tee|turtleneck &bottom=trousers|shorts|skirt
+  &render=gouache|anime|clay|lowpoly|pixel|realistic
   Sets window.__ready once drawn.
 -->
 <script type="importmap">
@@ -25,13 +27,15 @@ import * as THREE from 'three';
 import { styleTick, blobShadow } from '../js/style.js';
 import { makePerson } from '../js/people.js';
 import { makeBike } from '../js/motion.js';
+import { applyRenderStyle, applySceneStyle } from '../js/render-styles.js';
 import { paint, ink } from '../js/style.js';
 
 const q = new URLSearchParams(location.search);
 const styles = (q.get('styles') || 'real,town').split(',');
 const yaw = THREE.MathUtils.degToRad(+(q.get('yaw') ?? 0)), pitch = THREE.MathUtils.degToRad(+(q.get('pitch') ?? 6));
 const focus = q.get('focus') || 'full';
-const body = {}; for (const k of ['sex', 'muscle', 'weight', 'height', 'proportions']) if (q.has(k)) body[k] = +q.get(k);
+const body = {}; for (const k of ['sex', 'age', 'muscle', 'weight', 'height', 'proportions']) if (q.has(k)) body[k] = +q.get(k);
+const render = q.get('render') || 'gouache';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight);
@@ -42,17 +46,17 @@ scene.add(new THREE.HemisphereLight(0xfff6e8, 0xd8c8b0, 1.35), sun);
 
 const H = 1.7, gap = 0.75;
 const t0 = performance.now();
-const people = await Promise.all(styles.map(s => makePerson({ style: s, body, stature: H, showHair: q.get('hair') !== '0', ...(q.get('hairStyle') ? { hairStyle: q.get('hairStyle') } : {}) })));
+const people = await Promise.all(styles.map(s => makePerson({ style: s, body, render, ...(q.has('top') ? { topType: q.get('top') } : {}), ...(q.has('bottom') ? { bottomType: q.get('bottom') } : {}), ...(q.has('age') ? {} : { stature: H }), showHair: q.get('hair') !== '0', ...(q.get('hairStyle') ? { hairStyle: q.get('hairStyle') } : {}) })));
 console.log('LOG built', styles.length, 'in', Math.round(performance.now() - t0), 'ms');
 const action = q.get('action') || 'idle', phase = +(q.get('phase') ?? 0.25);
 people.forEach((p, i) => {
   p.group.position.x = (i - (people.length - 1) / 2) * (action === 'bike' ? gap * 1.3 : gap);
   p.group.add(blobShadow(0.3)); scene.add(p.group);
   const m = p.motion, opts = {};
-  if (action === 'bike') { const b = makeBike(p); p.group.add(b.group); opts.bike = b; }
+  if (action === 'bike') { const b = makeBike(p); applyRenderStyle(b.group, render); p.group.add(b.group); opts.bike = b; }
   if (action === 'sit') {                       // a plain bench at the person's knee height
     const h = m.M.knee.L.y * 0.97, bench = new THREE.Mesh(new THREE.BoxGeometry(0.5, h, 0.42), paint(0x8a6a4e));
-    bench.position.set(0, h / 2, m.M.hipMid.z - 0.08); ink(bench, 'fine'); p.group.add(bench);
+    bench.position.set(0, h / 2, m.M.hipMid.z - 0.08); applyRenderStyle(bench, render); p.group.add(bench);
   }
   p.group.updateMatrixWorld(true);
   m.pose(action, phase / m.cycle(action), opts);
@@ -74,6 +78,7 @@ const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.01, 5
 const dist = wFrame / 2 / Math.tan(THREE.MathUtils.degToRad(15));
 camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
 camera.lookAt(target);
+applySceneStyle(renderer, scene, render, { dpr: devicePixelRatio }); renderer.setSize(innerWidth, innerHeight);
 styleTick(1.0, renderer.domElement.width, renderer.domElement.height);
 renderer.render(scene, camera);
 window.__lab = { scene, camera, renderer, people, render: () => renderer.render(scene, camera) };

@@ -8,7 +8,8 @@ import { makePerson } from './people.js';
 import { makeBike } from './motion.js';
 import { paint, ink, styleTick, blobShadow } from './style.js';
 import { HAIRSTYLES } from './hair.js';
-import { PALETTE, FACES, STYLE_NAMES, DEFAULT, randomCitizen, generateCitizens, toPersonSpec, INSTANT, loadRoster, saveRoster, toJSON, fromJSON } from './citizens.js';
+import { RENDER_STYLES, applyRenderStyle, applySceneStyle } from './render-styles.js';
+import { PALETTE, TOP_COLOURS, FACES, STYLE_NAMES, DEFAULT, TOPS, BOTTOMS, AGE_MIN, AGE_MAX, AGE_RANGES, randomCitizen, generateCitizens, toPersonSpec, INSTANT, loadRoster, saveRoster, toJSON, fromJSON } from './citizens.js';
 
 const $ = (s) => document.querySelector(s);
 const stageEl = $('#stage');
@@ -27,6 +28,11 @@ ground.position.y = -0.002; scene.add(ground);
 const ring = new THREE.Mesh(new THREE.RingGeometry(1.06, 1.1, 64).rotateX(-Math.PI / 2), paint(0x2a2230, { hatch: 0 }));
 ring.position.y = 0.001; scene.add(ring);
 
+// ── how everyone is drawn (one render style for the whole roster, as a game would have) ──
+const RKEY = 'citizens.render';
+let render = (() => { try { const r = localStorage.getItem(RKEY); return RENDER_STYLES[r] ? r : 'gouache'; } catch { return 'gouache'; } })();
+const spec = (c) => toPersonSpec(c, { render });
+
 function resize() {
   const r = stageEl.getBoundingClientRect();
   renderer.setSize(r.width, r.height, false);
@@ -43,7 +49,7 @@ const stage = new THREE.Group(); scene.add(stage);
 // ── building people (latest request wins) ──
 async function build(c) {
   const id = ++buildId; $('#busy').classList.add('on');
-  const p = await makePerson(toPersonSpec(c));
+  const p = await makePerson(spec(c));
   if (id !== buildId) return null;
   $('#busy').classList.remove('on');
   return p;
@@ -59,20 +65,34 @@ async function show() {
 function setProp() {
   if (prop) { prop.parent?.remove(prop.group ?? prop); prop = null; }
   if (!current) return;
-  if (action === 'bike') { prop = makeBike(current); current.group.add(prop.group); }
+  if (action === 'bike') { prop = makeBike(current); current.group.add(prop.group); applyRenderStyle(prop.group, render); }
   if (action === 'sit') {
     const h = current.motion.M.knee.L.y * 0.97;
     const bench = new THREE.Mesh(new THREE.BoxGeometry(0.5, h, 0.42), paint(0x8a6a4e));
     bench.position.set(0, h / 2, current.motion.M.hipMid.z - 0.12); ink(bench, 'fine');
-    current.group.add(bench); prop = bench;
+    const g = new THREE.Group(); g.add(bench); applyRenderStyle(g, render);
+    current.group.add(g); prop = g;
   }
+}
+function setRender(name) {
+  render = name; try { localStorage.setItem(RKEY, name); } catch {}
+  applySceneStyle(renderer, scene, name); applySceneStyle(renderer, pscene, name); resize();
+  for (const o of [ground, ring]) applyRenderStyle(o, name);
+  if (plazaFolk.props) applyRenderStyle(plazaFolk.props, name);
+  for (const f of plazaFolk) { f.p.setRender(name); if (f.bike) applyRenderStyle(f.bike.group, name); }
+  if (current) { current.setRender(name); setProp(); }
+  // portraits are redrawn in the new style, in the background
+  for (const c of roster) delete c.portrait;
+  if (current) portrait(current, cur()); fillPortraits();
 }
 
 // ── a portrait for the roster card (rendered from the real model) ──
-const rt = new THREE.WebGLRenderTarget(160, 160), pcam = new THREE.PerspectiveCamera(24, 1, 0.05, 20);
+const pcam = new THREE.PerspectiveCamera(24, 1, 0.05, 20);
 const pscene = new THREE.Scene(); pscene.background = new THREE.Color(0xefe4cc);       // portraits get their own little studio
 { const s2 = sun.clone(); pscene.add(new THREE.HemisphereLight(0xfff6e8, 0xd8c8b0, 1.35), s2); }
-rt.texture.colorSpace = THREE.SRGBColorSpace;              // so the portrait is encoded like the screen
+// Portraits are drawn into a corner of the screen and read straight back, then the frame is
+// redrawn before anyone sees it: three.js only tone-maps what goes to the screen, so a render
+// target came out blown white in the lit styles (clay, realistic).
 function portrait(p, c) {
   p.motion.pose('idle', 0.5);
   p.group.updateMatrixWorld(true);
@@ -80,13 +100,19 @@ function portrait(p, c) {
   p.group.position.set(0, 0, 0); p.group.rotation.y = 0; pscene.add(p.group); p.group.updateMatrixWorld(true);
   const head2 = p.sk.byName.head.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.07, 0));
   pcam.position.copy(head2).add(new THREE.Vector3(0.12, 0.02, 0.78)); pcam.lookAt(head2);
-  renderer.setRenderTarget(rt); renderer.render(pscene, pcam); renderer.setRenderTarget(null);
+  const pr = renderer.getPixelRatio(), N = RENDER_STYLES[render].pixel ? 48 : 160, full = renderer.getSize(new THREE.Vector2());   // (pixel style: drawn small, blown up)
+  renderer.setScissorTest(true); renderer.setViewport(0, 0, N / pr, N / pr); renderer.setScissor(0, 0, N / pr, N / pr);
+  renderer.render(pscene, pcam);
+  const gl = renderer.getContext(), px = new Uint8Array(N * N * 4); gl.readPixels(0, 0, N, N, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  renderer.setScissorTest(false); renderer.setViewport(0, 0, full.x, full.y);
   pscene.remove(p.group); if (parent) parent.add(p.group); p.group.position.copy(pos); p.group.rotation.y = rot;
-  const px = new Uint8Array(160 * 160 * 4); renderer.readRenderTargetPixels(rt, 0, 0, 160, 160, px);
+  renderer.render(scene, camera);
+  const small = document.createElement('canvas'); small.width = small.height = N;
+  const sctx = small.getContext('2d'), img = sctx.createImageData(N, N);
+  for (let y = 0; y < N; y++) img.data.set(px.subarray((N - 1 - y) * N * 4, (N - y) * N * 4), y * N * 4);   // flip: GL rows run bottom-up
+  sctx.putImageData(img, 0, 0);
   const cv = document.createElement('canvas'); cv.width = cv.height = 160;
-  const ctx = cv.getContext('2d'), img = ctx.createImageData(160, 160);
-  for (let y = 0; y < 160; y++) img.data.set(px.subarray((159 - y) * 640, (160 - y) * 640), y * 640);   // flip: GL rows run bottom-up
-  ctx.putImageData(img, 0, 0);
+  const ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = N === 160; ctx.drawImage(small, 0, 0, 160, 160);
   c.portrait = cv.toDataURL('image/jpeg', 0.85);
   saveRoster(roster); drawRoster();
 }
@@ -117,13 +143,23 @@ const HAIR_ICON = {
   bun: '<path d="M10 21c0-8 5-11 11-11s11 3 11 11c-3-3-7-4-11-4s-8 1-11 4z" fill="#1f1a1a" stroke="#2a2230" stroke-width="1.5"/><circle cx="21" cy="7" r="5" fill="#1f1a1a" stroke="#2a2230" stroke-width="1.5"/>',
   curly: '<g fill="#3b2a22" stroke="#2a2230" stroke-width="1.2"><circle cx="11" cy="15" r="5"/><circle cx="18" cy="10" r="5.5"/><circle cx="26" cy="10" r="5.5"/><circle cx="32" cy="16" r="5"/><circle cx="8" cy="23" r="4"/><circle cx="34" cy="24" r="4"/></g>',
 };
+const CL = (d, fill) => `<svg viewBox="0 0 42 42" aria-hidden="true"><path d="${d}" fill="${fill}" stroke="#2a2230" stroke-width="2" stroke-linejoin="round"/></svg>`;
+const CLOTHES_ICON = {
+  sweater: CL('M14 6l-9 6 3 26h5l1-16 1 16h14l1-16 1 16h5l3-26-9-6c-2 3-4 4-7 4s-5-1-7-4z', '#8e2f3a'),
+  tee: CL('M14 6l-10 7 4 6 5-3v20h16V16l5 3 4-6-10-7c-2 3-4 4-7 4s-5-1-7-4z', '#6f8db0'),
+  turtleneck: CL('M16 3h10v5l9 4 3 26h-5l-1-16-1 16H11l-1-16-1 16H4l3-26 9-4z', '#3f8f88'),
+  trousers: CL('M11 5h20l2 33h-7l-5-24-5 24H9z', '#3f5a7a'),
+  shorts: CL('M11 8h20l3 18h-9l-4-9-4 9H8z', '#b98a5e'),
+  skirt: CL('M13 7h16l6 26H7z', '#c98fb5'),
+};
 const icon = (inner, face = true) => `<svg viewBox="0 0 42 42" aria-hidden="true">${face ? HEAD : ''}${inner}</svg>`;
 const BODY_ICON = (w, h) => `<svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="${10 + (1 - h) * 4}" r="5" fill="#efc3a2" stroke="#2a2230" stroke-width="1.5"/><rect x="${21 - w}" y="${16 + (1 - h) * 4}" width="${w * 2}" height="${24 - (1 - h) * 4}" rx="${w * 0.7}" fill="#6f8db0" stroke="#2a2230" stroke-width="1.5"/></svg>`;
 
 const TABS = {
   Body: [
     { tiles: 'sex', label: 'Body', options: [[0, 'Woman', BODY_ICON(6, 0.85)], [1, 'Man', BODY_ICON(7.5, 1)]] },
-    { slider: 'height', label: 'Height', ends: ['shorter', 'taller'] },
+    { slider: 'age', label: 'Age', min: AGE_MIN, max: AGE_MAX, step: 1, show: (v) => v + (v == 1 ? ' year' : ' years'), ends: ['child', 'elder'] },
+    { slider: 'height', label: 'Height', ends: ['shorter', 'taller'], note: 'for their age' },
     { slider: 'build', label: 'Build', ends: ['slight', 'solid'] },
     { slider: 'muscle', label: 'Muscle', ends: ['soft', 'strong'] },
   ],
@@ -138,13 +174,16 @@ const TABS = {
     { swatches: 'hair', label: 'Colour', colours: PALETTE.hair },
   ],
   Clothes: [
-    { swatches: 'top', label: 'Top', colours: PALETTE.clothes },
-    { swatches: 'bottom', label: 'Trousers', colours: PALETTE.clothes },
+    { tiles: 'topType', label: 'Top', options: Object.entries(TOPS).map(([k, v]) => [k, v, CLOTHES_ICON[k]]) },
+    { swatches: 'top', label: 'Top colour', colours: TOP_COLOURS },
+    { tiles: 'bottomType', label: 'Bottoms', options: Object.entries(BOTTOMS).map(([k, v]) => [k, v, CLOTHES_ICON[k]]) },
+    { swatches: 'bottom', label: 'Bottoms colour', colours: PALETTE.clothes },
     { swatches: 'shoes', label: 'Shoes', colours: [0xf1ebdf, 0x2f2b33, 0xd8584a, 0x8e2f3a, 0x5b4636, 0xe4b84f, 0x3f8f88, 0x6f8db0] },
   ],
   Style: [
-    { tiles: 'style', label: 'Drawn as', options: Object.entries(STYLE_NAMES).map(([k, v]) => [k, v, '']) },
-    { note: 'Painted and Natural keep real human proportions. Storybook and Chibi are deliberately exaggerated (bigger heads and eyes).' },
+    { tiles: 'style', label: 'Proportions', options: Object.entries(STYLE_NAMES).map(([k, v]) => [k, v, '']) },
+    { note: 'Town and Natural keep real human proportions. Storybook and Chibi are deliberately exaggerated (bigger heads and eyes).' },
+    { render: true, label: 'Drawn as (everyone)', options: Object.entries(RENDER_STYLES).map(([k, v]) => [k, v.label, v.note]) },
   ],
 };
 let tab = 'Body';
@@ -155,7 +194,8 @@ function drawControls() {
   const c = cur();
   $('#controls').innerHTML = TABS[tab].map((r, i) => {
     if (r.note) return `<p class="note">${r.note}</p>`;
-    if (r.slider) return `<div class="row"><label for="s${i}">${r.label}</label><input id="s${i}" type="range" min="0" max="1" step="0.01" value="${c[r.slider]}" data-slider="${r.slider}"><div class="ends"><span>${r.ends[0]}</span><span>${r.ends[1]}</span></div></div>`;
+    if (r.slider) return `<div class="row"><label for="s${i}">${r.label}${r.show ? ` <output id="o${i}">${r.show(c[r.slider])}</output>` : r.note ? ` <small>${r.note}</small>` : ''}</label><input id="s${i}" type="range" min="${r.min ?? 0}" max="${r.max ?? 1}" step="${r.step ?? 0.01}" value="${c[r.slider]}" data-slider="${r.slider}"${r.show ? ` data-out="o${i}"` : ''}><div class="ends"><span>${r.ends[0]}</span><span>${r.ends[1]}</span></div></div>`;
+    if (r.render) return `<div class="row"><span class="lbl">${r.label}</span><div class="tiles wide">${r.options.map(([v, label, note]) => `<button class="tile ${render === v ? 'on' : ''}" data-render="${v}" title="${note}"><b>${label}</b><small>${note}</small></button>`).join('')}</div></div>`;
     if (r.swatches) return `<div class="row"><span class="lbl">${r.label}</span><div class="swatches">${r.colours.map(col => `<button class="sw ${c[r.swatches] === col ? 'on' : ''}" style="background:${hexCss(col)}" aria-label="${r.label} ${hexCss(col)}" data-key="${r.swatches}" data-val="${col}"></button>`).join('')}</div></div>`;
     if (r.tiles) return `<div class="row"><span class="lbl">${r.label}</span><div class="tiles">${r.options.map(([v, label, svg]) => `<button class="tile ${(typeof v === 'number' ? Math.round(c[r.tiles]) === v : c[r.tiles] === v) ? 'on' : ''}" data-key="${r.tiles}" data-val="${v}" data-num="${typeof v === 'number'}">${svg}<span>${label}</span></button>`).join('')}</div></div>`;
     return '';
@@ -167,11 +207,16 @@ $('#tabs').addEventListener('click', (e) => {
   setZoom(tab === 'Face' || tab === 'Hair' ? 'face' : 'full');
 });
 $('#controls').addEventListener('click', (e) => {
+  const rb = e.target.closest('[data-render]'); if (rb) { setRender(rb.dataset.render); drawControls(); return; }
   const b = e.target.closest('[data-key]'); if (!b) return;
   const v = b.classList.contains('sw') || b.dataset.num === 'true' ? +b.dataset.val : b.dataset.val;
   change(b.dataset.key, v); drawControls();
 });
 $('#controls').addEventListener('change', (e) => { if (e.target.dataset.slider) change(e.target.dataset.slider, +e.target.value); });
+$('#controls').addEventListener('input', (e) => {                // the age reads out while dragging
+  const o = e.target.dataset.out && document.getElementById(e.target.dataset.out), r = o && TABS[tab].find(x => x.slider === e.target.dataset.slider);
+  if (r) o.textContent = r.show(+e.target.value);
+});
 $('#name').addEventListener('input', (e) => { cur().name = e.target.value || 'Citizen'; saveRoster(roster); drawRoster(); });
 
 // ── the roster ──
@@ -186,7 +231,7 @@ function select(i) {
 $('#cards').addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) { if (mode === 'plaza') exitPlaza(); select(+b.dataset.i); } });
 const add = (c) => { roster.push({ id: 'c' + Date.now(), ...c }); saveRoster(roster); select(roster.length - 1); };
 $('#new').onclick = () => add({ ...DEFAULT, name: 'Citizen ' + (roster.length + 1) });
-$('#rand').onclick = () => { Object.assign(cur(), randomCitizen()); delete cur().portrait; saveRoster(roster); select(sel); };
+$('#rand').onclick = () => { const [ageMin, ageMax] = ageRange(); Object.assign(cur(), randomCitizen(Math.random, { ageMin, ageMax })); delete cur().portrait; saveRoster(roster); select(sel); };
 
 // ── batches: make n citizens at once (seeded = reproducible), portraits drawn in the background ──
 let portraitRun = 0;
@@ -196,16 +241,33 @@ async function fillPortraits() {
     if (run !== portraitRun) return;
     if (todo[i].portrait || todo[i] === cur()) continue;
     $('#count').textContent = `drawing portraits ${i + 1} of ${todo.length}…`;
-    const p = await makePerson(toPersonSpec(todo[i]));
+    const p = await makePerson(spec(todo[i]));
     if (run !== portraitRun) return;
     portrait(p, todo[i]);
     await new Promise(r => setTimeout(r, 30));                         // let the page breathe between people
   }
   drawRoster();
 }
+// the batch's age range: a preset, or any two ages typed in
+function ageRange() {
+  let a = Math.round(+$('#ageMin').value), b = Math.round(+$('#ageMax').value);
+  a = Math.max(AGE_MIN, Math.min(AGE_MAX, a || AGE_MIN)); b = Math.max(AGE_MIN, Math.min(AGE_MAX, b || AGE_MAX));
+  return a <= b ? [a, b] : [b, a];
+}
+function setAges(a, b) {
+  $('#ageMin').value = a; $('#ageMax').value = b;
+  const k = Object.entries(AGE_RANGES).find(([, r]) => r[0] === +a && r[1] === +b)?.[0];
+  $('#ages').value = k ?? 'custom';
+}
+$('#ages').innerHTML = Object.entries({ all: 'all ages', kids: 'kids', teens: 'teens', young: 'young adults', adults: 'adults', middle: 'middle-aged', seniors: 'seniors' })
+  .map(([k, v]) => `<option value="${k}">${v} (${AGE_RANGES[k][0]}–${AGE_RANGES[k][1]})</option>`).join('') + '<option value="custom">custom</option>';
+$('#ages').onchange = (e) => { const r = AGE_RANGES[e.target.value]; if (r) setAges(...r); };
+for (const id of ['#ageMin', '#ageMax']) $(id).addEventListener('change', () => setAges(...ageRange()));
+setAges(...AGE_RANGES.adults);
 function makeBatch(n, seed, replace) {
   n = Math.max(1, Math.min(200, Math.round(n) || 1));
-  const batch = generateCitizens(n, { seed: seed || null });
+  const [ageMin, ageMax] = ageRange();
+  const batch = generateCitizens(n, { seed: seed || null, ageMin, ageMax });
   roster = replace ? batch : roster.concat(batch);
   saveRoster(roster); select(replace ? 0 : roster.length - n); fillPortraits();
 }
@@ -214,7 +276,7 @@ $('#dup').onclick = () => { const { id, portrait, ...c } = cur(); add({ ...c, na
 $('#del').onclick = () => { if (roster.length > 1) { roster.splice(sel, 1); saveRoster(roster); select(sel); } };
 $('#export').onclick = () => {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([toJSON(roster)], { type: 'application/json' }));
+  a.href = URL.createObjectURL(new Blob([toJSON(roster, render)], { type: 'application/json' }));
   a.download = 'citizens.json'; a.click(); URL.revokeObjectURL(a.href);
 };
 $('#import').onclick = () => $('#file').click();
@@ -250,17 +312,17 @@ async function enterPlaza() {
   for (const f of plazaFolk) scene.remove(f.p.group);
   plazaFolk = [];
   const bench = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.44, 0.42), paint(0x8a6a4e)); bench.position.set(0, 0.22, -0.3); ink(bench, 'fine');
-  const props = new THREE.Group(); props.add(bench); scene.add(props); plazaFolk.props = props;
+  const props = new THREE.Group(); props.add(bench); applyRenderStyle(props, render); scene.add(props); plazaFolk.props = props;
   const crowd = roster.slice(0, PLAZA_MAX);                         // a big batch still strolls, a plaza-full at a time
   for (let i = 0; i < crowd.length && mode === 'plaza'; i++) {
     $('#busy').textContent = `sketching ${i + 1} of ${crowd.length}${roster.length > crowd.length ? ` (of ${roster.length})` : ''}…`; $('#busy').classList.add('on');
-    const p = await makePerson(toPersonSpec(crowd[i]));
+    const p = await makePerson(spec(crowd[i]));
     if (mode !== 'plaza') return;
     const role = i === 1 ? 'sit' : i % 4 === 3 ? 'bike' : 'walk';
     // rings: everyone on a ring goes the same way, evenly spaced, so nobody walks through anybody
     const ringN = role === 'bike' ? 3 : i % 3, onRing = Math.ceil(crowd.length / 3);
     const f = { p, role, r: 1.5 + ringN * 0.8, a: (Math.floor(i / 3) / onRing) * Math.PI * 2 + ringN, dir: ringN % 2 ? 1 : -1, t: Math.random() * 10 };
-    if (role === 'bike') { f.bike = makeBike(p); p.group.add(f.bike.group); }
+    if (role === 'bike') { f.bike = makeBike(p); p.group.add(f.bike.group); applyRenderStyle(f.bike.group, render); }
     if (role === 'sit') p.group.position.set(0.3, 0, -0.25 - p.motion.M.hipMid.z);   // hips onto the bench (it spans z −0.51…−0.09)
     p.group.add(blobShadow(0.3)); scene.add(p.group); plazaFolk.push(f);
   }
@@ -305,9 +367,13 @@ function loop() {
   renderer.render(scene, camera);
 }
 
-drawTabs(); resize(); loop();
-// ?batch=30&seed=harbour makes a batch straight away (the same seed always makes the same people)
+// ?batch=30&seed=harbour&ages=2-12&render=anime makes a batch straight away (the same seed always makes the same people)
 const q = new URLSearchParams(location.search);
+if (RENDER_STYLES[q.get('render')]) render = q.get('render');
+{ const m = /^(\d+)\s*[-–]\s*(\d+)$/.exec(q.get('ages') ?? ''); if (m) setAges(+m[1], +m[2]); else if (AGE_RANGES[q.get('ages')]) setAges(...AGE_RANGES[q.get('ages')]); }
+applySceneStyle(renderer, scene, render); applySceneStyle(renderer, pscene, render);
+for (const o of [ground, ring]) applyRenderStyle(o, render);
+drawTabs(); resize(); loop();
 if (q.has('batch')) { $('#batchN').value = q.get('batch'); $('#seed').value = q.get('seed') ?? ''; makeBatch(+q.get('batch'), q.get('seed'), true); }
 else { select(0); fillPortraits(); }
-window.__maker = { get ready() { return !!current; }, enterPlaza, exitPlaza, change, select, makeBatch, get roster() { return roster; } };
+window.__maker = { get ready() { return !!current; }, enterPlaza, exitPlaza, change, select, makeBatch, setRender, get render() { return render; }, get roster() { return roster; } };

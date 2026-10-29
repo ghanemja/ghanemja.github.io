@@ -4,10 +4,12 @@
 // about a real joint, blended by the skin weights so it flows into the
 // neighbouring body exactly the way the skin bends (no seams, no hinges):
 //
-//   headsTall  stature ÷ head height (vertex → chin). Real adults ≈ 7.3–7.5;
-//              heroic 8; storybook 5–6; chibi 3–4. Scales the head about the
-//              top of the neck. Ordinary styles are held to HUMAN_RANGE (below);
-//              only a style marked `exaggerated: true` may leave it.
+//   head       head size relative to THIS person's natural head (1 = true to life),
+//              scaled about the top of the neck. Relative, so it suits every age: a
+//              4-year-old is naturally ≈5 heads tall and an adult ≈7.5, and a style
+//              must not "correct" a child into adult proportions. For an adult,
+//              1.15 ≈ 6.8 heads, 1.55 ≈ storybook 5.4, 2.6 ≈ chibi 3.6. Ordinary styles
+//              are held to HUMAN_RANGE (below); only `exaggerated: true` may leave it.
 //   hands      hand size about the wrist (1 = anatomical)
 //   feet       foot size about the ankle
 //   eyes       eyeball + socket size about each eye's centre
@@ -26,21 +28,21 @@ import { regionWeight } from './anatomy.js';
 // anything outside it is clamped (with a console warning) — a big-headed figure is
 // never an accident of tuning.
 export const HUMAN_RANGE = {
-  headsTall: [6.6, 8.0],     // adults are ≈7.3–7.5 heads; 6.6 is a gentle illustrator's head, 8 heroic
+  head: [0.95, 1.2],         // ×natural; 1.2 is a gentle illustrator's head (an adult ≈6.6 heads), 0.95 heroic
   hands: [0.95, 1.08],
   feet: [0.95, 1.06],
   eyes: [0.95, 1.15],
 };
 
 export const STYLES = {
-  real: { headsTall: null, hands: 1, feet: 1, eyes: 1, soften: 0, expression: {} },
+  real: { head: 1, hands: 1, feet: 1, eyes: 1, soften: 0, expression: {} },
   // the town: a person with human proportions, painted — the head only a touch
   // larger than life, small details softened for the gouache look
-  town: { headsTall: 6.8, hands: 1.02, feet: 1.0, eyes: 1.08, soften: 3, expression: {} },
+  town: { head: 1.15, hands: 1.02, feet: 1.0, eyes: 1.08, soften: 3, expression: {} },
   // exaggerated styles must say so (exaggerated: true), and are only used when asked for
-  storybook: { exaggerated: true, headsTall: 5.4, hands: 1.12, feet: 1.06, eyes: 1.35, soften: 3,
+  storybook: { exaggerated: true, head: 1.55, hands: 1.12, feet: 1.06, eyes: 1.35, soften: 3,
     expression: { 'eye-left-opened-up': 0.2, 'eye-right-opened-up': 0.2 } },   // open, bright eyes (more reads as startled)
-  chibi: { exaggerated: true, headsTall: 3.6, hands: 1.25, feet: 1.15, eyes: 1.6, soften: 4,
+  chibi: { exaggerated: true, head: 2.6, hands: 1.25, feet: 1.15, eyes: 1.6, soften: 4,
     expression: { 'eye-left-opened-up': 0.15, 'eye-right-opened-up': 0.15 } },
 };
 
@@ -131,12 +133,7 @@ export function smoothSurface(pos, tris, passes, { lambda = 0.5, mu = -0.53, wei
 
 export function stylize(body, style = STYLES.real) {
   const S = checkStyle(style), J = body.joints, stature = body.P.stature;
-  if (S.headsTall) {
-    const { h } = headHeight(body);
-    // scaling the head by s about the neck adds (s−1)·h to the stature too: solve for s
-    const s = (stature - h) / (h * (S.headsTall - 1));
-    scaleRegion(body, 'head', J.head.head.clone(), s);
-  }
+  if (S.head && S.head !== 1) scaleRegion(body, 'head', J.head.head.clone(), S.head);   // (ground() then restores the stature)
   if (S.eyes !== 1) {
     const [l, r] = eyeCentres(body), R = l.distanceTo(r) * 0.42;
     for (const c of [l, r]) for (let i = 0; i < body.A.n; i++) {
