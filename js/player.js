@@ -217,7 +217,7 @@ function dressPlayer(g) {
   bp.add(handle);
   for (const s of [-1, 1]) {                    // straps hugging over the shoulders to the chest
     const strap = new THREE.Mesh(rbox(0.028, 0.16, 0.013, 0.005), flapM);
-    strap.position.set(s * 0.056, 0.037, 0.066);   // seated on the sloped shoulder line
+    strap.position.set(s * 0.057, 0.052, 0.068);   // seated on the sloped shoulder line
     strap.rotation.x = -0.3;
     bp.add(strap);
   }
