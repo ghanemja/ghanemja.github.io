@@ -69,12 +69,14 @@ function skeleton(curl, Y = 0) {
   palm.push({ e: [0.0, 0.44, 0.03], r: [0.18, 0.055, 0.045] });
 
   for (const f of FINGERS) {
-    const ab = f.splay * (1 + 0.4 * Y) * D2R, d0 = [Math.sin(ab), Math.cos(ab), 0];
-    const r0 = f.r0 * (1 + 0.08 * Y), len = f.len * (1 - 0.02 * Y);   // young: plumper, shorter fingers
-    let p = [f.mcp[0], f.mcp[1], 0.0], th = 0, r = r0;
+    // the adult splay angles converge the fingertips (the relaxed cascade); a young hand
+    // fans a little OUTWARD instead, so the gaps open toward the tips (no holes at the webs)
+    const ab = (f.splay * (1 - Y) - 4 * Y * Math.sign(f.splay || 0)) * D2R, d0 = [Math.sin(ab), Math.cos(ab), 0];
+    const r0 = f.r0 * (1 - 0.06 * Y), len = f.len * (1 - 0.05 * Y);   // young: slim fingers — a gap narrower than a grid cell gets filled in (a mitten)
+    let p = [f.mcp[0] * (1 + 0.2 * Y), f.mcp[1], 0.0], th = 0, r = r0;   // knuckles a little further apart, so fingers have room
     const segs = [];
     for (let j = 0; j < 3; j++) {
-      th += (f.flex[j] * (1 - 0.3 * Y) + curl * [55, 60, 35][j]) * D2R;   // young: a looser, more open rest     // each joint bends further toward the palm
+      th += (f.flex[j] * (1 - 0.5 * Y) + curl * [55, 60, 35][j]) * D2R;   // young: a looser, more open rest     // each joint bends further toward the palm
       const dir = [d0[0] * Math.cos(th), d0[1] * Math.cos(th), Math.sin(th)];
       const q = add(p, dir, len * PHAL[j]);
       const r2 = r0 * (Y ? [0.93, 0.87, 0.78] : [0.9, 0.82, 0.7])[j];   // young fingers barely taper
@@ -112,7 +114,7 @@ function sdHand(S, r, d, p, Y = 0) {
   let hand = smin(palm, thumb, 0.07);
   for (const segs of S.fingers) {
     let f = 1e9;
-    for (const s of segs) f = smin(f, roundCone(r, d, p, s.a, s.b, s.r1, s.r2), 0.015 + 0.012 * Y);   // young: joints melt, no knobbly knuckles
+    for (const s of segs) f = smin(f, roundCone(r, d, p, s.a, s.b, s.r1, s.r2), 0.015 + 0.02 * Y);   // young: joints melt, no knobbly knuckles
     hand = Math.min(hand, smin(palm, f, 0.045));            // melts into the palm, never into the next finger
   }
   return hand;

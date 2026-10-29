@@ -287,7 +287,7 @@ export function makeFolk(spec) {
     ft.add(new THREE.Mesh(sg.upper, shoe), new THREE.Mesh(sg.sole, soleM));
   }
   // pelvis
-  const pel = ball(0.12 * B, bottom); pel.scale.set(1.05, 0.62, 0.8); J.hips.add(pel);
+  const pel = ball(0.12 * B, bottom); pel.scale.set(1.05, 0.62, 0.8 - 0.1 * (S.flatTum ?? 0)); J.hips.add(pel);
 
   // ── spine + torso ──
   J.spine = joint(J.hips, 0, 0.02, 0);
@@ -295,9 +295,26 @@ export function makeFolk(spec) {
   // S.slope (0…1) drops and rounds the shoulder line toward the neck — 0 is the
   // original broad, square shoulder; the player uses a soft sloped one
   const sl = S.slope ?? 0;
-  const torso = new THREE.Mesh(lathe(smooth([[0.001, -0.01], [0.112, 0.0], [0.125, 0.1], [0.122, 0.17],
-    [0.132 - 0.006 * sl, 0.25 - 0.025 * sl], [0.134 - 0.016 * sl, 0.278 - 0.022 * sl], [0.12 - 0.022 * sl, 0.31 - 0.006 * sl],
-    [0.088 - 0.012 * sl, 0.342], [0.05, 0.362], [0.001, 0.37]], 36), 32), top);
+  // with a full slope the yoke is a real shoulder line: from the neck a gentle, slightly
+  // CONCAVE trapezius run out to a rounded shoulder point — a convex dome there reads hunched
+  const prof = sl >= 1
+    ? [[0.001, -0.01], [0.112, 0.0], [0.122, 0.1], [0.12, 0.17], [0.126, 0.225], [0.124, 0.262],
+       [0.112, 0.29], [0.1, 0.31], [0.089, 0.328], [0.079, 0.343], [0.06, 0.36], [0.001, 0.368]]   // the neckline stays as wide as the collar ring (the torso is shallower front-to-back)
+    : [[0.001, -0.01], [0.112, 0.0], [0.125, 0.1], [0.122, 0.17],
+       [0.132 - 0.006 * sl, 0.25 - 0.025 * sl], [0.134 - 0.016 * sl, 0.278 - 0.022 * sl], [0.12 - 0.022 * sl, 0.31 - 0.006 * sl],
+       [0.088 - 0.012 * sl, 0.342], [0.05, 0.362], [0.001, 0.37]];
+  const tg = lathe(smooth(prof, 36), 32);
+  // S.flatTum (0…1): a lathe is as round in front as at the sides — flatten the FRONT of
+  // the lower torso so the stomach doesn't push out past the waistband
+  if (S.flatTum) {
+    const P = tg.attributes.position;
+    for (let i = 0; i < P.count; i++) {
+      const y = P.getY(i), z = P.getZ(i);
+      if (z > 0) P.setZ(i, z * (1 - 0.3 * S.flatTum * Math.exp(-((y - 0.07) ** 2) / 0.008)));
+    }
+    tg.computeVertexNormals();
+  }
+  const torso = new THREE.Mesh(tg, top);
   const TZ = 0.78 + 0.08 * S.belly;                  // torso depth
   torso.scale.set(B, 1, TZ);
   J.spine.add(torso);
