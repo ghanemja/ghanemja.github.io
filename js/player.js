@@ -168,7 +168,7 @@ function dressPlayer(g) {
     const skinM = paint(skinHex, { soft: true, hatch: 0.3 });
     grip.visible = false;
     const H = new THREE.Group();
-    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.117, young: 1, res: 88 }), skinM));
+    H.add(new THREE.Mesh(makeHandGeometry(s, { length: 0.117, young: 1, res: 104 }), skinM));
     ink(H, 'fine');
     hand.add(H);
     hand.rotation.x = -0.06;
