@@ -306,7 +306,16 @@ export function buildHead(J, S, F, mats) {
   // blush
   if (F.blush !== 0) for (const s of [-1, 1]) {
     const ch = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), paint(F.blushColor ?? 0xe89a86, { hatch: 0 })); ch.scale.set(1.1 * (F.blush ?? 1), 0.6, 0.3);
-    ch.position.copy(pt(s * 0.55, -0.2)).add(new THREE.Vector3(0, 0, -0.003)); bits.push(add(ch));
+    ch.position.copy(pt(s * 0.55, -0.2)).add(new THREE.Vector3(0, 0, -0.003));
+    if (F.blushFlush) {
+      // painted on, not stuck on: a paper-thin disc lying in the cheek's surface, no outline
+      const n = ch.position.clone().sub(HC).normalize();
+      ch.scale.set(1.1 * (F.blush ?? 1), 0.75, 0.04);
+      ch.position.copy(pt(s * 0.55, -0.2)).addScaledVector(n, 0.0006);
+      ch.lookAt(ch.position.clone().add(n));
+      ch.userData.noInk = true;
+    }
+    bits.push(add(ch));
   }
   // ears
   for (const s of [-1, 1]) { const ear = new THREE.Mesh(new THREE.SphereGeometry(0.024, 12, 10), skin); ear.scale.set(0.5, 1, 0.8); ear.position.copy(pt(s * 0.97, 0.03, -1)).add(new THREE.Vector3(0, 0, 0.012)); add(ear); }
