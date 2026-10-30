@@ -424,7 +424,7 @@ function dress(body, N, look) {
     : (i, s) => 0.5 - s.f.ul2[i];                                                         // under a skirt: to mid thigh
   out.bottom = cut(cut(cut(copySurface(S), (i, s) => 0.5 - s.f.arms[i]), (i, s) => waistY - y(i, s)), legEnd);
   out.top.type = top; out.bottom.type = bottom;
-  if (bottom !== 'trousers') {                                                            // bare legs below, never the feet (shoes)
+  if (bottom === 'shorts' || bottom === 'skirt') {                                         // bare legs below, never the feet (shoes) — not under any trousers (under baggy ones the hidden leg poked through at the hips)
     const from = bottom === 'shorts' ? (i, s) => kneeY + 0.06 * H - y(i, s) : (i, s) => s.f.ul2[i] - 0.3;
     out.legs = cut(cut(copySurface(S), from), (i, s) => 0.6 - s.f.feet[i]);
   }
