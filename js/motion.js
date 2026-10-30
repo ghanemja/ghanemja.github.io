@@ -359,11 +359,19 @@ export function makeMotion(person) {
       const c = rest.lerp(mouth, sip), tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.9 * sip);
       setProp(cup, c, tilt);
       look(0.05 - 0.15 * sip);
-      // the right hand round the cup from its outer side, fingers wrapping forward round it
-      const out = new THREE.Vector3(-1, 0, 0.15).normalize();
+      // the right hand round the cup's side, the wrist straight: the hand points the way the forearm
+      // does (elbow → cup), so it is aimed from where the elbow actually lands and re-aimed as the IK
+      // settles (aimed on its own, the hand cocked back at the wrist). The palm faces the cup's axis
+      // and the thumb runs up toward the rim.
       // the elbow stays down and in front of the body, even mid-sip (pointed out and back, the arm went up
       // like a salute and the hand covered the face)
-      hold('R', c.clone().addScaledVector(out, r * 1.05), new THREE.Vector3(0.25, 0, 1).applyQuaternion(tilt), out.clone().negate(), M.shoulder.R.clone().add(new THREE.Vector3(-0.12, -0.7 + 0.15 * sip, 0.15 + 0.25 * sip)), { along: 0.45 });
+      const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(tilt), pole = M.shoulder.R.clone().add(new THREE.Vector3(-0.12, -0.7 + 0.15 * sip, 0.15 + 0.25 * sip));
+      let elbow = M.elbow.R.clone();
+      for (let it = 0; it < 4; it++) {
+        const F = c.clone().sub(elbow).normalize(), N = new THREE.Vector3().crossVectors(axis, F).normalize();
+        hold('R', c.clone().addScaledVector(N, -r * 1.05), F, N, pole, { along: 0.45 });
+        rig.updateMatrixWorld(true); elbow = local(B['lowerarm01.R']);
+      }
       curlFingers(B, 'R', 0.6);
     },
     read(t) {
