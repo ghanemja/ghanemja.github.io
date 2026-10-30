@@ -331,7 +331,7 @@ Edit \`citizens.json\` (or import it in the maker), re-export. Fields: name, sex
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'citizen';
 
-export async function exportPack({ roster, render, makePerson, spec, toJSON, onProgress = () => {} }) {
+export async function exportPack({ roster, render, makePerson, spec, toJSON, portrait, onProgress = () => {} }) {
   const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
   const exporter = new GLTFExporter(), used = new Set(), files = [], people = [];
   const glbOf = async (root, k, animations) => new Uint8Array(restoreDots(await exporter.parseAsync(forExport(root, k), { binary: true, animations })));
@@ -342,6 +342,7 @@ export async function exportPack({ roster, render, makePerson, spec, toJSON, onP
     while (used.has(base)) base = slug(c.name) + '-' + n++;
     used.add(base);
     const person = await makePerson({ ...spec(c), render }), k = person.body.P.stature / 1.7;
+    if (portrait) portrait(person, c);                                  // (portraits are drawn lazily in the page: any still missing are drawn now)
     const { clips, info, bike, ride, props } = bakeMotion(person, render);   // (poses the person, so it comes before the model is dressed for export)
     const entry = { name: c.name, model: `models/${base}.glb`, props: {}, height: +person.body.P.stature.toFixed(3), clips: info };
     const wrap = (name, obj) => { const g = new THREE.Group(); g.name = name; g.add(obj); return g; };

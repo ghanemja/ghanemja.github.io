@@ -47,20 +47,28 @@ const cur = () => roster[sel];
 const stage = new THREE.Group(); scene.add(stage);
 
 // ── building people (latest request wins) ──
+// Recently built people are kept (keyed by everything that shapes them), so clicking a card whose
+// portrait was just drawn, or going back to someone, is instant instead of a rebuild. A person is
+// in the scene or in here, never both.
+const built = new Map(), keyOf = (c) => JSON.stringify(spec(c));
+const keep = (p) => { const k = p.key; if (!k) return; built.delete(k); built.set(k, p); while (built.size > 8) built.delete(built.keys().next().value); };
+const takeBuilt = (c) => { const k = keyOf(c), p = built.get(k); if (p) built.delete(k); return p; };
 async function build(c) {
-  const id = ++buildId; $('#busy').classList.add('on');
-  const p = await makePerson(spec(c));
-  if (id !== buildId) return null;
+  const ready = takeBuilt(c); if (ready) { ++buildId; $('#busy').classList.remove('on'); return ready; }
+  const id = ++buildId, key = keyOf(c); $('#busy').classList.add('on');
+  const p = await makePerson(spec(c)); p.key = key;          // (the exact settings it was built from)
+  if (id !== buildId) { keep(p); return null; }            // (superseded by a newer click: kept for later)
   $('#busy').classList.remove('on');
   return p;
 }
 async function show() {
-  const p = await build(cur());
+  const c = cur(), p = await build(c);
   if (!p) return;
-  if (current) stage.remove(current.group);
-  current = p; stage.add(p.group); p.group.add(blobShadow(0.3));
+  if (current) { stage.remove(current.group); keep(current); }
+  current = p; stage.add(p.group);
+  if (!p.shadow) { p.shadow = blobShadow(0.3); p.group.add(p.shadow); }
   setProp();
-  portrait(p, cur());
+  if (!c.portrait) portrait(p, c);
 }
 function setProp() {
   if (prop) { const o = prop.group ?? prop; o.parent?.remove(o); prop = null; }   // (a bike is { group, … }, not itself in the scene)
@@ -114,19 +122,29 @@ function portrait(p, c) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 160;
   const ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = N === 160; ctx.drawImage(small, 0, 0, 160, 160);
   c.portrait = cv.toDataURL('image/jpeg', 0.85);
-  saveRoster(roster); drawRoster();
+  saveSoon(); drawCard(c);
 }
+// a finished portrait swaps into its own card (redrawing the whole strip replaced the card under the
+// mouse, about once a second while a batch filled in, and clicks were lost)
+function drawCard(c) {
+  const b = $(`#cards [data-i="${roster.indexOf(c)}"]`); if (!b || !c.portrait) return;
+  const old = b.querySelector('img, .ph'), img = document.createElement('img'); img.src = c.portrait; img.alt = '';
+  old ? old.replaceWith(img) : b.prepend(img);
+}
+// the roster (portraits and all, megabytes for a big batch) is saved at most about once a second
+let saveTimer = 0;
+const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => saveRoster(roster), 800); };
 
 // ── editing ──
 function change(key, value, rebuild = !INSTANT.includes(key)) {
   cur()[key] = value;
   if (key === 'bodyType' && BODY_TYPES[value]) Object.assign(cur(), { build: BODY_TYPES[value].build, muscle: BODY_TYPES[value].muscle });   // a type is a whole body
   saveRoster(roster);
-  if (rebuild || !current) { queueRebuild(); return; }
+  if (rebuild || !current) { delete cur().portrait; queueRebuild(); return; }
   const s = toPersonSpec(cur());
   const map = { skin: { skin: s.skin, lips: s.lips, blush: s.blush }, hair: { hair: s.hair, brows: s.brows }, hairStyle: { hairStyle: s.hairStyle },
     eyes: { eyes: s.eyes }, top: { top: s.top }, bottom: { bottom: s.bottom }, shoes: { shoes: s.shoes, sole: s.sole } };
-  current.restyle(map[key]);
+  current.restyle(map[key]); current.key = keyOf(cur());          // (recoloured in place: it now matches the new settings)
   clearTimeout(change.t); change.t = setTimeout(() => portrait(current, cur()), 300);
 }
 let rebuildT = 0;
@@ -242,7 +260,9 @@ $('#name').addEventListener('input', (e) => { cur().name = e.target.value || 'Ci
 // ── the roster ──
 function drawRoster() {
   $('#count').textContent = roster.length + (roster.length === 1 ? ' citizen' : ' citizens');
+  wanted.clear();
   $('#cards').innerHTML = roster.map((c, i) => `<button class="card ${i === sel ? 'on' : ''}" data-i="${i}" aria-label="Edit ${c.name}">${c.portrait ? `<img src="${c.portrait}" alt="">` : '<div class="ph"></div>'}<span>${c.name}</span></button>`).join('');
+  fillPortraits();
 }
 function select(i) {
   sel = Math.max(0, Math.min(roster.length - 1, i));
@@ -255,19 +275,28 @@ $('#rand').onclick = () => { const [ageMin, ageMax] = ageRange(); Object.assign(
 
 // ── batches: make n citizens at once (seeded = reproducible), portraits drawn in the background ──
 let portraitRun = 0;
-async function fillPortraits() {
-  const run = ++portraitRun, todo = roster.filter(c => !c.portrait);
-  for (let i = 0; i < todo.length; i++) {
-    if (run !== portraitRun) return;
-    if (todo[i].portrait || todo[i] === cur()) continue;
-    $('#count').textContent = `drawing portraits ${i + 1} of ${todo.length}…`;
-    const p = await makePerson(spec(todo[i]));
-    if (run !== portraitRun) return;
-    portrait(p, todo[i]);
-    await new Promise(r => setTimeout(r, 30));                         // let the page breathe between people
+// portraits are drawn lazily: only for the cards in view in the strip (and a little ahead), one at a
+// time, waiting while a person you clicked is being built. A batch of 200 used to build all 200
+// people up front and the page could barely be clicked. (An export draws any that are missing.)
+const wanted = new Set();
+const seen = new IntersectionObserver((es) => {
+  for (const e of es) if (e.isIntersecting) { const c = roster[+e.target.dataset.i]; if (c && !c.portrait) wanted.add(c); }
+  pump();
+}, { root: $('#cards'), rootMargin: '0px 480px' });
+let pumping = false, lastInput = -1e9;
+for (const ev of ['pointerdown', 'keydown', 'wheel']) addEventListener(ev, () => { lastInput = performance.now(); }, { capture: true, passive: true });
+async function pump() {
+  if (pumping) return; pumping = true;
+  while (wanted.size) {
+    if ($('#busy').classList.contains('on') || mode === 'plaza' || performance.now() - lastInput < 1200) { await new Promise(r => setTimeout(r, 250)); continue; }
+    const c = [...wanted].find(c => roster.includes(c)) ?? null; wanted.clear(); if (!c) break;
+    for (const x of document.querySelectorAll('#cards .card')) { const r = roster[+x.dataset.i]; if (r && !r.portrait && r !== c) { const b = x.getBoundingClientRect(), box = $('#cards').getBoundingClientRect(); if (b.right > box.left - 480 && b.left < box.right + 480) wanted.add(r); } }
+    if (!c.portrait && c !== cur()) { const key = keyOf(c), p = await makePerson(spec(c)); p.key = key; if (roster.includes(c) && !c.portrait) { portrait(p, c); keep(p); } }
+    await new Promise(r => setTimeout(r, 60));                         // let the page breathe between people
   }
-  drawRoster();
+  pumping = false;
 }
+function fillPortraits() { seen.disconnect(); for (const x of document.querySelectorAll('#cards .card')) seen.observe(x); }
 // the batch's age range: a preset, or any two ages typed in
 function ageRange() {
   let a = Math.round(+$('#ageMin').value), b = Math.round(+$('#ageMax').value);
@@ -302,8 +331,8 @@ const save = (blob, name) => {
 $('#export').onclick = async () => {
   const btn = $('#export'); btn.disabled = true;
   try {
-    const { exportPack } = await import('./export-pack.js?cb=7');
-    const blob = await exportPack({ roster, render, makePerson, spec, toJSON, onProgress: (i, n) => { $('#count').textContent = `exporting ${i + 1} of ${n}…`; } });
+    const { exportPack } = await import('./export-pack.js?cb=9');
+    const blob = await exportPack({ roster, render, makePerson, spec, toJSON, portrait: (p, c) => { if (!c.portrait) portrait(p, c); }, onProgress: (i, n) => { $('#count').textContent = `exporting ${i + 1} of ${n}…`; } });
     save(blob, 'citizens.zip');
   } catch (err) { console.error(err); alert('Export failed: ' + err.message); }
   btn.disabled = false; drawRoster();
@@ -334,7 +363,7 @@ addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT') { if (e.k
 
 // ── the plaza: everyone out for a stroll ──
 let plazaFolk = [];
-const PLAZA_MAX = 16;
+const PLAZA_MAX = 10;                                               // (more than this got heavy; everyone is in the export)
 $('#plaza').onclick = async () => { if (mode === 'plaza') return exitPlaza(); enterPlaza(); };
 async function enterPlaza() {
   mode = 'plaza'; $('#plaza').classList.add('on'); document.body.classList.add('plaza');
@@ -363,8 +392,10 @@ async function enterPlaza() {
     p.group.add(blobShadow(0.3)); scene.add(p.group); plazaFolk.push(f);
   }
   $('#busy').classList.remove('on'); $('#busy').textContent = 'sketching…';
+  if (roster.length > crowd.length) $('#count').textContent = `${crowd.length} of ${roster.length} in the plaza · all ${roster.length} are in the export`;
 }
 function exitPlaza() {
+  $('#count').textContent = roster.length + (roster.length === 1 ? ' citizen' : ' citizens');
   mode = 'edit'; $('#plaza').classList.remove('on'); document.body.classList.remove('plaza');
   for (const f of plazaFolk) scene.remove(f.p.group);
   if (plazaFolk.props) scene.remove(plazaFolk.props);
