@@ -143,7 +143,7 @@ function doAct(it) {
     fadeDo(() => {
       zone = act.id;
       const rm = rooms[act.id];
-      player.setZone({ colliders: rm.colliders, bounds: rm.bounds });
+      player.setZone({ colliders: rm.colliders, bounds: rm.bounds, lookY: 1.5 });
       player.teleport(rm.spawn.x, rm.spawn.z, 0);
       markVisited(act.id);
       $('#hud').classList.add('hide');

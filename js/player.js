@@ -387,7 +387,7 @@ export function createPlayer(scene, camera, start) {
       // head→camera segment and stop at the first collider footprint (the
       // awnings overhang the fronts, so pad generously)
       const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
-      _t.set(g.position.x, 1.02, g.position.z);
+      _t.set(g.position.x, S.zone.lookY ?? 1.02, g.position.z);     // indoors the camera aims higher, at the walls
       _c.set(
         _t.x + Math.sin(S.yaw) * cp * S.dist,
         _t.y + sp * S.dist,
