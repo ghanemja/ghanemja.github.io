@@ -91,7 +91,7 @@ export const BODY_TYPES = {
 export const BODY_ALIASES = { rectangle: 'average', column: 'slim', diamond: 'round', wedge: 'broad', trapezoid: 'athletic' };
 // (belly is MakeHuman's "pregnant" target, so it is kept to half: a tummy, not a pregnancy)
 const GIRTH_MAX = { belly: 0.5 };
-const GIRTHS = { bust: 'measure/bust-circ', waist: 'measure/waist-circ', hips: 'measure/hips-circ', shoulders: 'measure/shoulder-dist', belly: 'stomach/stomach-pregnant', seat: 'buttocks/buttocks-volume' };
+const GIRTHS = { thighs: 'measure/thigh-circ', bust: 'measure/bust-circ', waist: 'measure/waist-circ', hips: 'measure/hips-circ', shoulders: 'measure/shoulder-dist', belly: 'stomach/stomach-pregnant', seat: 'buttocks/buttocks-volume' };
 
 // faces: a head shape (MakeHuman's head-shape targets) and features, each −1..1. The three
 // measured ancestry sets alone differ only subtly — nose and lips — so faces looked alike.
@@ -186,6 +186,7 @@ export const BODY_RANGE = {
   shr: [[0.84, 1.15], [0.98, 1.35]],         // shoulder joints apart ÷ hip width
   hipW: [[0.18, 0.245], [0.17, 0.235]],      // hip width ÷ stature
   belly: [[0.09, 0.175], [0.09, 0.18]],      // belly depth ÷ stature
+  thigh: [[0.8, 1.0], [0.8, 0.98]],          // width across both upper thighs ÷ hip width (no saddlebags)
 };
 let _torsoIds = null;
 export function bodyRatios(b) {
@@ -198,7 +199,8 @@ export function bodyRatios(b) {
   const hipW = span(hip - 0.04 * H, hip, 0);
   let waist = 1e9; for (let k = 0; k < 8; k++) { const y = hip + 0.06 * H + k * 0.012 * H; waist = Math.min(waist, span(y, y + 0.01 * H, 0)); }
   const belly = span(hip + 0.04 * H, hip + 0.12 * H, 2, (i) => Math.abs(P[i * 3]) < 0.06 * H);
-  return { whr: waist / hipW, shr: J['upperarm01.L'].head.distanceTo(J['upperarm01.R'].head) / hipW, hipW: hipW / H, belly: belly / H };
+  const thighs = Math.max(span(hip - 0.1 * H, hip - 0.08 * H, 0), span(hip - 0.07 * H, hip - 0.05 * H, 0));
+  return { thigh: thighs / hipW, whr: waist / hipW, shr: J['upperarm01.L'].head.distanceTo(J['upperarm01.R'].head) / hipW, hipW: hipW / H, belly: belly / H };
 }
 function outOfRange(r, sex) {
   let worst = 0; const off = {};
@@ -215,7 +217,7 @@ export function buildBody(A, params = {}) {
   if (params.enforce === false || (b.P.age ?? 25) < 15) return b;
   // scale back the body type a little, then correct the girths that are out (wider waist, narrower
   // hips, broader shoulders, less belly) until the body is a human one
-  const corr = { waist: 0, hips: 0, shoulders: 0, belly: 0 };
+  const corr = { waist: 0, hips: 0, shoulders: 0, belly: 0, thighs: 0 };
   for (let it = 0, f = 1; it < 16; it++) {
     const { worst, off } = outOfRange(bodyRatios(b), b.P.sex);
     if (worst <= 0.005) break;
@@ -224,8 +226,9 @@ export function buildBody(A, params = {}) {
     if (off.hipW > 0) corr.hips -= 0.12; else if (off.hipW < 0) corr.hips += 0.1;
     if (off.shr < 0) { corr.shoulders += 0.12; } else if (off.shr > 0) corr.shoulders -= 0.1;
     if (off.belly > 0) corr.belly -= 0.12;
+    if (off.thigh > 0) corr.thighs -= 0.15;
     const p2 = { ...params, shapeAmount: (params.shapeAmount ?? 1) * f };
-    for (const g of ['bust', 'waist', 'hips', 'shoulders', 'belly', 'seat']) p2[g] = (params[g] || 0) * f + (corr[g] || 0);
+    for (const g of ['bust', 'waist', 'hips', 'shoulders', 'belly', 'seat', 'thighs']) p2[g] = (params[g] || 0) * f + (corr[g] || 0);
     b = buildBodyRaw(A, p2); b.P.enforced = { shape: f, ...corr };
   }
   return b;

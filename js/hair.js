@@ -214,7 +214,7 @@ export function makeHair(H, { chin }, styleName, colour) {
   // lock flows over the head from the whorl to where its column ends (front hair forward over the
   // top, back hair down), then on down the curtain. Rooted at the pole, every lock met in one point
   // and the top of the head was a pinwheel of outlines.
-  const whorl = dirAt(Math.PI, S.whorl ?? 0.8);
+  const whorl = dirAt(Math.PI - 0.3, S.whorl ?? 0.8);                       // (a little off centre, as it grows)
   const surfAt = (d) => onHead(Math.atan2(d.x, d.z), THREE.MathUtils.clamp(d.y, -0.999, 0.999));
   const flow = (col) => {
     const Lhead = col.L[SAMPLES], onTop = col.end <= Lhead + 1e-6, target = onTop ? at(col, col.end) : col.pts[SAMPLES];
@@ -228,7 +228,13 @@ export function makeHair(H, { chin }, styleName, colour) {
   // Layered as hair artists build cards: the base mass hides the scalp; then big clumps (layer 0);
   // then a top layer over them with a little air between (1); then thin breakup locks (2) so it
   // isn't one width all over. Clumps vary in width; thick and thin together read as hair.
-  const LAYER = [{ n: 1, w: 1.15, lift: 0.012, s0: [0.02, 0.06], shade: 0.86 }, { n: 1, w: 0.95, lift: 0.03, s0: [0.25, 0.2], shade: 1 }, { n: 0.6, w: 0.42, lift: 0.046, s0: [0.12, 0.35], shade: 1.07 }];
+  // As stylized-hair tutorials build it: the silhouette from the base mass, then a FEW big chunky
+  // tufts (about 15, each ~2 slots wide and thick), a layer of medium tufts over them, and only a
+  // handful of small strands on top. Thirty-odd same-width thin locks a layer read as stripes, with
+  // outlines everywhere. Each tuft is an S-curve, not a straight ribbon.
+  const LAYER = [{ n: 0.42, w: 2.3, h: 1.6, lift: 0.014, s0: [0.02, 0.05], shade: 0.9, sway: 0.05 },
+    { n: 0.3, w: 1.6, h: 1.3, lift: 0.04, s0: [0.1, 0.22], shade: 1, sway: 0.06 },
+    { n: 0.22, w: 0.45, h: 0.6, lift: 0.06, s0: [0.22, 0.3], shade: 1.06, sway: 0.08 }];
   if (NL && !S.curl && !S.extra) for (let layer = 0; layer < 3; layer++) for (let j = 0, nl = Math.round(NL * LAYER[layer].n); j < nl; j++) {
     const Ly = LAYER[layer], th = -Math.PI + ((j + 0.5 * (layer % 2) + 0.35 * rnd(j * 7 + layer)) / nl) * Math.PI * 2, col = flow(column(th)), fw = faceW(th);
     const s0 = col.end * (Ly.s0[0] + Ly.s0[1] * rnd(j + 3 + layer * 5)), wv = 0.7 + 0.6 * rnd(j * 23 + layer);
@@ -238,14 +244,19 @@ export function makeHair(H, { chin }, styleName, colour) {
     const hl = isHairline(th);
     const s1 = hl ? col.end * (0.97 - 0.03 * rnd(j * 3 + layer)) : col.end * (1 - 0.05 * rnd(j * 3 + layer)) + R * (S.tip ?? 0.05) * (0.5 + rnd(j * 11 + layer)) * (0.4 + 0.6 * fw);
     const pts = [], lift = R * (Ly.lift + 0.006 * (j % 3));   // (each a little above its neighbour: at one height they z-fought into stripes)
+    // (neighbours sway the same way: alternating, they crossed in Xs)
+    const sg = Math.sin(th * 2 + layer) >= 0 ? 1 : -1, sway = R * Ly.sway * 0.7 * (0.6 + 0.8 * rnd(j * 29 + layer)), tn = new THREE.Vector3(), sd = new THREE.Vector3();
     for (let i = 0; i <= 24; i++) {
-      const t = i / 24, sAt = s0 + (s1 - s0) * t, p = taper(along(col, sAt), th, Math.min(1, sAt / col.end));
-      pts.push(p.addScaledVector(outOf(p), lift * (hl ? 1 - ss(t, 0.45, 1) : 1 - 0.5 * t)));
+      const t = i / 24, sAt = s0 + (s1 - s0) * t, p = taper(along(col, sAt), th, Math.min(1, sAt / col.end)), o = outOf(p);
+      tn.copy(along(col, sAt + 0.01 * R)).sub(along(col, sAt)).normalize(); sd.crossVectors(tn, o).normalize();
+      // an S: out to one side through the middle, back across toward the tip (none at a hairline's end)
+      const S2 = (Math.sin(Math.PI * t) * 0.75 + 0.25 * Math.sin(2 * Math.PI * t)) * (hl ? 1 - ss(t, 0.6, 1) : 1);
+      pts.push(p.addScaledVector(o, lift * (hl ? 1 - ss(t, 0.45, 1) : 1 - 0.5 * t)).addScaledVector(sd, sg * sway * S2));
     }
     const ring = (p) => Math.hypot(p.x - C.x, p.z - C.z);
     const spacing = (i) => (2 * Math.PI * ring(pts[i])) / NL;
     lock(pts, (t) => spacing(Math.round(t * 24)) * (S.lockW ?? 0.85) * Ly.w * wv * (0.35 + 0.65 * ss(t, 0, 0.12)) * (1 - 0.85 * ss(t, 0.62, 1)),
-      (t) => R * (S.lockH ?? 0.035) * (layer === 2 ? 0.6 : 1) * (1 - 0.6 * t) * (hl ? 1 - 0.9 * ss(t, 0.45, 1) : 1), Ly.shade * (0.93 + 0.14 * rnd(j * 13 + layer)));
+      (t) => R * (S.lockH ?? 0.035) * Ly.h * (1 - 0.6 * t) * (hl ? 1 - 0.9 * ss(t, 0.45, 1) : 1), Ly.shade * (0.93 + 0.14 * rnd(j * 13 + layer)));
   }
   // transition locks: short, thin clumps along a hairline, growing into it, so the edge is soft
   // (the shell's edge alone read as a cut line)
