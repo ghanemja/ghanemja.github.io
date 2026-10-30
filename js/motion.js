@@ -355,7 +355,8 @@ export function makeMotion(person) {
       const rest = M.shoulder.R.clone().add(new THREE.Vector3(0.1 * S, -0.22 * S, 0.22 * S));
       // the cup's rim meets the lips: its centre a little below and in front of the mouth
       const mouth = headRest.clone().add(new THREE.Vector3(-0.02 * S, -0.075 * S, 0.17 * S));
-      const c = rest.lerp(mouth, sip), tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.9 * sip);
+      // the cup tips its rim back toward the lips (a +x turn tipped it away: the lid faced out and the hand ended up under it)
+      const c = rest.lerp(mouth, sip), tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.9 * sip);
       setProp(cup, c, tilt);
       look(0.05 - 0.15 * sip);
       // the right hand round the cup from its outer side, fingers wrapping forward round it

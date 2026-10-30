@@ -409,7 +409,9 @@ function dress(body, N, look) {
   // not the neck bone's weight boundary: that zig-zags across the mesh at the base of the neck,
   // and both the collar and the skin under it came out sawtoothed, with dark gaps between
   const Jn = J.neck01.head, turtle = top === 'turtleneck';
-  const lineY = (z) => Jn.y + (turtle ? 0.035 : 0.004) * H - (turtle ? 0.15 : 0.6) * Math.max(0, z - Jn.z);
+  // (a crew neck dips only a little at the front: at a steeper 0.6 the bare skin ran down onto the chest and the
+  // neck read as flaring into a wedge at its base, side-on)
+  const lineY = (z) => Jn.y + (turtle ? 0.035 : 0.004) * H - (turtle ? 0.15 : 0.3) * Math.max(0, z - Jn.z);
   const near = (i, s) => s.f.neck[i] - 0.03;                            // only round the neck (the neck and head's own weight)
   const above = (i, s) => s.P[i * 3 + 1] - lineY(s.P[i * 3 + 2]);
   out.face = cut(copySurface(S), (i, s) => Math.min(above(i, s) + 0.012 * H, near(i, s)));
