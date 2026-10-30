@@ -70,6 +70,7 @@
 
   /* interaction prompt + controls bar */
   #prompt { left: 50%; bottom: 76px; transform: translateX(-50%) rotate(-1deg); font-size: 22px; padding: 6px 18px; background: #fffaf0; cursor: pointer; }
+  #say { left: 50%; bottom: 124px; transform: translateX(-50%) rotate(0.8deg); max-width: min(520px, 88vw); font-size: 20px; padding: 8px 18px; text-align: center; background: #fffaf0; pointer-events: none; }
   #bar { left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 15px; padding: 5px 14px; white-space: nowrap; max-width: 96vw; overflow: hidden; }
 
   /* the shop card */
@@ -115,6 +116,7 @@
   </div>
 
   <div id="prompt" class="ui sk fade hide"></div>
+  <div id="say" class="ui sk fade hide"></div>
   <div id="bar" class="ui sk fade hide"><kbd>WASD</kbd> walk · <kbd>Shift</kbd> run · <kbd>E</kbd> enter / look · drag to look · scroll to zoom · <kbd>H</kbd> hide</div>
 
   <div id="card" class="ui sk fade hide">
@@ -136,6 +138,6 @@
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="./js/main.js?cb=68"></script>
+<script type="module" src="./js/main.js?cb=69"></script>
 </body>
 </html>

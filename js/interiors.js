@@ -46,9 +46,23 @@ const css = (hex) => '#' + new THREE.Color(hex).getHexString();
 
 const _loader = new THREE.TextureLoader();
 const LIVE = [];                            // per-frame animations: f(t), local room coords
+let NOW = 0;
 export function tickInteriors(t) {
+  NOW = t;
   for (const f of LIVE) f(t);
 }
+// a station's little show: plays for `dur` s, rests `rest` s, then plays again by itself;
+// pressing E starts it over. p() is 0..1 through the show.
+function station(dur, rest, delay = 0) {
+  let t0 = delay;
+  return {
+    go() { t0 = NOW; },
+    set(p) { t0 = NOW - p * dur; },
+    p() { if (NOW - t0 > dur + rest) t0 = NOW; return Math.min(1, Math.max(0, (NOW - t0) / dur)); },
+  };
+}
+// something to walk up to and press E at (room-local x, z)
+const mini = (K, x, z, label, run, r = 0.8) => K.minis.push({ x, z, r, label, run });
 function shotMat(url, clip, aspect = 1.6) {
   const crop = (tex, iw, ih) => {
     const ia = iw / ih;
@@ -378,7 +392,7 @@ const SETS = {
   deckgpt(K) {
     // the silver screen, playing the app
     K.box(SCR_W + 0.3, SCR_H + 0.2, 0.08, paint(0x2a2230, { hatch: 0 }), 0, SCR_Y, -D + 0.62, 0.03);
-    K.flat(SCR_W, SCR_H, shotMat('screenshots/pptgpt.png', null, SCR_W / SCR_H), 0, SCR_Y, -D + 0.67);
+    K.deckScreen = K.flat(SCR_W, SCR_H, shotMat('screenshots/pptgpt.png', null, SCR_W / SCR_H), 0, SCR_Y, -D + 0.67);
     // red curtains either side
     for (const s of [-1, 1]) {
       const cur = K.put(new THREE.CylinderGeometry(0.22, 0.26, 2.2, 10), paint(0xb03a30), s * (SCR_W / 2 + 0.3), 1.25, -D + 0.68);
@@ -1003,8 +1017,10 @@ const CENTER = {
       K.flat(0.62, 0.16, texMat(256, 64, (c, w, h) => {
         c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h); c.font = `700 30px ${HAND}`; c.fillStyle = '#f2d27a'; c.textAlign = 'center'; c.fillText('PUSH  ·  85% height', w / 2, 42);
       }), x, 0.11, z + 0.56, [-Math.PI / 2 + 0.6, 0, 0]);
+      const st = station(4.5, 6, 1);
+      mini(K, x, z + 1.0, 'push it', (m) => { st.go(); m.say('A bar pushes at 85% of their height: the can slides, the bottle tips. Same push, different behaviour.'); });
       LIVE.push((t) => {
-        const s = (t * 0.22) % 1, reset = s > 0.86 || s < 0.05;
+        const s = st.p(), reset = s >= 1 || s < 0.05;
         const bx = -0.62 + (smooth(0.05, 0.45, s) - smooth(0.62, 0.85, s)) * 0.95;
         bar.position.x = x + bx;
         // the can slides ahead of the bar's face and stays where it was left
@@ -1028,8 +1044,10 @@ const CENTER = {
       prot.userData.noInk = true;
       const needle = K.box(0.28, 0.015, 0.01, dark, x + 0.9, 0.32, z + 0.47, 0.004);
       needle.geometry.translate(-0.14, 0, 0);
+      const st = station(5.5, 6, 3);
+      mini(K, x, z + 0.95, 'tilt the ramp', (m) => { st.go(); m.say('The floor tilts toward 35°: the ball rolls at once, the crate holds until about 19°, then slides.'); });
       LIVE.push((t) => {
-        const s = (t * 0.18) % 1;
+        let s = st.p(); if (s >= 1) s = 0;
         const a = 0.6 * smooth(0.0, 0.55, s) * (1 - smooth(0.8, 0.95, s));
         hinge.rotation.z = -a;
         needle.rotation.z = a;
@@ -1051,8 +1069,10 @@ const CENTER = {
       K.box(1.3, 0.07, 0.07, steel, x, 2.1, z, 0.015);
       K.box(0.16, 0.12, 0.16, dark, x, 2.0, z, 0.02);
       const box = K.box(0.24, 0.24, 0.24, paint(0x7fb3a8), x, 1.8, z, 0.03);
+      const st = station(3.3, 6, 5);
+      mini(K, x + 0.3, z + 0.95, 'drop the box', (m) => { st.go(); m.say('Dropped from its own height, tilted 25°: it bounces twice and settles. Every object got the same.'); });
       LIVE.push((t) => {
-        const s = (t * 0.3) % 1, T = s * 3.2;          // seconds into the drop
+        const s = st.p(), T = s * 3.2;          // seconds into the drop
         let y, rot = 0;
         if (T < 0.55) y = 1.8 - 0.5 * 9.8 * T * T * 1.0;
         else { const k = T - 0.55, e = 0.45; let tt = k, amp = 0.45, per = 0.6; y = 0; while (tt > per && per > 0.05) { tt -= per; amp *= e; per *= Math.sqrt(e); } y = amp * 4 * (tt / per) * (1 - tt / per); rot = Math.min(0.6, k * 0.8); }
@@ -1076,10 +1096,16 @@ const CENTER = {
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), paint(0xe8604c)); head.position.y = 0.14; g.add(head);
         return { g, pin, head };
       });
+      const NAMES = [['Northwest', 'sway'], ['West', 'float'], ['Southwest', 'hop'], ['Midwest', 'wave'], ['Southeast', 'swing'], ['Mid-Atlantic', 'rush'], ['Northeast', 'twirl']];
+      let on = 0, t0 = 0;
+      mini(K, x, z + 0.85, 'wake a region', (m) => {
+        on = (on + 1) % tiles.length; t0 = NOW;
+        m.say(`${NAMES[on][0]}: its companies ${NAMES[on][1]}. On the real map, click a region and it breaks off into its own little world.`);
+      });
       LIVE.push((t) => {
-        const on = Math.floor(t * 0.8) % tiles.length;
+        if (t - t0 > 2.5) { on = (on + 1) % tiles.length; t0 = t; }
         tiles.forEach((tl, i) => {
-          const k = i === on ? Math.sin((t * 0.8 % 1) * Math.PI) : 0;
+          const k = i === on ? Math.sin(Math.min(1, (t - t0) / 1.25) * Math.PI) : 0;
           tl.g.position.y = 0.8 + k * 0.05;
           tl.pin.position.y = 0.09 + k * 0.12; tl.head.position.y = 0.14 + k * 0.12;
         });
@@ -1117,8 +1143,14 @@ const CENTER = {
           b: new THREE.Vector3(x + b[0] * cell, 0.82 + b[1] * cell, z + 0.1), d: R() * 0.25 });
       }
       const ink = new THREE.Color(0x2a2230), P = new THREE.Vector3();
+      const st = station(8.3, 0, 0);
+      mini(K, x - 0.1, z + 0.75, 'scan the model', (m) => {
+        const s = st.p();
+        if (s < 0.2 || s > 0.92) { st.set(0.2); m.say('Tap a company and its model breaks into pixels that land on its QR code: scannable, and it links back.'); }
+        else { st.set(0.7); m.say('…and back into the little shop it was.'); }
+      });
       LIVE.push((t) => {
-        const s = (t * 0.12) % 1;
+        const s = st.p();
         px.forEach((p) => {
           const f = Math.min(1, Math.max(0, (s - 0.2 - p.d) / 0.18)) - Math.min(1, Math.max(0, (s - 0.7 - p.d) / 0.18));
           const e = f * f * (3 - 2 * f);
@@ -1860,6 +1892,155 @@ const ENV = {
   },
 };
 
+const MINI = {
+  yarnflow(K) {
+    // a drying rack with a scarf on it: every press crochets one more row
+    const x = 2.7, z = -3.2, wood = paint(0x8a6448);
+    for (const dx of [-0.42, 0.42]) { K.box(0.05, 1.6, 0.05, wood, x + dx, 0.8, z, 0.012); K.box(0.3, 0.04, 0.3, wood, x + dx, 0.02, z, 0.01); }
+    K.box(0.95, 0.05, 0.05, wood, x, 1.58, z, 0.012);
+    const cols = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0xdc9e9a, 0xa8b994];
+    const STITCH = ['chain', 'single crochet', 'half double crochet', 'double crochet', 'treble crochet'];
+    const rows = [];
+    for (let i = 0; i < 16; i++) {
+      const r = K.box(0.42, 0.07, 0.035, paint(cols[Math.floor(i / 2) % cols.length], { hatch: 0.7 }), x, 1.5 - i * 0.075, z, 0.03);
+      r.visible = i < 5; rows.push(r);
+    }
+    let n = 5;
+    const hook = K.put(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 8), paint(0x8f7ae8), x + 0.26, 1.5 - n * 0.075, z + 0.05, [0, 0, 0.9]);
+    LIVE.push((t) => { hook.position.y = 1.54 - n * 0.075 + Math.sin(t * 6) * 0.01; hook.rotation.z = 0.9 + Math.sin(t * 6) * 0.15; });
+    mini(K, x, z + 0.75, 'crochet a row', (m) => {
+      if (n >= rows.length) { rows.forEach((r, i) => { r.visible = i < 1; }); n = 1; return m.say('Finished a swatch! Starting a new one with a chain.'); }
+      rows[n].visible = true; n++;
+      m.say(`Row ${n}: ${STITCH[n % STITCH.length]} × 12. YarnFlow plays a pattern like this stitch by stitch, in 3D.`);
+    });
+    K.cols.push({ x0: x - 0.55, x1: x + 0.55, z0: z - 0.25, z1: z + 0.25 });
+  },
+  deckgpt(K) {
+    // the projector steps through DeckGPT's four stages on the big screen
+    const scr = K.deckScreen, shot = scr.material;
+    const slide = (n, title, body) => new THREE.MeshBasicMaterial({ toneMapped: false, map: canvasTex(800, 500, (c, w, h) => {
+      c.fillStyle = '#fbf8f1'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#b03a30'; c.fillRect(0, 0, 18, h);
+      c.font = `400 26px ${HAND}`; c.fillStyle = '#8a7e8e'; c.fillText(`stage ${n} of 4`, 60, 64);
+      c.font = `700 64px ${SCRIPT}`; c.fillStyle = '#2a2230'; c.fillText(title, 60, 130);
+      body(c, w, h);
+    }) });
+    const box = (c, x, y, w, h, fill, text) => { c.fillStyle = fill; c.fillRect(x, y, w, h); c.strokeStyle = '#2a2230'; c.lineWidth = 3; c.strokeRect(x, y, w, h); if (text) { c.fillStyle = '#2a2230'; c.font = `400 26px ${HAND}`; c.textAlign = 'center'; c.fillText(text, x + w / 2, y + h / 2 + 9); c.textAlign = 'left'; } };
+    const slides = [
+      slide(1, 'Scope', (c) => {
+        c.font = `400 30px ${HAND}`; c.fillStyle = '#3a3240';
+        ['What are you sharing?', 'Who is it for?', 'What should they do after?'].forEach((q, i) => { box(c, 60, 180 + i * 80, 34, 34, i < 2 ? '#7fb3a8' : '#fff'); c.fillText(q, 110, 207 + i * 80); });
+        c.font = `400 22px ${HAND}`; c.fillStyle = '#8a7e8e'; c.fillText('questions drawn from your organization’s profile', 60, 460);
+      }),
+      slide(2, 'Story', (c) => {
+        ['hook', 'problem', 'insight', 'the ask'].forEach((b, i) => { box(c, 60 + i * 180, 230, 150, 110, ['#f6c453', '#e8a0a0', '#93c3c9', '#a8c99a'][i], b); if (i < 3) { c.fillStyle = '#2a2230'; c.beginPath(); c.moveTo(214 + i * 180, 275); c.lineTo(234 + i * 180, 285); c.lineTo(214 + i * 180, 295); c.fill(); } });
+      }),
+      slide(3, 'Visuals', (c) => {
+        box(c, 60, 190, 210, 200, '#fff'); for (let i = 0; i < 5; i++) { c.fillStyle = '#b03a30'; c.fillRect(85 + i * 36, 360 - (i * 37 % 120) - 40, 24, (i * 37 % 120) + 40); }
+        box(c, 300, 190, 210, 200, '#cfe3e6'); c.fillStyle = '#7fb3a8'; c.beginPath(); c.arc(405, 290, 60, 0, 7); c.fill();
+        box(c, 540, 190, 210, 200, '#fff'); ['#f6c453', '#93c3c9', '#e8a0a0'].forEach((f, i) => box(c, 570, 210 + i * 58, 150, 42, f));
+        c.font = `400 22px ${HAND}`; c.fillStyle = '#8a7e8e'; c.fillText('in your house style', 60, 450);
+      }),
+      slide(4, 'Deck', (c) => {
+        box(c, 60, 170, 680, 240, '#2a2230');
+        c.font = `700 70px ${SCRIPT}`; c.fillStyle = '#f2d27a'; c.textAlign = 'center'; c.fillText('Our Q3 plan', 400, 290);
+        c.font = `400 28px ${HAND}`; c.fillStyle = '#f6eedb'; c.fillText('12 slides · ready to export', 400, 350); c.textAlign = 'left';
+      }),
+    ];
+    let i = 0;
+    const NOTE = ['', 'Scope: what you’re sharing and who it’s for.', 'Story: the arc, slide by slide.', 'Visuals: charts and pictures, in your house style.', 'Deck: done — export it and present.'];
+    mini(K, 2.5, -1.4, 'run the projector', (m) => {
+      i = (i + 1) % 5; scr.material = i ? slides[i - 1] : shot;
+      m.say(i ? `Stage ${i} · ${NOTE[i]}` : 'Back to the real DeckGPT. Walk up to the screen to open it.');
+    });
+    mini(K, -2.9, -0.65, 'grab some popcorn', (m) => m.say('Still warm. The show is DeckGPT building a deck: Scope, Story, Visuals, Deck.'), 0.7);
+  },
+  splatform(K) {
+    // the middle easel: paint the same button in each of Splatform's five media
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 192;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const MEDIA = [
+      ['watercolor', 'soft washes that bleed at the edges', (c, w, h) => {
+        for (let k = 0; k < 6; k++) { const g = c.createRadialGradient(w / 2 + (k - 3) * 14, h / 2, 6, w / 2, h / 2, 90); g.addColorStop(0, 'rgba(95,140,200,0.35)'); g.addColorStop(1, 'rgba(95,140,200,0)'); c.fillStyle = g; c.beginPath(); c.ellipse(w / 2, h / 2, 92, 42, 0, 0, 7); c.fill(); }
+      }, '#2f5a8a'],
+      ['acrylic', 'thick paint, ridges you can see', (c, w, h) => {
+        c.fillStyle = '#e8604c'; c.beginPath(); c.roundRect(w * 0.14, h * 0.3, w * 0.72, h * 0.4, 18); c.fill();
+        c.strokeStyle = 'rgba(255,220,200,0.6)'; c.lineWidth = 3; for (let x = 44; x < w - 44; x += 9) { c.beginPath(); c.moveTo(x, h * 0.32); c.quadraticCurveTo(x + 6, h / 2, x, h * 0.68); c.stroke(); }
+      }, '#fff'],
+      ['charcoal', 'gritty and smudged', (c, w, h) => {
+        for (let k = 0; k < 2200; k++) { c.fillStyle = `rgba(40,36,44,${Math.random() * 0.5})`; c.fillRect(w * 0.14 + Math.random() * w * 0.72, h * 0.3 + Math.random() * h * 0.4, 2, 2); }
+      }, '#f6efdf'],
+      ['torn paper', 'washi tape and a ripped edge', (c, w, h) => {
+        c.fillStyle = 'rgba(0,0,0,0.15)'; c.fillRect(w * 0.16, h * 0.33, w * 0.72, h * 0.4);
+        c.fillStyle = '#f3dfa8'; c.beginPath(); c.moveTo(w * 0.14, h * 0.3);
+        for (let x = w * 0.14; x <= w * 0.86; x += 8) c.lineTo(x, h * 0.3 + (Math.random() - 0.5) * 6);
+        for (let x = w * 0.86; x >= w * 0.14; x -= 8) c.lineTo(x, h * 0.7 + (Math.random() - 0.5) * 6);
+        c.fill(); c.fillStyle = 'rgba(127,179,168,0.75)'; c.save(); c.translate(w * 0.2, h * 0.3); c.rotate(-0.4); c.fillRect(-20, -8, 50, 16); c.restore();
+      }, '#5a4e5e'],
+      ['marker', 'flat, bright, a little streaky', (c, w, h) => {
+        c.strokeStyle = 'rgba(228,184,79,0.85)'; c.lineWidth = 26; c.lineCap = 'round';
+        for (let k = 0; k < 3; k++) { c.beginPath(); c.moveTo(w * 0.2, h * (0.38 + k * 0.12)); c.lineTo(w * 0.8, h * (0.37 + k * 0.12)); c.stroke(); }
+      }, '#2a2230'],
+    ];
+    let i = 0;
+    const draw = () => {
+      const c = cv.getContext('2d'), [name, , fill, ink] = MEDIA[i];
+      c.fillStyle = '#fdf8ec'; c.fillRect(0, 0, cv.width, cv.height);
+      fill(c, cv.width, cv.height);
+      c.font = `700 34px ${SCRIPT}`; c.fillStyle = ink; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('button', cv.width / 2, cv.height / 2);
+      c.font = `400 18px ${HAND}`; c.fillStyle = '#8a7e8e'; c.fillText(name, cv.width / 2, cv.height * 0.88);
+      tex.needsUpdate = true;
+    };
+    draw();
+    const x = -3.1, z = -D + 3.2;
+    K.flat(0.72, 0.54, paint(0xffffff, { map: tex, hatch: 0, unique: true }), x, 0.95, z + 0.065, [-0.06, 0, 0]).renderOrder = 2;
+    mini(K, x + 0.2, z + 0.75, 'repaint it', (m) => { i = (i + 1) % MEDIA.length; draw(); m.say(`The same button in ${MEDIA[i][0]}: ${MEDIA[i][1]}. On a real site it's one attribute.`); });
+  },
+  'borrowed-eyes'(K) {
+    // look through the field camera and the whole room changes to how that animal sees
+    const EYES = [
+      ['your own eyes', ''],
+      ['a honeybee', 'hue-rotate(235deg) saturate(1.8) contrast(1.1)', 'ultraviolet: flowers light up with landing strips you can’t normally see'],
+      ['a pit viper', 'grayscale(1) sepia(1) hue-rotate(-40deg) saturate(6) contrast(1.5) brightness(1.05)', 'heat pits: warm things glow, cold things fade'],
+      ['an owl', 'brightness(0.55) contrast(1.5) grayscale(0.75) sepia(0.4) hue-rotate(170deg)', 'night eyes: dim light, sharp shapes, little colour'],
+      ['a bat', 'grayscale(1) invert(0.9) contrast(1.8)', 'echolocation: the world as edges and echoes'],
+    ];
+    let i = 0;
+    mini(K, 2.45, -3.0, 'look through the camera', (m) => {
+      i = (i + 1) % EYES.length; m.see(EYES[i][1]);
+      m.say(i ? `Borrowing ${EYES[i][0]}'s eyes — ${EYES[i][2]}. Press E again for the next animal.` : 'Back to your own eyes.');
+    }, 0.75);
+  },
+  gallery(K) {
+    // the empty frame: examine it for clues
+    const CLUES = [
+      'A thread of blue paint on the frame’s corner. Fresh.',
+      'Scuffed footprints lead toward the skylight.',
+      'The guard’s log stops at 3:07 a.m.',
+      'Only one suspect could have reached that skylight. Walk up to the screen to play and name the thief.',
+    ];
+    let i = -1;
+    mini(K, -2.6, -3.75, 'examine the empty frame', (m) => { i = (i + 1) % CLUES.length; m.say(`Clue ${i + 1} of ${CLUES.length}: ${CLUES[i]}`); });
+  },
+  library(K) {
+    // pull a book off the shelf: each one is a repository
+    const BOOKS = [
+      ['whiteboard', 'A coding agent draws what it’s doing on a whiteboard: its plan, its decisions and why, its progress.'],
+      ['equalizer', 'Beats from math: every drum, bass line and melody is an equation you can read and tweak.'],
+      ['npcity', 'NPCity: a production line of NPC characters, made on demand in the browser.'],
+      ['adapter-portability', 'Move a LoRA fine-tune onto the next version of its base model without retraining it.'],
+      ['RL_Tutorial', 'Reinforcement learning on a MuJoCo cart-pole: reward design, PPO, and reward hacking.'],
+      ['ros2_depth_camera_tutorial', 'Stream a RealSense depth camera over HTTP from your own ROS2 nodes.'],
+      ['art-heist', 'The Vanishing Gallery: the detective game this whole street borrows its look from.'],
+    ];
+    let i = -1;
+    const book = K.box(0.06, 0.3, 0.22, paint(0xe8604c), 0.1, 1.2, -D + 0.85, 0.01);
+    let t0 = -9;
+    LIVE.push((t) => { const k = Math.max(0, Math.sin(Math.min(1, (t - t0) / 2.4) * Math.PI)); book.position.z = -D + 0.85 + k * 0.3; book.rotation.x = k * 0.25; });
+    mini(K, 0, -4.05, 'pull a book', (m) => { i = (i + 1) % BOOKS.length; t0 = NOW; m.say(`“${BOOKS[i][0]}” — ${BOOKS[i][1]}`); });
+  },
+};
+
 const ROOM_WALL = {
   behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
   splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a,
@@ -1871,7 +2052,7 @@ export function buildInteriors(scene) {
     const ox = -105 + i * 30, oz = -45;
     const g = new THREE.Group(); g.position.set(ox, 0, oz);
     const K = kit(g);
-    K.cols = [];
+    K.cols = []; K.minis = [];
     const theme = THEMES[place.id];
     roomShell(K, ROOM_WALL[place.id] ?? 0xe8ddc2, place, theme);
     furnish(K, place.id, ROOM_WALL[place.id] ?? 0xe8ddc2, theme);
@@ -1883,6 +2064,7 @@ export function buildInteriors(scene) {
     if (lib) { plaque(K, -1.25, -D + 2.1); counter(K, 1.6, -D + 2.3, 0); }
     else wallLabel(K, place, LBL_X, 1.35, -D + 0.56);
     SETS[place.id]?.(K);
+    MINI[place.id]?.(K);
     // a soft pool of light on the floor
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
     ink(g, 'mid');
@@ -1904,6 +2086,7 @@ export function buildInteriors(scene) {
         lib ? { x: ox + 1.6, z: oz - D + 2.75, r: 1.1, label: `open ${place.title} →`, act: { type: 'visit', url: place.url, place } }
             : { x: ox, z: oz - D + 1.5, r: 1.25, label: `open ${place.title} →`, act: { type: 'visit', url: place.url, place } },
         { x: ox, z: oz + 0.1, r: 1.0, label: 'back to the street', act: { type: 'exit' } },
+        ...K.minis.map(m => ({ x: ox + m.x, z: oz + m.z, r: m.r, label: m.label, act: { type: 'mini', run: m.run } })),
       ],
     };
   });

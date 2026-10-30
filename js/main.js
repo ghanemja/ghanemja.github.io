@@ -153,17 +153,30 @@ function doAct(it) {
     const wasLib = zone === 'library';
     fadeDo(() => {
       zone = 'street';
+      mini.see(''); $('#say').classList.add('hide');
       player.setZone({ colliders: town.colliders, bounds: town.bounds });
       if (wasLib) player.teleport(lastDoor.x - 0.9, 0, Math.PI / 2);
       else player.teleport(lastDoor.x, lastDoor.z - Math.sign(lastDoor.z) * 1.15, -Math.PI / 2);
       if (!uiHidden) $('#hud').classList.remove('hide');
     });
+  } else if (act.type === 'mini') {
+    act.run(mini);
   } else if (act.type === 'card') {
     openCard(act.place);
   } else if (act.type === 'visit') {
     window.open(act.url, '_blank', 'noopener');
   }
 }
+
+// the little things you can do inside a shop: a caption, and (Borrowed Eyes) a way of seeing
+let sayTimer = 0;
+const mini = {
+  say(text) {
+    const el = $('#say'); el.textContent = text; el.classList.remove('hide');
+    clearTimeout(sayTimer); sayTimer = setTimeout(() => el.classList.add('hide'), 4200);
+  },
+  see(filter) { renderer.domElement.style.filter = filter || ''; },
+};
 
 function openCard(p) {
   $('#cardTitle').textContent = p.title;
