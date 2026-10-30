@@ -115,7 +115,8 @@ function makeInk(weight = 1, color = PAL.ink, wobble = 1) {
       void main() { gl_FragColor = vec4(uColor, 1.0); }`,
   });
 }
-const INK = { heavy: makeInk(1.25), mid: makeInk(1.0), fine: makeInk(0.7), crisp: makeInk(0.85, 0x1a1418, 0), pixel: makeInk(0.6, 0x1a1418, 0) };
+const INK = { heavy: makeInk(1.25), mid: makeInk(1.0), fine: makeInk(0.7), crisp: makeInk(0.85, 0x1a1418, 0), pixel: makeInk(0.6, 0x1a1418, 0),
+  pencil: makeInk(1.1, 0x3a3530, 1), wash: makeInk(0.55, 0x5a4234, 1), comic: makeInk(1.5, 0x0c0a0c, 0) };
 // the same stroke, faded per vertex by an `inkW` attribute (no line where one part grows out of another)
 const INK_FADE = {};
 function fadeInk(weight) {

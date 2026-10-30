@@ -742,14 +742,23 @@ export async function makePerson(spec = {}) {
     smoothW: top.P.map((_, j) => j).filter(j => j % 3 === 0).map(j => 1 - 0.6 * Math.min(1, top.f.arms[j / 3])) });
   hang(topP, top, (i) => Math.min(1, Math.max(0, upperW(i) * 1.6 - 0.3)), { top: body.joints['upperarm01.L'].head.y - 0.05 * body.P.stature, band: 0.06 * body.P.stature, maxPush: F.push * k,
     hem: body.joints['upperleg01.L'].head.y + 0.02 * body.P.stature, hemBand: 0.07 * body.P.stature });
+  { const Hs = body.P.stature, hipY = body.joints['upperleg01.L'].head.y, ay = body.joints['upperarm01.L'].head.y;
+    const wT = Float32Array.from({ length: top.P.length / 3 }, (_, i) => upperW(i) * THREE.MathUtils.smoothstep(top.P[i * 3 + 1], hipY - 0.01 * Hs, hipY + 0.05 * Hs) * (1 - THREE.MathUtils.smoothstep(top.P[i * 3 + 1], ay - 0.12 * Hs, ay - 0.04 * Hs)));
+    const Tt = Uint32Array.from(top.T);
+    spatialSmooth(topP, Tt, wT, { sigma: 0.05 * k, rounds: 4 });
+    spatialSmooth(topP, Tt, wT, { sigma: 0.03 * k, rounds: 6, outOnly: true }); }
   const topM = add(geometryOf(top, topP),
     paint(look.top, { soft: true, side: THREE.DoubleSide }), 'cloth');
   const botP = drape(bot, { thick: 0.007, ease: () => 0.007, smooth: 18, k });
   // the crotch: cloth bridges between the legs instead of following the body into a sharp V
   { const cy = body.joints['upperleg01.L'].head.y - 0.045 * body.P.stature, Hs = body.P.stature;
     const wC = bot.P.map((_, j) => j).filter(j => j % 3 === 0).map(j => { const x = bot.P[j], y = bot.P[j + 1];
-      return (1 - THREE.MathUtils.smoothstep(Math.abs(x), 0.03 * Hs, 0.07 * Hs)) * (1 - THREE.MathUtils.smoothstep(Math.abs(y - cy), 0.03 * Hs, 0.07 * Hs)); });
-    spatialSmooth(botP, Uint32Array.from(bot.T), Float32Array.from(wC), { sigma: 0.03 * k, rounds: 6, outOnly: true }); }
+      // the whole seat and front of the hips, from the waistband to below the crotch (cloth skims over
+      // anatomy: following it, shorts and trousers showed the crotch in the lit styles)
+      return THREE.MathUtils.smoothstep(y, cy - 0.07 * Hs, cy - 0.02 * Hs) * (1 - 0.6 * THREE.MathUtils.smoothstep(Math.abs(x), 0.09 * Hs, 0.14 * Hs)); });
+    const Tb = Uint32Array.from(bot.T), Wb = Float32Array.from(wC);
+    spatialSmooth(botP, Tb, Wb, { sigma: 0.035 * k, rounds: 5 });
+    spatialSmooth(botP, Tb, Wb, { sigma: 0.03 * k, rounds: 6, outOnly: true }); }
   // trousers fall from the thigh too, just less than baggy ones: skin-tight, they swelled over the
   // thighs and pinched to thin ankles (carrot legs)
   if (D.bottom.type === 'baggy') legHang(botP, bot, body, k);

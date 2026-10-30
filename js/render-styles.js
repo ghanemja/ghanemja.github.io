@@ -1,4 +1,4 @@
-// ─── RENDER STYLES: the same people, drawn six ways ──────────────────────────
+// ─── RENDER STYLES: the same people, drawn ten ways ──────────────────────────
 // Shape style (js/stylize.js) changes the body on purpose; RENDER style only
 // changes how it's drawn — materials, outlines, a little geometry (low-poly) and
 // the scene around it (light, tone mapping, resolution). It is applied after a
@@ -21,6 +21,51 @@ const CEL2 = ramp([150, 255]), CEL3 = ramp([95, 170, 255]), CEL_SKIN = ramp([212
 const lift = (hex, t, to = 0xffffff) => new THREE.Color(hex).lerp(new THREE.Color(to), t).getHex();
 const warm = (hex, k = 0.3) => { const c = new THREE.Color(hex), h = {}; c.getHSL(h); return c.setHSL(h.h, Math.min(1, h.s * (1 + k)), h.l * (1 - k * 0.3)).getHex(); };
 
+// Cartoon looks that restyle the light itself: a Lambert material, then the fragment's own light
+// level (lit ÷ base colour) is redrawn as pencil, wash, halftone or flat colour.
+function restyled(b, tag, glsl) {
+  return once(`${tag}|${b.key}`, () => {
+    const m = new THREE.MeshLambertMaterial({ color: b.color, vertexColors: b.vc, side: b.side });
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `
+        {
+          vec3 base = diffuseColor.rgb; vec2 fp = gl_FragCoord.xy;
+          float lf = clamp(dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114)) / max(dot(base, vec3(0.299, 0.587, 0.114)), 1e-3), 0.0, 1.6);
+          float grain = fract(sin(dot(floor(fp), vec2(12.9898, 78.233))) * 43758.5453);
+          vec3 col = base;
+          ${glsl}
+          gl_FragColor.rgb = col;
+        }
+        #include <dithering_fragment>`);
+    };
+    m.customProgramCacheKey = () => 'restyled-' + tag;
+    return m;
+  });
+}
+const SKETCH = `
+  vec3 paper = vec3(0.965, 0.945, 0.9);
+  float shade = smoothstep(0.25, 1.0, lf);
+  col = mix(paper, base, 0.3) * (0.93 + 0.07 * shade);                  // a light colour wash on paper
+  float h1 = step(0.62, fract((fp.x + fp.y) / 6.0)) * (1.0 - smoothstep(0.5, 0.8, shade));
+  float h2 = step(0.66, fract((fp.x - fp.y) / 5.0)) * (1.0 - smoothstep(0.2, 0.5, shade));
+  col = mix(col, vec3(0.24, 0.21, 0.19), max(h1, h2) * 0.5);            // pencil hatching in the shadows
+  col *= 0.97 + 0.03 * grain;`;
+const WASH = `
+  vec3 pig = mix(base, vec3(1.0), 0.1);
+  float b = smoothstep(0.3, 0.8, lf);
+  col = mix(pig * vec3(0.64, 0.68, 0.88), pig * vec3(1.04, 1.0, 0.95), b);   // cool shadows, warm light
+  col *= 1.0 - 0.09 * exp(-pow((b - 0.5) * 5.0, 2.0));                     // pigment pooling at the edge of the wash
+  float blot = 0.5 + 0.5 * sin(fp.x * 0.045 + sin(fp.y * 0.03) * 2.0) * sin(fp.y * 0.05 + sin(fp.x * 0.02) * 2.0);
+  col *= 0.95 + 0.05 * blot + 0.03 * grain;                                // uneven wash and paper`;
+const COMIC = `
+  float b = step(0.55, lf);
+  col = mix(base * 0.45, base * 1.03, b);
+  vec2 g = fract(fp / 5.0) - 0.5;
+  col = mix(col, base * 0.28, step(length(g), 0.36 * (1.0 - lf)) * (1.0 - b));   // halftone dots in the shade
+  col = mix(col, vec3(1.0), step(1.12, lf) * 0.35);`;
+const FLAT = `
+  col = base * mix(0.84, 1.0, smoothstep(0.42, 0.52, lf));`;
+
 export const RENDER_STYLES = {
   gouache: {
     label: 'Gouache', note: 'cel bands, paper grain, a hand-drawn wobbling line', ink: 'fine',
@@ -37,6 +82,22 @@ export const RENDER_STYLES = {
   lowpoly: {
     label: 'Low-poly', note: 'a simplified, faceted mesh', ink: null, cell: 0.028,
     mat: (b) => once(`low|${b.key}`, () => new THREE.MeshLambertMaterial({ color: b.color, vertexColors: b.vc, side: b.side, flatShading: true })),
+  },
+  sketch: {
+    label: 'Hand-drawn', note: 'pencil on paper: a light colour wash, hatched shadows', ink: 'pencil',
+    mat: (b) => b.role === 'eye' || b.role === 'glint' ? paint(b.color, b.opts) : restyled(b, 'sketch', SKETCH),
+  },
+  watercolor: {
+    label: 'Watercolour', note: 'soft painted washes, cool shadows, warm light', ink: 'wash',
+    mat: (b) => b.role === 'eye' || b.role === 'glint' ? paint(b.color, b.opts) : restyled(b, 'wash', WASH),
+  },
+  comic: {
+    label: 'Comic', note: 'hard shadows, halftone dots, bold lines', ink: 'comic',
+    mat: (b) => b.role === 'eye' || b.role === 'glint' ? paint(b.color, b.opts) : restyled(b, 'comic', COMIC),
+  },
+  flat: {
+    label: 'Flat', note: 'clean vector colour, no lines', ink: null,
+    mat: (b) => b.role === 'eye' || b.role === 'glint' ? paint(b.color, b.opts) : restyled(b, 'flat', FLAT),
   },
   pixel: {
     label: 'Pixel', note: 'drawn small and blown up, a few hard tones', ink: 'pixel', pixel: 0.3,
@@ -91,6 +152,9 @@ const SHEEN = {
   anime: { a: 0.3, b: 0, e1: 60, e2: 1, band: 1 },          // a crisp "angel ring"
   realistic: { a: 0.28, b: 0.18, e1: 160, e2: 30, band: 0 },
   pixel: { a: 0.35, b: 0, e1: 50, e2: 1, band: 1 },
+  watercolor: { a: 0.12, b: 0.05, e1: 50, e2: 14, band: 0.3 },
+  comic: { a: 0.35, b: 0, e1: 60, e2: 1, band: 1 },
+  flat: { a: 0.15, b: 0, e1: 40, e2: 1, band: 1 },
   lowpoly: { a: 0.25, b: 0, e1: 40, e2: 1, band: 0.6 },
 };
 const sheenCache = new Map();
@@ -176,7 +240,8 @@ export function applySceneStyle(renderer, scene, name = 'gouache', { dpr = Math.
   scene.environmentIntensity = name === 'clay' ? 0.7 : 0.9;
   renderer.toneMapping = lit ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   renderer.toneMappingExposure = name === 'realistic' ? 0.95 : 1;
-  scene.background = new THREE.Color({ gouache: 0xf3ead7, anime: 0xfbf7f0, clay: 0xe9e1d6, lowpoly: 0xdfe8ea, pixel: 0xe8dcc0, realistic: 0xcfc8bf }[name] ?? 0xf3ead7);
+  scene.background = new THREE.Color({ gouache: 0xf3ead7, anime: 0xfbf7f0, clay: 0xe9e1d6, lowpoly: 0xdfe8ea, pixel: 0xe8dcc0, realistic: 0xcfc8bf,
+    sketch: 0xf6f1e6, watercolor: 0xeef0e4, comic: 0xfff3d2, flat: 0xdcedf2 }[name] ?? 0xf3ead7);
   renderer.shadowMap.enabled = !!R.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   scene.traverse((o) => { if (o.isDirectionalLight) { o.castShadow = !!R.shadows; o.shadow.mapSize.set(1024, 1024); Object.assign(o.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 1, far: 60 }); o.shadow.camera.updateProjectionMatrix(); o.shadow.bias = -0.0005; o.shadow.normalBias = 0.02; } });
   renderer.setPixelRatio(R.pixel ? R.pixel : dpr);

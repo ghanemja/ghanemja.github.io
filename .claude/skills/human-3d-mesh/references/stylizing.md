@@ -221,6 +221,11 @@ realistic light that reads as a painted-on body. The fit goes in three steps:
   vertices (y, z) through it after each stage (fit → drape → hang). The stage that
   changes it is the culprit. Looking at renders alone took several wrong guesses.
 
+- **Cloth skims over anatomy, it never shows it.** After draping, the shirt's torso (hip to
+  chest) and the bottoms' seat and crotch get their own spatial smoothing, followed by a
+  pit-filling pass. The lit styles (clay, realistic) showed the navel and the crotch through
+  a tee and shorts. That's too much, so always check clothing in clay, front and side.
+
 ## Render styles (how a person is drawn)
 Proportions (`style`, js/stylize.js) shape the body. The render style (`render`,
 js/render-styles.js) only changes how it's drawn, and can be swapped at any time with
@@ -232,6 +237,10 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
 | clay | matte MeshStandard (skin and hair through a warm multiplier) | none | RoomEnvironment, ACES |
 | lowpoly | flat-shaded Lambert on vertex-clustered geometry (finer cells for face, hands, brows) | none | flat |
 | pixel | MeshToon, three tones | thin | drawn at 0.3 pixel ratio, `image-rendering: pixelated`; faces keep only their silhouette |
+| sketch (Hand-drawn) | a light colour wash on paper, pencil hatching in the shadows | pencil, wobbling | paper |
+| watercolor | cool shadows, warm light, pigment pooling at the wash's edge, uneven wash | thin brown, wobbling | paper |
+| comic | two tones, halftone dots in the shade | bold, even | flat |
+| flat | clean vector colour, one soft step | none | flat |
 | realistic | MeshPhysical skin, cloth and hair sheen, clearcoat eyes | none | environment, ACES, soft shadows |
 - **Filmic tone mapping greys skin out.** Skin and hair are vertex-coloured over a white
   material, so the lit styles give them a warm multiplier colour (warming the material
