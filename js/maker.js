@@ -294,11 +294,21 @@ function makeBatch(n, seed, replace) {
 $('#batchF').addEventListener('submit', (e) => { e.preventDefault(); makeBatch(+$('#batchN').value, $('#seed').value.trim(), $('#replace').checked); });
 $('#dup').onclick = () => { const { id, portrait, ...c } = cur(); add({ ...c, name: c.name + ' 2' }); };
 $('#del').onclick = () => { if (roster.length > 1) { roster.splice(sel, 1); saveRoster(roster); select(sel); } };
-$('#export').onclick = () => {
+const save = (blob, name) => {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([toJSON(roster, render)], { type: 'application/json' }));
-  a.download = 'citizens.json'; a.click(); URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
+// export = a zip of rigged .glb people + portraits + the editable citizens.json
+$('#export').onclick = async () => {
+  const btn = $('#export'); btn.disabled = true;
+  try {
+    const { exportPack } = await import('./export-pack.js?cb=2');
+    const blob = await exportPack({ roster, render, makePerson, spec, toJSON, onProgress: (i, n) => { $('#count').textContent = `exporting ${i + 1} of ${n}…`; } });
+    save(blob, 'citizens.zip');
+  } catch (err) { console.error(err); alert('Export failed: ' + err.message); }
+  btn.disabled = false; drawRoster();
+};
+$('#exportJson').onclick = () => save(new Blob([toJSON(roster, render)], { type: 'application/json' }), 'citizens.json');
 $('#import').onclick = () => $('#file').click();
 $('#file').onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
