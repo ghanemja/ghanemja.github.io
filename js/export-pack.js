@@ -6,6 +6,8 @@
 // colour (skin and the face use vertex colours). Each mesh's `extras.role` says what it is
 // (skin / cloth / hair / eye / brow / shoe / sole).
 import * as THREE from 'three';
+import { makeBike } from './motion.js';
+import { applyRenderStyle } from './render-styles.js';
 
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
 const crc32 = (u8) => { let c = ~0; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 255] ^ (c >>> 8); return ~c >>> 0; };
@@ -60,9 +62,9 @@ function outlineOf(o, k) {
 }
 
 // a person made for export: shader materials → plain PBR in the style's own colours; ink → outline hulls
-function forExport(person) {
-  const inks = [], k = person.body.P.stature / 1.7;
-  person.group.traverse((o) => {
+function forExport(root, k) {
+  const inks = [];
+  root.traverse((o) => {
     if (!o.isMesh) return;
     if (o.material.isShaderMaterial) { inks.push(o); return; }
     const role = o.userData.role;                                      // (the rest of userData is rebuild recipes: not for a game)
@@ -78,7 +80,65 @@ function forExport(person) {
     parent?.remove(o);
     if (line) parent.add(line);
   }
-  return person.group;
+  return root;
+}
+
+// ── animation: the maker's motions, sampled into real clips ──
+// The motions are procedural (two-bone IK on the skeleton, js/motion.js), so each one is baked
+// by posing the person at 30 fps through one full cycle and recording every bone. Clips loop
+// (last frame = first), play in place (no travel; the ground speed is in manifest.json), and
+// only bones that move get a track.
+const FPS = 30, TAU = Math.PI * 2;
+// three's track names can't contain '.', and bones are called 'upperarm01.L': named with a
+// placeholder while sampling, then put back in the finished GLB
+const DOT = '_DOT_';
+function restoreDots(glb) {
+  const dv = new DataView(glb), jl = dv.getUint32(12, true);
+  const json = new TextDecoder().decode(new Uint8Array(glb, 20, jl)).replaceAll(DOT, '.');
+  const jb = new TextEncoder().encode(json + ' '.repeat((4 - json.length % 4) % 4)), rest = new Uint8Array(glb, 20 + jl);
+  const out = new Uint8Array(20 + jb.length + rest.length), o = new DataView(out.buffer);
+  out.set(new Uint8Array(glb, 0, 12)); o.setUint32(8, out.length, true); o.setUint32(12, jb.length, true); o.setUint32(16, 0x4e4f534a, true);
+  out.set(jb, 20); out.set(rest, 20 + jb.length);
+  return out.buffer;
+}
+// poses → AnimationClip: `nodes` are [{ obj, name }] to record (rotation always; position if it ever moves)
+function bake(name, T, nodes, pose) {
+  const n = Math.max(2, Math.round(T * FPS)), times = [], rec = nodes.map(() => ({ q: [], p: [] }));
+  for (let i = 0; i <= n; i++) {
+    pose(T * i / n); times.push(T * i / n);
+    nodes.forEach(({ obj }, j) => { rec[j].q.push(...obj.quaternion.toArray()); rec[j].p.push(...obj.position.toArray()); });
+  }
+  const tracks = [], moved = (a, w, rest) => a.some((v, k) => Math.abs(v - rest[k % w]) > 1e-5);
+  nodes.forEach(({ obj, name: nm, rest }, j) => {
+    if (moved(rec[j].q, 4, rest.q)) tracks.push(new THREE.QuaternionKeyframeTrack(`${nm}.quaternion`, times, rec[j].q));
+    if (moved(rec[j].p, 3, rest.p)) tracks.push(new THREE.VectorKeyframeTrack(`${nm}.position`, times, rec[j].p));
+  });
+  return new THREE.AnimationClip(name, T, tracks);
+}
+const nodeOf = (obj, name) => ({ obj, name, rest: { q: obj.quaternion.toArray(), p: obj.position.toArray() } });
+
+// a person's five clips (idle, walk, run, sit, bike), plus a bike that fits them and its own ride clip
+function bakeMotion(person, render) {
+  const { sk, motion } = person, M = motion.M;
+  for (const b of sk.bones) b.name = b.name.replaceAll('.', DOT);
+  motion.pose('idle', 0);
+  const nodes = sk.bones.map(b => nodeOf(b, b.name)), clips = [], info = {};
+  const loop = (name, T, pose, extra = {}) => { clips.push(bake(name, T, nodes, pose)); info[name] = { duration: +T.toFixed(4), ...extra }; };
+  loop('idle', 4, (t) => motion.pose('idle', t));
+  for (const g of ['walk', 'run']) loop(g, 1 / motion.cycle(g), (t) => motion.pose(g, t), { speed: +motion.speed(g).toFixed(3) });
+  loop('sit', 4, (t) => motion.pose('sit', t), { seatHeight: +(M.knee.L.y * 0.97).toFixed(3) });
+  // the bike, built to this rider; one crank turn per cycle, and the wheels turn a whole number of times
+  const bike = makeBike(person); applyRenderStyle(bike.group, render);
+  const T = 1 / motion.cycle('bike'), r = 0.35 * M.s, turns = Math.max(1, Math.round(motion.speed('walk') * 2.2 * T / (TAU * r))), speed = turns * TAU * r / T;
+  const [wf, wr, crank] = bike.group.children.filter(o => o.isGroup), arms = crank.children.filter(o => o.isGroup);
+  const parts = [['wheel_front', wf], ['wheel_rear', wr], ['crank', crank], ['crank_arm_L', arms[0]], ['crank_arm_R', arms[1]], ['pedal_L', arms[0].userData.pedal], ['pedal_R', arms[1].userData.pedal]];
+  for (const [nm, o] of parts) o.name = nm;
+  bike.spin(0, 0);
+  const bikeNodes = parts.map(([nm, o]) => nodeOf(o, nm));
+  loop('bike', T, (t) => motion.pose('bike', t, { bike, speed }), { speed: +speed.toFixed(3) });
+  const ride = bake('ride', T, bikeNodes, (t) => bike.spin(TAU * 1.1 * M.pendulum * t, speed * t));
+  motion.pose('idle', 0); bike.spin(0, 0);
+  return { clips, info, bike, ride };
 }
 
 // ── viewer.html: the zip's own three.js page. glTF can hold the outline but not the town's
@@ -101,22 +161,45 @@ const sun = new THREE.DirectionalLight(0xfff2d8, 1.6); sun.position.set(14, 22, 
 scene.add(new THREE.HemisphereLight(0xfff6e8, 0xd8c8b0, 1.35), sun);
 applySceneStyle(renderer, scene, STYLE);
 const manifest = await (await fetch('./manifest.json')).json(), loader = new GLTFLoader();
-for (const [i, c] of manifest.people.entries()) {
-  const root = (await loader.loadAsync(c.model)).scene;
-  const lines = []; root.traverse(o => { if (o.isMesh && o.userData.role === 'outline') lines.push(o); });
-  for (const l of lines) { l.userData.keep = [l.parent]; l.parent.remove(l); }      // (the style would restyle them as props)
+const q = new URLSearchParams(location.search), CLIPS = ['idle', 'walk', 'run', 'sit', 'bike'];
+let clip = q.get('clip') || 'idle'; const mixers = [], riders = [], bikes = [];
+// the style is re-applied by role; the outlines (geometry) are set aside while it is
+async function load(url) {
+  const gltf = await loader.loadAsync(url), root = gltf.scene, lines = [];
+  root.traverse(o => { if (o.isMesh && o.userData.role === 'outline') lines.push(o); });
+  const homes = lines.map(l => l.parent); lines.forEach(l => l.parent.remove(l));
   root.traverse(o => { if (o.isMesh) { o.userData.noInk = true; const h = o.geometry.getAttribute('_hairdir'); if (h && !o.geometry.getAttribute('hairDir')) o.geometry.setAttribute('hairDir', h); } });
   applyRenderStyle(root, STYLE);
-  for (const l of lines) l.userData.keep[0].add(l);
-  root.position.set((i % 6 - 2.5) * 0.9, 0, -Math.floor(i / 6) * 1.2); scene.add(root);
+  lines.forEach((l, i) => homes[i].add(l));
+  return { root, animations: gltf.animations };
 }
+for (const [i, c] of manifest.people.entries()) {
+  const x = (i % 6 - 2.5) * 0.9, z = -Math.floor(i / 6) * 1.2;
+  const p = await load(c.model); p.root.position.set(x, 0, z); scene.add(p.root);
+  const m = new THREE.AnimationMixer(p.root); mixers.push(m);
+  riders.push({ m, actions: Object.fromEntries(p.animations.map(a => [a.name, m.clipAction(a)])) });
+  if (c.bike) {
+    const b = await load(c.bike); b.root.position.set(x, 0, z); b.root.visible = false; scene.add(b.root);
+    const bm = new THREE.AnimationMixer(b.root); mixers.push(bm); bm.clipAction(b.animations[0]).play(); bikes.push(b.root);
+  }
+}
+function play(name) {
+  clip = name;
+  for (const r of riders) { for (const a of Object.values(r.actions)) a.stop(); r.actions[name]?.reset().play(); }
+  for (const b of bikes) b.visible = name === 'bike';
+  for (const btn of document.querySelectorAll('#bar button')) btn.style.fontWeight = btn.textContent === name ? '700' : '400';
+}
+const bar = document.body.appendChild(document.createElement('div')); bar.id = 'bar'; bar.style.cssText = 'position:fixed;top:8px;left:8px;display:flex;gap:6px';
+for (const n of CLIPS) { const b = bar.appendChild(document.createElement('button')); b.textContent = n; b.onclick = () => play(n); }
+play(clip); if (q.has('t')) for (const m of mixers) m.setTime(+q.get('t'));       // ?clip=walk&t=0.4 freezes a frame
 camera.position.set(0, 1.2, 7); const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 0.9, 0);
 const fit = () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); };
 addEventListener('resize', fit); fit();
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => { const dt = clock.getDelta(); if (!q.has('t')) for (const m of mixers) m.update(dt); controls.update(); renderer.render(scene, camera); });
 </script>
 `;
-const HANDOFF = (style, names) => `# Handoff: citizens.zip
+const HANDOFF = (style, names, clips = {}) => `# Handoff: citizens.zip
 
 For an agent (or person) putting these people into a game. Generated by the Citizen Maker
 (https://ghanemja.github.io/citizens.html). The roster is drawn in the **${style}** style.
@@ -125,10 +208,11 @@ For an agent (or person) putting these people into a game. Generated by the Citi
 
 | path | what |
 |---|---|
-| \`models/<name>.glb\` | one rigged, dressed person each (${names.length}: ${names.join(', ')}) |
+| \`models/<name>.glb\` | one rigged, dressed person each (${names.length}: ${names.join(', ')}), **with baked animation clips** |
+| \`models/<name>-bike.glb\` | a bicycle built to fit that person, with its own \`ride\` clip (wheels, crank, pedals) |
 | \`portraits/<name>.png\` | the maker's portrait of each person |
 | \`citizens.json\` | the editable roster: the recipe for every person (re-import it in the maker to change anyone) |
-| \`manifest.json\` | \`{ render, people: [{ name, model }] }\`, the style and the file for each person |
+| \`manifest.json\` | \`{ render, fps, people: [{ name, model, bike, height, clips }] }\`: the style, files, and each clip's duration and ground speed |
 | \`viewer.html\` | a working three.js page showing everyone **in the chosen style**; read it as the reference implementation |
 | \`three-style/\` | the town's own style code (\`render-styles.js\`, \`style.js\`) that \`viewer.html\` imports |
 
@@ -145,7 +229,7 @@ So "combining the glb with the textures" means choosing one of the two routes be
 
 - glTF 2.0 binary, **Y-up, metres, facing +Z**; about 1.7 m for an adult (children and elders scale with age).
 - One shared 76-bone MakeHuman-style skeleton, named \`root\`, \`spine01..05\`, \`neck01..03\`, \`head\`, \`clavicle.L/R\`, \`upperarm01/02.L/R\`, \`lowerarm01/02.L/R\`, \`wrist.L/R\`, \`finger1-1.L\` … \`finger5-3.R\`, \`upperleg01/02.L/R\`, \`lowerleg01/02.L/R\`, \`foot.L/R\`, \`toe1-1.L/R\`, \`pelvis.L/R\`. Left/right ends in \`.L\` / \`.R\`. Exported in a relaxed standing rest pose.
-- **No animation clips are included.** Idle / walk / run / sit / bike are generated in code in the maker (\`js/motion.js\` in the site repo). Retarget your own clips to the bone names above.
+- **Animation clips are baked into every person's \`.glb\`**: \`idle\`, \`walk\`, \`run\`, \`sit\`, \`bike\` (see Animation below).
 - Every mesh node has \`extras.role\`, which arrives as \`userData.role\` in three.js:
 
 | role | meaning | skinned? | colour from |
@@ -159,6 +243,27 @@ So "combining the glb with the textures" means choosing one of the two routes be
 
 - **Never delete the \`skin\`, \`cloth\` meshes**: the skin mesh covers only face, neck and hands, so removing a garment leaves a hole, not a body.
 - Hair meshes may carry a custom \`_HAIRDIR\` attribute (strand direction, used by the hair highlight in the three.js style code). Ignore it elsewhere.
+
+## Animation (the rigging, working)
+
+Every \`models/<name>.glb\` carries these clips, sampled at ${30} fps from the maker's own motion code, keyed on the skeleton's bones (rotations, plus the \`root\` bone's position for the hip bob / seat height):
+
+| clip | what | loop | extra |
+|---|---|---|---|
+| \`idle\` | standing, breathing | ${clips.idle?.duration ?? 4} s | |
+| \`walk\` | one full stride cycle (left + right step) | ${clips.walk?.duration ?? '?'} s | ground speed ${clips.walk?.speed ?? '?'} m/s |
+| \`run\` | one full cycle | ${clips.run?.duration ?? '?'} s | ground speed ${clips.run?.speed ?? '?'} m/s |
+| \`sit\` | seated, hands on thighs, breathing | ${clips.sit?.duration ?? 4} s | hips lowered to a seat about ${clips.sit?.seatHeight ?? '0.44'} m high: put a bench/chair there |
+| \`bike\` | riding, pedalling | ${clips.bike?.duration ?? '?'} s (one crank turn) | needs the bike below; ground speed ${clips.bike?.speed ?? '?'} m/s |
+
+(The numbers above are for the first person; every person has their own, in \`manifest.json\` under \`people[].clips\`: longer legs swing slower.)
+
+- All clips **play in place**: the body does not travel. Move the character yourself at the clip's ground speed (\`speed\` in \`manifest.json\`) and the feet will not slide.
+- Every clip loops cleanly (last frame equals the first). Blend between clips (cross-fade ~0.2 s) to switch.
+- **Bike:** load \`models/<name>-bike.glb\`, put it at the **same origin as the person** (same position and rotation, no offset; it was built in the rider's own space), and play the rider's \`bike\` clip together with the bike's \`ride\` clip. The two are the same length and start in step. Show the bike only while riding.
+- Bone names in the clips are exactly the skeleton's (\`upperarm01.L\`, …). Note three.js's GLTFLoader strips dots from node names, so in three.js they read \`upperarm01L\`; Unity, Unreal, Godot and Blender keep them.
+- To use them in three.js: \`const mixer = new THREE.AnimationMixer(root); mixer.clipAction(THREE.AnimationClip.findByName(gltf.animations, 'walk')).play();\` then \`mixer.update(dt)\` each frame (\`viewer.html\` has buttons for all five clips).
+- To retarget onto another rig, map the bone names above; this skeleton is MakeHuman's "default" rig.
 
 ## Route A: any engine (Unity, Unreal, Godot, Blender, …)
 
@@ -200,6 +305,7 @@ Edit \`citizens.json\` (or import it in the maker), re-export. Fields: name, sex
 
 - One render style per export (the roster's), shared by everyone.
 - Outline width is fixed in the model (about 4 mm at weight 1); the town draws a constant on-screen width with a slight wobble, which \`viewer.html\` does not reproduce.
+- Clips are baked from the maker's procedural motion, so they are one fixed style of walk/run/sit/bike each (scaled to the person), not mocap and not editable in the maker.
 - Not viewed: the sketch, watercolor and comic styles in \`viewer.html\`; the glb has been inspected, not opened in Unity/Unreal/Godot.
 `;
 
@@ -207,24 +313,28 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 
 export async function exportPack({ roster, render, makePerson, spec, toJSON, onProgress = () => {} }) {
   const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
-  const exporter = new GLTFExporter(), used = new Set(), files = [];
+  const exporter = new GLTFExporter(), used = new Set(), files = [], people = [];
+  const glbOf = async (root, k, animations) => new Uint8Array(restoreDots(await exporter.parseAsync(forExport(root, k), { binary: true, animations })));
   for (let i = 0; i < roster.length; i++) {
     const c = roster[i];
     onProgress(i, roster.length);
     let base = slug(c.name), n = 2;
     while (used.has(base)) base = slug(c.name) + '-' + n++;
     used.add(base);
-    const person = await makePerson({ ...spec(c), render });
-    const glb = await exporter.parseAsync(forExport(person), { binary: true });
-    files.push({ name: `models/${base}.glb`, data: new Uint8Array(glb) });
+    const person = await makePerson({ ...spec(c), render }), k = person.body.P.stature / 1.7;
+    const { clips, info, bike, ride } = bakeMotion(person, render);     // (poses the person, so it comes before the model is dressed for export)
+    const entry = { name: c.name, model: `models/${base}.glb`, bike: `models/${base}-bike.glb`, height: +person.body.P.stature.toFixed(3), clips: info };
+    files.push({ name: entry.model, data: await glbOf(person.group, k, clips) });
+    const bg = new THREE.Group(); bg.name = 'bike'; bg.add(bike.group);
+    files.push({ name: entry.bike, data: await glbOf(bg, k, [ride]) });
+    people.push(entry);
     if (c.portrait) files.push({ name: `portraits/${base}.png`, data: new Uint8Array(await (await fetch(c.portrait)).arrayBuffer()) });
     await new Promise(r => setTimeout(r, 0));                          // let the page breathe
   }
   const text = (name, str) => ({ name, data: new TextEncoder().encode(str) });
-  const models = files.filter(f => f.name.startsWith('models/')).map(f => f.name);
-  const manifest = { render, people: roster.map((c, i) => ({ name: c.name, model: models[i] })) };
+  const manifest = { render, fps: FPS, people };
   const src = async (f) => (await (await fetch(new URL('./' + f, import.meta.url))).text());
   files.unshift(text('citizens.json', toJSON(roster, render)), text('manifest.json', JSON.stringify(manifest, null, 2)), text('viewer.html', VIEWER(render)),
-    text('HANDOFF.md', HANDOFF(render, roster.map((c, i) => models[i].slice(7, -4)))), text('three-style/render-styles.js', await src('render-styles.js')), text('three-style/style.js', await src('style.js')));
+    text('HANDOFF.md', HANDOFF(render, people.map(p => p.model.slice(7, -4)), people[0]?.clips)), text('three-style/render-styles.js', await src('render-styles.js')), text('three-style/style.js', await src('style.js')));
   return zip(files);
 }
