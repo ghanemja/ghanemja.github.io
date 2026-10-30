@@ -302,7 +302,7 @@ const save = (blob, name) => {
 $('#export').onclick = async () => {
   const btn = $('#export'); btn.disabled = true;
   try {
-    const { exportPack } = await import('./export-pack.js?cb=2');
+    const { exportPack } = await import('./export-pack.js?cb=3');
     const blob = await exportPack({ roster, render, makePerson, spec, toJSON, onProgress: (i, n) => { $('#count').textContent = `exporting ${i + 1} of ${n}…`; } });
     save(blob, 'citizens.zip');
   } catch (err) { console.error(err); alert('Export failed: ' + err.message); }
