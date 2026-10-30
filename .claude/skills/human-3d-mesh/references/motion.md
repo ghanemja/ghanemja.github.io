@@ -102,3 +102,18 @@ seated and hung next to the handlebar instead of holding it. Now `hand(k, contac
   gentle: about 8–15° at the knuckle, 15–25° at the middle joint and 8–12° at the tip, more
   toward the pinky. Up to 90° in all read as a claw.
 
+## Bystanders
+`m.pose('coffee' | 'read' | 'phone', t)` (the list is `m.BYSTANDERS`): standing with a prop in
+hand. The prop is made the first time, kept on the rig, shown only while in use, and drawn in
+the person's render style. It's held by placing the palm on it (`hand()`) and letting the
+arm's IK reach, while the other arm stays relaxed. Coffee sips every ~7 s, the paper sways,
+and the head looks down at the paper or phone. Lessons:
+- **Face the prop to the person.** A newspaper or phone made with its face toward +z shows
+  the print or screen to the viewer. Turn it round (rotate π about y), then tip it back.
+- **Aim a sip at the mouth, not the head joint.** The mouth sits about 4 cm below and 14 cm
+  in front of the `head` bone. Aimed higher, the cup went above the head.
+- **Sitting with hands on the thighs, the elbows point back** (pole about (±0.12, −0.35, −0.6)
+  from the shoulder). Pointed out to the side, the arms flared.
+- New activity: add a function to `BYSTANDERS` in js/motion.js; the maker's plaza deals
+  them to standing citizens at random.
+

@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { rotateBone, regionWeight } from './anatomy.js';
 import { paint, ink } from './style.js';
+import { applyRenderStyle } from './render-styles.js';
 
 // ── bone helpers (world space) ──
 const _wq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _lq = new THREE.Quaternion();
@@ -302,7 +303,8 @@ export function makeMotion(person) {
         if (contact.clone().addScaledVector(along, -0.55 * M.palm).distanceTo(shW) <= 0.92 * M.arm) break;
       }
       const F = along.clone().addScaledVector(X, -s * 0.06).addScaledVector(up, -0.04);  // fingers toward the knee, a touch inward
-      hand(k, contact, F, up.clone().negate(), W(M.shoulder[k]).add(new THREE.Vector3(s * 0.6, -0.4, -0.6)), { gap: 0.002 * M.s });
+      // the elbow points back and only a little out (pointed out to the side, the arms flared)
+      hand(k, contact, F, up.clone().negate(), W(M.shoulder[k].clone().add(new THREE.Vector3(s * 0.12, -0.35, -0.6))), { gap: 0.002 * M.s });
       flattenFingers(B, k, 0.75);
     }
   }
@@ -328,14 +330,95 @@ export function makeMotion(person) {
     bk.spin(theta, (o.speed ?? 0) * t);
   }
 
+  // ── bystanders: standing about with something in hand ──
+  // Each activity has a prop (made once, kept on the rig, shown only while in use), held by placing
+  // the palm on it and letting the arm's IK reach; the other arm stays relaxed. In rig space: x to
+  // the person's left, y up, z forward.
+  const props = {}, headRest = local(B.head);
+  const toW = (v) => v.clone().applyQuaternion(rq).normalize();
+  const showProp = (name) => { for (const [n, p] of Object.entries(props)) p.visible = n === name; return props[name]; };
+  const makeProp = (name, build) => { if (!props[name]) { const g = build(); g.traverse(o => { if (o.isMesh) o.userData.role = 'prop'; }); rig.add(g); props[name] = g; applyRenderStyle(g, person.render ?? 'gouache'); } return props[name]; };   // (in the person's own drawing style)
+  const setProp = (p, posLocal, quatLocal) => { p.position.copy(posLocal); if (quatLocal) p.quaternion.copy(quatLocal); };
+  const S = M.s, hold = (k, contactL, F, N, poleL, o) => hand(k, W(contactL), toW(F), toW(N), W(poleL), o);
+  const BYSTANDERS = {
+    coffee(t) {
+      const r = 0.036 * S, h = 0.1 * S;
+      const cup = makeProp('coffee', () => {
+        const g = new THREE.Group(), body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.82, h, 24, 1, true), paint(0xf1ebdf, { side: THREE.DoubleSide }));
+        const lid = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.04, r * 1.04, h * 0.12, 24), paint(0x4a3a30));
+        const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.02, r * 0.92, h * 0.4, 24, 1, true), paint(0xb98a5e, { side: THREE.DoubleSide }));
+        lid.position.y = h * 0.5; sleeve.position.y = -h * 0.02; g.add(body, lid, sleeve); return g;
+      });
+      showProp('coffee'); breathe(t);
+      // a sip every ~7 s: up to the mouth and back
+      const ph = (t % 7) / 7, sip = ss(ph, 0.55, 0.65) * (1 - ss(ph, 0.8, 0.9));
+      const rest = M.shoulder.R.clone().add(new THREE.Vector3(0.1 * S, -0.22 * S, 0.22 * S));
+      const mouth = headRest.clone().add(new THREE.Vector3(-0.03 * S, -0.04 * S, 0.14 * S));
+      const c = rest.lerp(mouth, sip), tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.9 * sip);
+      setProp(cup, c, tilt);
+      look(0.05 - 0.15 * sip);
+      // the right hand round the cup from its outer side, fingers wrapping forward round it
+      const out = new THREE.Vector3(-1, 0, 0.15).normalize();
+      hold('R', c.clone().addScaledVector(out, r * 1.05), new THREE.Vector3(0.25, 0, 1).applyQuaternion(tilt), out.clone().negate(), M.shoulder.R.clone().add(new THREE.Vector3(-0.2, -0.45, -0.3)), { along: 0.45 });
+      curlFingers(B, 'R', 0.6);
+    },
+    read(t) {
+      const w = 0.42 * S, hgt = 0.3 * S;
+      const paper = makeProp('read', () => {
+        const cv = document.createElement('canvas'); cv.width = 256; cv.height = 184; const x = cv.getContext('2d');
+        x.fillStyle = '#ece6d8'; x.fillRect(0, 0, 256, 184); x.fillStyle = '#2a2230'; x.fillRect(12, 10, 232, 18);
+        x.fillStyle = '#8a8478'; for (let col = 0; col < 3; col++) for (let ln = 0; ln < 14; ln++) x.fillRect(12 + col * 80, 38 + ln * 10, 64 - (ln % 5 === 4 ? 24 : 0), 4);
+        x.fillStyle = '#b8b0a0'; x.fillRect(92, 40, 72, 50);
+        const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+        const g = new THREE.Group(), geo = new THREE.PlaneGeometry(w, hgt, 8, 1), P = geo.attributes.position;
+        for (let i = 0; i < P.count; i++) P.setZ(i, -0.035 * S * (1 - (P.getX(i) / (w / 2)) ** 2));   // a soft fold down the middle
+        geo.computeVertexNormals();
+        g.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide }))); return g;
+      });
+      showProp('read'); breathe(t, 0.7);
+      const c = M.shoulderMid.clone().add(new THREE.Vector3(0, -0.15 * S + 0.004 * S * Math.sin(t * 0.7), 0.3 * S));
+      // the printed side faces the reader (turned round), tipped back toward their eyes
+      const qx = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.5 + 0.03 * Math.sin(t * 0.4));
+      const q = qx.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+      setProp(paper, c, q);
+      look(0.35);
+      // a hand at each side edge, thumb in front, palm facing in along the page
+      for (const [k, sg] of [['L', 1], ['R', -1]]) {
+        const edge = c.clone().add(new THREE.Vector3(sg * w * 0.47, -0.02 * S, 0).applyQuaternion(qx));
+        hold(k, edge, new THREE.Vector3(0, 1, 0.3).applyQuaternion(qx), new THREE.Vector3(-sg, 0, 0), M.shoulder[k].clone().add(new THREE.Vector3(sg * 0.35, -0.5, -0.2)), { along: 0.6, gap: 0.004 * S });
+        curlFingers(B, k, 0.55);
+      }
+    },
+    phone(t) {
+      const pw = 0.072 * S, ph = 0.15 * S;
+      const phone = makeProp('phone', () => {
+        const g = new THREE.Group(), body = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, 0.009 * S), paint(0x2f2b33));
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(pw * 0.88, ph * 0.9), new THREE.MeshBasicMaterial({ color: 0x8fb8d8 }));
+        screen.position.z = 0.0047 * S; screen.userData.noInk = true; g.add(body, screen); return g;
+      });
+      showProp('phone'); breathe(t, 0.7);
+      const c = M.shoulder.R.clone().add(new THREE.Vector3(0.11 * S, -0.2 * S, 0.24 * S));
+      // the screen turned to the face: round, then tipped back
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.65).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+      setProp(phone, c, q);
+      look(0.5 + 0.03 * Math.sin(t * 1.3));
+      // held from below in the right palm, fingers up its far side
+      hold('R', c.clone().add(new THREE.Vector3(0, 0, -0.008 * S).applyQuaternion(q)), new THREE.Vector3(0.15, 1, 0).applyQuaternion(q), new THREE.Vector3(0, 0, 1).applyQuaternion(q), M.shoulder.R.clone().add(new THREE.Vector3(-0.15, -0.5, -0.3)), { along: 0.55 });
+      curlFingers(B, 'R', 0.5);
+    },
+  };
+
   return {
     M,
+    BYSTANDERS: Object.keys(BYSTANDERS),
     pose(action, t = 0, o = {}) {
       frame(); reset();
       let v = 0;
+      if (!BYSTANDERS[action]) showProp(null);
       if (action === 'walk' || action === 'run') v = gait(GAITS[action], t);
       else if (action === 'sit') sit(t, o);
       else if (action === 'bike') bike(t, o);
+      else if (BYSTANDERS[action]) BYSTANDERS[action](t);
       else breathe(t);                                              // idle
       rig.updateMatrixWorld(true);
       return v;

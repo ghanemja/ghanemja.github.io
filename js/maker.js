@@ -348,12 +348,18 @@ async function enterPlaza() {
     $('#busy').textContent = `sketching ${i + 1} of ${crowd.length}${roster.length > crowd.length ? ` (of ${roster.length})` : ''}…`; $('#busy').classList.add('on');
     const p = await makePerson(spec(crowd[i]));
     if (mode !== 'plaza') return;
-    const role = i === 1 ? 'sit' : i % 4 === 3 ? 'bike' : 'walk';
+    // most stroll; some sit, some ride, and some stand about doing something (a coffee, the paper, a phone)
+    const role = i === 1 ? 'sit' : i % 4 === 3 ? 'bike' : i % 5 === 2 ? 'stand' : 'walk';
     // rings: everyone on a ring goes the same way, evenly spaced, so nobody walks through anybody
     const ringN = role === 'bike' ? 3 : i % 3, onRing = Math.ceil(crowd.length / 3);
     const f = { p, role, r: 1.5 + ringN * 0.8, a: (Math.floor(i / 3) / onRing) * Math.PI * 2 + ringN, dir: ringN % 2 ? 1 : -1, t: Math.random() * 10 };
     if (role === 'bike') { f.bike = makeBike(p); p.group.add(f.bike.group); applyRenderStyle(f.bike.group, render); }
     if (role === 'sit') p.group.position.set(0.3, 0, -0.25 - p.motion.M.hipMid.z);   // hips onto the bench (it spans z −0.51…−0.09)
+    if (role === 'stand') {                                          // round the edge, facing in, each doing one of the bystander things
+      const a = (i * 2.399) % (Math.PI * 2), R2 = 4.6;
+      f.act = p.motion.BYSTANDERS[(i * 7 + Math.floor(Math.random() * 3)) % p.motion.BYSTANDERS.length];
+      p.group.position.set(Math.cos(a) * R2, 0, Math.sin(a) * R2); p.group.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
+    }
     p.group.add(blobShadow(0.3)); scene.add(p.group); plazaFolk.push(f);
   }
   $('#busy').classList.remove('on'); $('#busy').textContent = 'sketching…';
@@ -384,6 +390,7 @@ function loop() {
     for (const f of plazaFolk) {
       const m = f.p.motion;
       if (f.role === 'sit') { m.pose('sit', t + f.t, { seatY: 0.44 }); continue; }
+      if (f.role === 'stand') { m.pose(f.act, t + f.t); continue; }
       const v = f.role === 'bike' ? m.speed('walk') * 2.4 : m.speed('walk');
       f.a += f.dir * v / f.r * dt;
       f.p.group.position.set(Math.cos(f.a) * f.r, 0, Math.sin(f.a) * f.r);
