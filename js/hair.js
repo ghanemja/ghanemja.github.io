@@ -51,6 +51,9 @@ export function makeHair(H, { chin }, styleName, colour) {
   // meets) and well under the grid's limit (NT/2 waves): finer grooves alias into
   // zig-zag slivers whose flipped faces let the outline show through as black holes
   const strand = (th) => 0.6 * Math.sin(th * 14 + 1.5 * Math.sin(th * 5)) + 0.4 * Math.sin(th * 23 + 1.3);
+  // clumps: a few big soft ridges round the head (whole-number frequencies so the back seam meets),
+  // drifting a little as they run down; none at the crown, where they would meet in a star
+  const clump = (th, u) => (0.55 * Math.sin(th * 9 + 0.6 * u + 0.8 * Math.sin(th * 4)) + 0.3 * Math.sin(th * 13 + 2.1 - 0.4 * u) + 0.15 * Math.sin(th * 21 + 0.7)) * ss(u, 0.1, 0.35);
   // curls: soft lumps a few centimetres across (again, coarse enough for the grid to carry)
   const curlN = (p) => S.curl ? S.curl * R * (Math.sin(p.x * 9 / R) * Math.sin(p.y * 8 / R + 1) * Math.sin(p.z * 7.5 / R + 2) * 0.7
     + 0.3 * Math.sin(p.x * 15 / R + p.z * 13 / R) * Math.sin(p.y * 14 / R)) : 0;
@@ -131,13 +134,18 @@ export function makeHair(H, { chin }, styleName, colour) {
   const cols = [];
   for (let j = 0; j < NT; j++) cols.push(column(-Math.PI + (j / NT) * Math.PI * 2));
   for (let j = 0; j < NT; j++) {
-    const th = -Math.PI + (j / NT) * Math.PI * 2, col = cols[j], len = col.end;
+    const th = -Math.PI + (j / NT) * Math.PI * 2, col = cols[j];
+    // the ends come to soft points, one per clump (a fringe, a bob's ends): a gentle scallop, not
+    // a ruler-straight cut; none along a hairline, which thins out instead
+    const tip = isHairline(th) ? 0 : Math.pow(Math.abs(Math.sin(th * 9 / 2 + 0.3 + 0.4 * Math.sin(th * 2))), 0.7);
+    const len = col.end * (1 - (S.curtain || faceW(th) > 0.5 ? 0.06 : 0) * (1 - tip));
     for (let i = 0; i <= NR; i++) {
       const u = i / NR, p = at(col, len * u);
       taper(p, th, u);
+      if (S.locks && !S.curl) { const d = p.clone().sub(C).normalize(); p.addScaledVector(d, R * 0.045 * clump(th, u) * (1 - ss(u, 0.92, 1))); }
       P.push(p.x, p.y, p.z);
-      const e = (p.y - C.y) / R, r = strand(th) * (1 - ss(u, 0, 0.25));   // (no stripes at the top: they met in a star)
-      c.copy(base).lerp(dark, 0.32 * Math.max(0, -r) + 0.25 * (1 - ss(u, 0, 0.12)))     // grooves, darker at the roots
+      const e = (p.y - C.y) / R, r = (strand(th) * 0.5 + (S.locks ? clump(th, u) * 0.9 : 0)) * (1 - ss(u, 0, 0.25));   // (no stripes at the top: they met in a star)
+      c.copy(base).lerp(dark, 0.5 * Math.max(0, -r) + 0.25 * (1 - ss(u, 0, 0.12)))     // grooves between clumps, darker at the roots
         .lerp(shine, 0.55 * Math.exp(-((e - 0.5) ** 2) / 0.02) * THREE.MathUtils.clamp(0.4 + 0.6 * r, 0, 1));
       Cc.push(c.r, c.g, c.b);
     }
@@ -214,7 +222,8 @@ export function makeHair(H, { chin }, styleName, colour) {
   // lock flows over the head from the whorl to where its column ends (front hair forward over the
   // top, back hair down), then on down the curtain. Rooted at the pole, every lock met in one point
   // and the top of the head was a pinwheel of outlines.
-  const whorl = dirAt(Math.PI - 0.3, S.whorl ?? 0.8);                       // (a little off centre, as it grows)
+  // (on the centre line: set off to one side, the locks running down the back crossed in diagonals)
+  const whorl = dirAt(Math.PI, S.whorl ?? 0.8);
   const surfAt = (d) => onHead(Math.atan2(d.x, d.z), THREE.MathUtils.clamp(d.y, -0.999, 0.999));
   const flow = (col) => {
     const Lhead = col.L[SAMPLES], onTop = col.end <= Lhead + 1e-6, target = onTop ? at(col, col.end) : col.pts[SAMPLES];
@@ -235,9 +244,12 @@ export function makeHair(H, { chin }, styleName, colour) {
   const LAYER = [{ n: 0.42, w: 2.3, h: 1.6, lift: 0.014, s0: [0.02, 0.05], shade: 0.9, sway: 0.05 },
     { n: 0.3, w: 1.6, h: 1.3, lift: 0.04, s0: [0.1, 0.22], shade: 1, sway: 0.06 },
     { n: 0.22, w: 0.45, h: 0.6, lift: 0.06, s0: [0.22, 0.3], shade: 1.06, sway: 0.08 }];
-  if (NL && !S.curl && !S.extra) for (let layer = 0; layer < 3; layer++) for (let j = 0, nl = Math.round(NL * LAYER[layer].n); j < nl; j++) {
+  // (separate lock geometry is off for straight styles: however it was laid, flat ribbons over a shell
+  // read as shards, crossed each other and burst from the crown. The shell itself carries the clumps)
+  if (S.lockMesh && NL && !S.curl && !S.extra) for (let layer = 0; layer < 3; layer++) for (let j = 0, nl = Math.round(NL * LAYER[layer].n); j < nl; j++) {
     const Ly = LAYER[layer], th = -Math.PI + ((j + 0.5 * (layer % 2) + 0.35 * rnd(j * 7 + layer)) / nl) * Math.PI * 2, col = flow(column(th)), fw = faceW(th);
-    const s0 = col.end * (Ly.s0[0] + Ly.s0[1] * rnd(j + 3 + layer * 5)), wv = 0.7 + 0.6 * rnd(j * 23 + layer);
+    // (no lock starts AT the whorl: all rooted in one point, they left a hole and spikes at the crown)
+    const s0 = col.end * Math.max(0.14, Ly.s0[0] + Ly.s0[1] * rnd(j + 3 + layer * 5)), wv = 0.7 + 0.6 * rnd(j * 23 + layer);
     // at a hairline a lock stops just short of it and settles flat; a hanging fringe or the ends of
     // longer hair reach a little past the cut in soft points (locks spilling past a hairline onto
     // the temples and ears, at full thickness, made the edge a ragged ledge)
@@ -255,19 +267,11 @@ export function makeHair(H, { chin }, styleName, colour) {
     }
     const ring = (p) => Math.hypot(p.x - C.x, p.z - C.z);
     const spacing = (i) => (2 * Math.PI * ring(pts[i])) / NL;
-    lock(pts, (t) => spacing(Math.round(t * 24)) * (S.lockW ?? 0.85) * Ly.w * wv * (0.35 + 0.65 * ss(t, 0, 0.12)) * (1 - 0.85 * ss(t, 0.62, 1)),
-      (t) => R * (S.lockH ?? 0.035) * Ly.h * (1 - 0.6 * t) * (hl ? 1 - 0.9 * ss(t, 0.45, 1) : 1), Ly.shade * (0.93 + 0.14 * rnd(j * 13 + layer)));
+    lock(pts, (t) => spacing(Math.round(t * 24)) * (S.lockW ?? 0.85) * Ly.w * wv * ss(t, 0, 0.18) * (1 - 0.85 * ss(t, 0.62, 1)),
+      (t) => R * (S.lockH ?? 0.035) * Ly.h * ss(t, 0, 0.18) * (1 - 0.6 * t) * (hl ? 1 - 0.9 * ss(t, 0.45, 1) : 1), Ly.shade * (0.93 + 0.14 * rnd(j * 13 + layer)));
   }
-  // transition locks: short, thin clumps along a hairline, growing into it, so the edge is soft
-  // (the shell's edge alone read as a cut line)
-  if (NL && S.taper && !S.curl) for (let j = 0, n = Math.round(NL * 1.6); j < n; j++) {
-    const th = -Math.PI + ((j + 0.5 * rnd(j * 3)) / n) * Math.PI * 2;
-    if (!isHairline(th)) continue;
-    const col = column(th), len = R * (0.14 + 0.08 * rnd(j * 5)), s0 = Math.max(0, col.end - len), pts = [];
-    for (let i = 0; i <= 10; i++) { const t = i / 10, sAt = s0 + (col.end * 0.995 - s0) * t, p = taper(along(col, sAt), th, Math.min(1, sAt / col.end)); pts.push(p.addScaledVector(outOf(p), R * 0.008 * (1 - t))); }
-    const sp = (2 * Math.PI * Math.hypot(pts[0].x - C.x, pts[0].z - C.z)) / n;
-    lock(pts, (t) => sp * 0.75 * (1 - 0.8 * ss(t, 0.5, 1)), (t) => R * 0.012 * (1 - 0.8 * t), 0.95 + 0.1 * rnd(j));
-  }
+  // (no separate transition locks along hairlines: drawn short and thin they made a zigzag at the nape;
+  // the shell's taper is the soft edge)
   // flyaways: a few single strands lifting off the mass, the last layer; they break the perfect
   // outline (none on very short hair)
   if (NL && (S.curtain || S.extra) && !S.curl) for (let j = 0; j < 9; j++) {
@@ -375,7 +379,10 @@ export function makeHair(H, { chin }, styleName, colour) {
     lg.setAttribute('color', new THREE.Float32BufferAttribute(LC, 3));
     lg.setAttribute('hairDir', new THREE.Float32BufferAttribute(LT, 3));
     lg.setIndex(LI); lg.computeVertexNormals();
-    g.add(new THREE.Mesh(lg, paint(0xffffff, { vertexColors: true, soft: true, hatch: 0.25 })));
+    // the locks are drawn without outlines of their own: inked one by one, every lock edge became a
+    // black line and the hair read as broken shards. The shell carries the silhouette's line; curls
+    // keep theirs (each curl is a shape to read)
+    const lm = new THREE.Mesh(lg, paint(0xffffff, { vertexColors: true, soft: true, hatch: 0.25 })); if (!S.curl) lm.userData.noInk = true; g.add(lm);
     shell.geometry.attributes.color.array.forEach((x, i, a) => { a[i] = x * 0.82; });   // the mass beneath is in the locks' shade
   }
   return g;

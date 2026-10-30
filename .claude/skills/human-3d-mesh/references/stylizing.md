@@ -322,6 +322,13 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   cap it only drew a ring at the crown). Hair never goes inside the real head above the
   ears: `headMap().reach()` is the highest raw cell round a direction (blending passed
   under skull bumps and the scalp showed through short hair).
+- **Straight styles are ONE watertight shell; no separate locks.** Several rounds of lock
+  geometry (thin locks, chunky tufts, S-curves, with or without outlines) all read as broken.
+  Flat ribbons over a shell shade as shards, cross each other, and burst out of the crown.
+  The definition lives in the shell instead: a few big soft clump ridges (whole-number
+  frequencies, absent at the crown), grooves darkened in the colour, and the ends scalloped
+  into soft points. Separate shapes stay only where they ARE shapes: curls, a ponytail, a bun.
+  (`lockMesh: true` on a style turns the old locks back on, for experiments.)
 - Styles are data (`HAIRSTYLES`): buzz, crop, pixie, bob, long bob, ponytail, bun, curls.
   A new style means new numbers (fringe height and sweep, face window, side/back ends,
   curtain cut / A-line / bell / tuck), plus an extra mesh for a tail or bun.
