@@ -193,32 +193,40 @@ function counter(K, x, z, accent) {
 // ── per-app set dressing ────────────────────────────────────────────────────
 const SETS = {
   charterscope(K) {
-    // the clause board: a chart of the fleet, red string to the odd clauses
+    // the decision board: the charter pinned in the middle, today's competitor moves
+    // around it, each stamped with its verdict and strung back to the charter
     K.flat(1.7, 1.1, texMat(512, 330, (c, w, h) => {
       c.fillStyle = '#caa87c'; c.fillRect(0, 0, w, h);
       c.strokeStyle = '#8a6448'; c.lineWidth = 10; c.strokeRect(5, 5, w - 10, h - 10);
-      for (let i = 0; i < 6; i++) {
-        const x = 40 + (i % 3) * 150, y = 40 + Math.floor(i / 3) * 140;
+      const V = { ADOPT: '#3f8f5a', MONITOR: '#c08a2a', REJECT: '#8a8494', PIVOT: '#7a5bb5' };
+      const cards = [[40, 34, 'ADOPT'], [190, 34, 'MONITOR'], [360, 34, 'ADOPT'], [40, 200, 'REJECT'], [360, 200, 'PIVOT']];
+      const cx = 256, cy = 190;
+      c.strokeStyle = '#e8604c'; c.lineWidth = 3;
+      for (const [x, y] of cards) { c.beginPath(); c.moveTo(x + 55, y + 45); c.lineTo(cx, cy); c.stroke(); }
+      for (const [x, y, v] of cards) {
         c.fillStyle = '#f6efdf'; c.fillRect(x, y, 110, 90);
         c.strokeStyle = INKC; c.lineWidth = 2; c.strokeRect(x, y, 110, 90);
-        c.strokeStyle = '#b9b2a4'; for (let l = 0; l < 4; l++) { c.beginPath(); c.moveTo(x + 10, y + 28 + l * 14); c.lineTo(x + 100, y + 28 + l * 14); c.stroke(); }
-        c.font = `700 16px ${SCRIPT}`; c.fillStyle = INKC; c.fillText('clause ' + (i + 7), x + 10, y + 16);
-        if (i === 1 || i === 5) { c.strokeStyle = '#e8604c'; c.lineWidth = 4; c.beginPath(); c.ellipse(x + 55, y + 45, 62, 52, 0, 0, Math.PI * 2); c.stroke(); }
+        c.strokeStyle = '#b9b2a4'; for (let l = 0; l < 3; l++) { c.beginPath(); c.moveTo(x + 10, y + 46 + l * 13); c.lineTo(x + 100 - l * 18, y + 46 + l * 13); c.stroke(); }
+        c.fillStyle = V[v]; c.fillRect(x + 8, y + 10, 66, 20);
+        c.font = `700 14px ${HAND}`; c.fillStyle = '#fff'; c.fillText(v, x + 12, y + 25);
       }
-      c.strokeStyle = '#e8604c'; c.lineWidth = 3;
-      c.beginPath(); c.moveTo(150, 85); c.lineTo(340, 225); c.stroke();
-      c.beginPath(); c.moveTo(395, 85); c.lineTo(340, 225); c.stroke();
-      c.fillStyle = '#e8604c'; c.beginPath(); c.arc(340, 225, 8, 0, 7); c.fill();
+      c.fillStyle = '#fff8e6'; c.fillRect(cx - 62, cy - 34, 124, 68);
+      c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(cx - 62, cy - 34, 124, 68);
+      c.font = `700 22px ${SCRIPT}`; c.fillStyle = INKC; c.textAlign = 'center';
+      c.fillText('our charter', cx, cy - 6); c.font = `400 14px ${HAND}`; c.fillStyle = '#5a4e5e';
+      c.fillText('goals · anti-goals', cx, cy + 18);
+      c.fillStyle = '#e8604c'; c.beginPath(); c.arc(cx, cy - 34, 6, 0, 7); c.fill();
     }), -2.4, 1.35, -D + 0.56, [0, 0.0, 0]);
-    // a ship's wheel by the window
-    const wheel = new THREE.Group(); wheel.position.set(2.9, 0.95, -D + 1.1);
-    const Wk = kit(wheel), dark = paint(0x6b4a34);
-    Wk.put(new THREE.TorusGeometry(0.42, 0.05, 10, 24), dark, 0, 0, 0);
-    for (let i = 0; i < 4; i++) Wk.box(0.055, 1.12, 0.055, dark, 0, 0, 0, 0.02, [0, 0, i * Math.PI / 4]);
-    Wk.put(new THREE.CylinderGeometry(0.09, 0.09, 0.1, 12), paint(PAL.gold), 0, 0, 0, [Math.PI / 2, 0, 0]);
-    Wk.box(0.12, 0.95, 0.12, dark, 0, -0.48, -0.1);
-    K.g.add(wheel);
-    // a leaning stack of contracts
+    // a brass telescope on a tripod, trained on the competition
+    const scope = new THREE.Group(); scope.position.set(2.9, 0, -D + 1.3); scope.rotation.y = -0.7;
+    const Sk = kit(scope), wood = paint(0x6b4a34), brass = paint(PAL.gold);
+    for (let i = 0; i < 3; i++) { const a = i * Math.PI * 2 / 3; Sk.box(0.04, 1.05, 0.04, wood, Math.sin(a) * 0.2, 0.5, Math.cos(a) * 0.2, 0.012, [Math.cos(a) * 0.2, 0, -Math.sin(a) * 0.2]); }
+    Sk.put(new THREE.CylinderGeometry(0.045, 0.07, 0.7, 14), brass, 0, 1.08, 0.05, [1.25, 0, 0]);
+    Sk.put(new THREE.CylinderGeometry(0.08, 0.08, 0.06, 16), brass, 0, 1.19, 0.38, [1.25, 0, 0]);
+    Sk.put(new THREE.SphereGeometry(0.05, 10, 8), wood, 0, 1.02, 0);
+    ink(scope, 'fine');
+    K.g.add(scope);
+    // a stack of yesterday's digests
     for (let i = 0; i < 7; i++) K.box(0.52, 0.035, 0.38, paint(i % 2 ? 0xf6efdf : 0xefe4cc), -3.1 + i * 0.012, 0.12 + i * 0.037, -D + 1.2, 0.006, [0, (i % 3 - 1) * 0.12, 0]);
   },
   'inbox-zero'(K) {
@@ -668,36 +676,40 @@ const EXTRA = {
   },
 
   charterscope(K) {
-    // a painted sea for the toy fleet, charts taped to the walls
-    const sea = K.flat(2.6, 1.8, texMat(256, 180, (c, w, h) => {
-      c.fillStyle = '#8fc3c9'; c.fillRect(0, 0, w, h);
-      c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 3;
-      for (let y = 20; y < h; y += 26) { c.beginPath(); for (let x = 0; x <= w; x += 16) c.lineTo(x, y + Math.sin(x / 14 + y) * 4); c.stroke(); }
-    }), 1.9, 0.016, -1.6, [-Math.PI / 2, 0, 0.3]);
-    sea.renderOrder = 1;
-    const shipG = new THREE.Group(); K.g.add(shipG);
-    const S = kit(shipG);
-    S.box(0.5, 0.12, 0.18, paint(0xc23f36), 0, 0.1, 0, 0.03);
-    S.box(0.26, 0.1, 0.14, paint(0xf6eedb), 0.02, 0.2, 0, 0.02);
-    S.put(new THREE.CylinderGeometry(0.03, 0.035, 0.12, 8), paint(0x2a2230), -0.08, 0.3, 0);
-    S.box(0.2, 0.02, 0.1, paint(0x8a6448), 0.16, 0.17, 0, 0.006);
-    ink(shipG, 'fine');
-    LIVE.push((t) => {
-      const a = t * 0.5;
-      shipG.position.set(1.9 + Math.cos(a) * 0.85, 0.02 + Math.sin(t * 2.2) * 0.015, -1.6 + Math.sin(a) * 0.5);
-      shipG.rotation.y = -a + Math.PI / 2;
-      shipG.rotation.z = Math.sin(t * 1.8) * 0.06;
+    // the radar on its console: a sweep goes round and competitor blips light up as it passes
+    const con = kit(new THREE.Group()); con.g.position.set(1.9, 0, -1.7);
+    con.box(1.0, 0.6, 0.7, paint(0x5a6a7a), 0, 0.3, 0, 0.04);
+    con.put(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 32), paint(0x2a2230, { hatch: 0 }), 0, 0.62, 0);
+    ink(con.g, 'fine');
+    K.g.add(con.g);
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.36, 40), new THREE.MeshBasicMaterial({ color: 0x1f4a3a }));
+    glass.rotation.x = -Math.PI / 2; glass.position.set(1.9, 0.652, -1.7); K.g.add(glass);
+    const rings = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.18, 40), new THREE.MeshBasicMaterial({ color: 0x5fd39a }));
+    rings.rotation.x = -Math.PI / 2; rings.position.set(1.9, 0.654, -1.7); K.g.add(rings);
+    const sweep = new THREE.Mesh(new THREE.CircleGeometry(0.35, 24, 0, 0.6), new THREE.MeshBasicMaterial({ color: 0x5fd39a, transparent: true, opacity: 0.55 }));
+    sweep.rotation.x = -Math.PI / 2; sweep.position.set(1.9, 0.656, -1.7); K.g.add(sweep);
+    const blips = [[0.22, 0.6], [0.12, 2.1], [0.28, 3.4], [0.18, 4.6], [0.3, 5.5]].map(([r, a]) => {
+      const m = new THREE.Mesh(new THREE.CircleGeometry(0.022, 12), new THREE.MeshBasicMaterial({ color: 0xc8ffd8, transparent: true }));
+      m.rotation.x = -Math.PI / 2; m.position.set(1.9 + Math.cos(a) * r, 0.658, -1.7 - Math.sin(a) * r); K.g.add(m);
+      return { m, a };
     });
-    // flagged clause memos taped to the side walls
-    for (const [x, y, z, ry, tilt] of [[-W / 2 + 0.06, 1.7, -2.2, Math.PI / 2, 0.08], [-W / 2 + 0.06, 1.3, -1.5, Math.PI / 2, -0.06], [W / 2 - 0.06, 1.8, -3.4, -Math.PI / 2, 0.1]]) {
+    LIVE.push((t) => {
+      const ang = (t * 1.6) % (Math.PI * 2);
+      sweep.rotation.z = ang;
+      for (const b of blips) {
+        const since = ((ang - b.a) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+        b.m.material.opacity = Math.max(0.08, 1 - since / 2.5);
+      }
+    });
+    // verdict notes taped to the side walls
+    for (const [x, y, z, ry, tilt, v, col] of [[-W / 2 + 0.06, 1.7, -2.2, Math.PI / 2, 0.08, 'ADOPT', '#3f8f5a'], [-W / 2 + 0.06, 1.3, -1.5, Math.PI / 2, -0.06, 'MONITOR', '#c08a2a'], [W / 2 - 0.06, 1.8, -3.4, -Math.PI / 2, 0.1, 'REJECT', '#8a8494']]) {
       const memo = K.flat(0.5, 0.62, texMat(128, 160, (c, w, h) => {
         c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h);
         c.strokeStyle = '#b9b2a4'; c.lineWidth = 2;
-        for (let l = 0; l < 7; l++) { c.beginPath(); c.moveTo(12, 34 + l * 16); c.lineTo(w - 12, 34 + l * 16); c.stroke(); }
-        c.strokeStyle = '#e8604c'; c.lineWidth = 5;
-        c.beginPath(); c.ellipse(w / 2, h * 0.45, w * 0.33, h * 0.18, 0.2, 0, 7); c.stroke();
-        c.fillStyle = '#e8604c'; c.font = `700 20px ${SCRIPT}`; c.textAlign = 'center';
-        c.fillText('flag!', w / 2, h * 0.88);
+        for (let l = 0; l < 5; l++) { c.beginPath(); c.moveTo(12, 64 + l * 16); c.lineTo(w - 12, 64 + l * 16); c.stroke(); }
+        c.fillStyle = col; c.fillRect(10, 14, w - 20, 34);
+        c.fillStyle = '#fff'; c.font = `700 20px ${HAND}`; c.textAlign = 'center';
+        c.fillText(v, w / 2, 39);
       }), x, y, z, [0, ry, tilt]);
       memo.renderOrder = 1;
     }
