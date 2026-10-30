@@ -115,6 +115,9 @@ function bake(name, T, nodes, pose) {
   });
   return new THREE.AnimationClip(name, T, tracks);
 }
+// loop lengths (s): the sip repeats every 7 s and breathing every 4, so 14 closes cleanly; the newspaper is two lines
+// of reading (the head dips a hair as the lines go down, and resets at the loop)
+const BYSTANDER_T = { coffee: 14, read: 6.4, phone: 4 };
 const nodeOf = (obj, name) => ({ obj, name, rest: { q: obj.quaternion.toArray(), p: obj.position.toArray() } });
 
 // a person's five clips (idle, walk, run, sit, bike), plus a bike that fits them and its own ride clip
@@ -137,8 +140,20 @@ function bakeMotion(person, render) {
   const bikeNodes = parts.map(([nm, o]) => nodeOf(o, nm));
   loop('bike', T, (t) => motion.pose('bike', t, { bike, speed }), { speed: +speed.toFixed(3) });
   const ride = bake('ride', T, bikeNodes, (t) => bike.spin(TAU * 1.1 * M.pendulum * t, speed * t));
+  // bystanders (coffee, newspaper, phone): the body's clip, and the prop's own clip. Each prop lives on the
+  // rig, shown only while its activity plays, so it is found as the visible group once posed
+  const props = [];
+  for (const act of motion.BYSTANDERS) {
+    const T = BYSTANDER_T[act] ?? 4;
+    motion.pose(act, 0);
+    const prop = person.rig.children.find(o => o.isGroup && o.visible); prop.name = act;
+    const all = bake(act, T, [...nodes, nodeOf(prop, act)], (t) => motion.pose(act, t)), mine = (tr) => tr.name.startsWith(act + '.');
+    clips.push(new THREE.AnimationClip(act, T, all.tracks.filter(tr => !mine(tr)))); info[act] = { duration: T };
+    const pt = all.tracks.filter(mine);
+    props.push({ act, prop, clip: pt.length ? new THREE.AnimationClip(act, T, pt) : null });
+  }
   motion.pose('idle', 0); bike.spin(0, 0);
-  return { clips, info, bike, ride };
+  return { clips, info, bike, ride, props };
 }
 
 // ── viewer.html: the zip's own three.js page. glTF can hold the outline but not the town's
@@ -161,8 +176,8 @@ const sun = new THREE.DirectionalLight(0xfff2d8, 1.6); sun.position.set(14, 22, 
 scene.add(new THREE.HemisphereLight(0xfff6e8, 0xd8c8b0, 1.35), sun);
 applySceneStyle(renderer, scene, STYLE);
 const manifest = await (await fetch('./manifest.json')).json(), loader = new GLTFLoader();
-const q = new URLSearchParams(location.search), CLIPS = ['idle', 'walk', 'run', 'sit', 'bike'];
-let clip = q.get('clip') || 'idle'; const mixers = [], riders = [], bikes = [];
+const q = new URLSearchParams(location.search);
+let clip = q.get('clip') || 'idle'; const mixers = [], riders = [], propRoots = {};
 // the style is re-applied by role; the outlines (geometry) are set aside while it is
 async function load(url) {
   const gltf = await loader.loadAsync(url), root = gltf.scene, lines = [];
@@ -178,18 +193,20 @@ for (const [i, c] of manifest.people.entries()) {
   const p = await load(c.model); p.root.position.set(x, 0, z); scene.add(p.root);
   const m = new THREE.AnimationMixer(p.root); mixers.push(m);
   riders.push({ m, actions: Object.fromEntries(p.animations.map(a => [a.name, m.clipAction(a)])) });
-  if (c.bike) {
-    const b = await load(c.bike); b.root.position.set(x, 0, z); b.root.visible = false; scene.add(b.root);
-    const bm = new THREE.AnimationMixer(b.root); mixers.push(bm); bm.clipAction(b.animations[0]).play(); bikes.push(b.root);
+  for (const [act, url] of Object.entries(c.props || {})) {                        // a prop is shown only while its clip plays
+    const b = await load(url); b.root.position.set(x, 0, z); b.root.visible = false; scene.add(b.root);
+    const bm = new THREE.AnimationMixer(b.root); mixers.push(bm); if (b.animations[0]) bm.clipAction(b.animations[0]).play();
+    (propRoots[act] ||= []).push(b.root);
   }
 }
+const CLIPS = Object.keys(manifest.people[0]?.clips || { idle: 1 });
 function play(name) {
   clip = name;
   for (const r of riders) { for (const a of Object.values(r.actions)) a.stop(); r.actions[name]?.reset().play(); }
-  for (const b of bikes) b.visible = name === 'bike';
+  for (const [act, roots] of Object.entries(propRoots)) for (const r of roots) r.visible = act === name;
   for (const btn of document.querySelectorAll('#bar button')) btn.style.fontWeight = btn.textContent === name ? '700' : '400';
 }
-const bar = document.body.appendChild(document.createElement('div')); bar.id = 'bar'; bar.style.cssText = 'position:fixed;top:8px;left:8px;display:flex;gap:6px';
+const bar = document.body.appendChild(document.createElement('div')); bar.id = 'bar'; bar.style.cssText = 'position:fixed;top:8px;left:8px;display:flex;gap:6px;flex-wrap:wrap';
 for (const n of CLIPS) { const b = bar.appendChild(document.createElement('button')); b.textContent = n; b.onclick = () => play(n); }
 play(clip); if (q.has('t')) for (const m of mixers) m.setTime(+q.get('t'));       // ?clip=walk&t=0.4 freezes a frame
 camera.position.set(0, 1.2, 7); const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 0.9, 0);
@@ -209,10 +226,10 @@ For an agent (or person) putting these people into a game. Generated by the Citi
 | path | what |
 |---|---|
 | \`models/<name>.glb\` | one rigged, dressed person each (${names.length}: ${names.join(', ')}), **with baked animation clips** |
-| \`models/<name>-bike.glb\` | a bicycle built to fit that person, with its own \`ride\` clip (wheels, crank, pedals) |
+| \`models/<name>-<prop>.glb\` | the props, sized to that person: \`bike\` (its own \`ride\` clip turns wheels, crank, pedals), \`coffee\` cup, \`read\` newspaper, \`phone\`, each with a clip of the same name that carries it |
 | \`portraits/<name>.png\` | the maker's portrait of each person |
 | \`citizens.json\` | the editable roster: the recipe for every person (re-import it in the maker to change anyone) |
-| \`manifest.json\` | \`{ render, fps, people: [{ name, model, bike, height, clips }] }\`: the style, files, and each clip's duration and ground speed |
+| \`manifest.json\` | \`{ render, fps, people: [{ name, model, props, height, clips }] }\`: the style, files, and each clip's duration and ground speed |
 | \`viewer.html\` | a working three.js page showing everyone **in the chosen style**; read it as the reference implementation |
 | \`three-style/\` | the town's own style code (\`render-styles.js\`, \`style.js\`) that \`viewer.html\` imports |
 
@@ -229,7 +246,7 @@ So "combining the glb with the textures" means choosing one of the two routes be
 
 - glTF 2.0 binary, **Y-up, metres, facing +Z**; about 1.7 m for an adult (children and elders scale with age).
 - One shared 76-bone MakeHuman-style skeleton, named \`root\`, \`spine01..05\`, \`neck01..03\`, \`head\`, \`clavicle.L/R\`, \`upperarm01/02.L/R\`, \`lowerarm01/02.L/R\`, \`wrist.L/R\`, \`finger1-1.L\` … \`finger5-3.R\`, \`upperleg01/02.L/R\`, \`lowerleg01/02.L/R\`, \`foot.L/R\`, \`toe1-1.L/R\`, \`pelvis.L/R\`. Left/right ends in \`.L\` / \`.R\`. Exported in a relaxed standing rest pose.
-- **Animation clips are baked into every person's \`.glb\`**: \`idle\`, \`walk\`, \`run\`, \`sit\`, \`bike\` (see Animation below).
+- **Animation clips are baked into every person's \`.glb\`**: \`idle\`, \`walk\`, \`run\`, \`sit\`, \`bike\`, and the bystander activities \`coffee\`, \`read\`, \`phone\` (see Animation below).
 - Every mesh node has \`extras.role\`, which arrives as \`userData.role\` in three.js:
 
 | role | meaning | skinned? | colour from |
@@ -255,12 +272,15 @@ Every \`models/<name>.glb\` carries these clips, sampled at ${30} fps from the m
 | \`run\` | one full cycle | ${clips.run?.duration ?? '?'} s | ground speed ${clips.run?.speed ?? '?'} m/s |
 | \`sit\` | seated, hands on thighs, breathing | ${clips.sit?.duration ?? 4} s | hips lowered to a seat about ${clips.sit?.seatHeight ?? '0.44'} m high: put a bench/chair there |
 | \`bike\` | riding, pedalling | ${clips.bike?.duration ?? '?'} s (one crank turn) | needs the bike below; ground speed ${clips.bike?.speed ?? '?'} m/s |
+| \`coffee\` | standing, sipping a coffee (a sip every 7 s) | ${clips.coffee?.duration ?? 14} s | prop \`<name>-coffee.glb\` |
+| \`read\` | standing, reading a newspaper, eyes along the lines | ${clips.read?.duration ?? 6.4} s | prop \`<name>-read.glb\` |
+| \`phone\` | standing, looking at a phone | ${clips.phone?.duration ?? 4} s | prop \`<name>-phone.glb\` |
 
 (The numbers above are for the first person; every person has their own, in \`manifest.json\` under \`people[].clips\`: longer legs swing slower.)
 
 - All clips **play in place**: the body does not travel. Move the character yourself at the clip's ground speed (\`speed\` in \`manifest.json\`) and the feet will not slide.
 - Every clip loops cleanly (last frame equals the first). Blend between clips (cross-fade ~0.2 s) to switch.
-- **Bike:** load \`models/<name>-bike.glb\`, put it at the **same origin as the person** (same position and rotation, no offset; it was built in the rider's own space), and play the rider's \`bike\` clip together with the bike's \`ride\` clip. The two are the same length and start in step. Show the bike only while riding.
+- **Props (bike, coffee, read, phone):** load \`models/<name>-<prop>.glb\`, put it at the **same origin as the person** (same position and rotation, no offset; it was built in that person's own space, so it fits their hands), and play the prop's own clip together with the person's clip of the same activity. They are the same length and start in step. Show a prop only while its activity plays. (The bike's clip is called \`ride\`; the others share the activity's name.) For a random bystander, pick one of \`coffee\`, \`read\`, \`phone\` per NPC and start it at a random time offset.
 - Bone names in the clips are exactly the skeleton's (\`upperarm01.L\`, …). Note three.js's GLTFLoader strips dots from node names, so in three.js they read \`upperarm01L\`; Unity, Unreal, Godot and Blender keep them.
 - To use them in three.js: \`const mixer = new THREE.AnimationMixer(root); mixer.clipAction(THREE.AnimationClip.findByName(gltf.animations, 'walk')).play();\` then \`mixer.update(dt)\` each frame (\`viewer.html\` has buttons for all five clips).
 - To retarget onto another rig, map the bone names above; this skeleton is MakeHuman's "default" rig.
@@ -322,11 +342,17 @@ export async function exportPack({ roster, render, makePerson, spec, toJSON, onP
     while (used.has(base)) base = slug(c.name) + '-' + n++;
     used.add(base);
     const person = await makePerson({ ...spec(c), render }), k = person.body.P.stature / 1.7;
-    const { clips, info, bike, ride } = bakeMotion(person, render);     // (poses the person, so it comes before the model is dressed for export)
-    const entry = { name: c.name, model: `models/${base}.glb`, bike: `models/${base}-bike.glb`, height: +person.body.P.stature.toFixed(3), clips: info };
+    const { clips, info, bike, ride, props } = bakeMotion(person, render);   // (poses the person, so it comes before the model is dressed for export)
+    const entry = { name: c.name, model: `models/${base}.glb`, props: {}, height: +person.body.P.stature.toFixed(3), clips: info };
+    const wrap = (name, obj) => { const g = new THREE.Group(); g.name = name; g.add(obj); return g; };
+    // props first: each moves out of the rig into its own file (same origin as the person), so the person's file has none
+    entry.props.bike = `models/${base}-bike.glb`;
+    files.push({ name: entry.props.bike, data: await glbOf(wrap('bike', bike.group), k, [ride]) });
+    for (const { act, prop, clip } of props) {
+      prop.visible = true; entry.props[act] = `models/${base}-${act}.glb`;
+      files.push({ name: entry.props[act], data: await glbOf(wrap(act + '_root', prop), k, clip ? [clip] : []) });   // (the wrapper's name must differ from the prop's: the clip targets the prop by name)
+    }
     files.push({ name: entry.model, data: await glbOf(person.group, k, clips) });
-    const bg = new THREE.Group(); bg.name = 'bike'; bg.add(bike.group);
-    files.push({ name: entry.bike, data: await glbOf(bg, k, [ride]) });
     people.push(entry);
     if (c.portrait) files.push({ name: `portraits/${base}.png`, data: new Uint8Array(await (await fetch(c.portrait)).arrayBuffer()) });
     await new Promise(r => setTimeout(r, 0));                          // let the page breathe
