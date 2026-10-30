@@ -353,13 +353,16 @@ export function makeMotion(person) {
       // a sip every ~7 s: up to the mouth and back
       const ph = (t % 7) / 7, sip = ss(ph, 0.55, 0.65) * (1 - ss(ph, 0.8, 0.9));
       const rest = M.shoulder.R.clone().add(new THREE.Vector3(0.1 * S, -0.22 * S, 0.22 * S));
-      const mouth = headRest.clone().add(new THREE.Vector3(-0.03 * S, -0.04 * S, 0.14 * S));
+      // the cup's rim meets the lips: its centre a little below and in front of the mouth
+      const mouth = headRest.clone().add(new THREE.Vector3(-0.02 * S, -0.075 * S, 0.17 * S));
       const c = rest.lerp(mouth, sip), tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.9 * sip);
       setProp(cup, c, tilt);
       look(0.05 - 0.15 * sip);
       // the right hand round the cup from its outer side, fingers wrapping forward round it
       const out = new THREE.Vector3(-1, 0, 0.15).normalize();
-      hold('R', c.clone().addScaledVector(out, r * 1.05), new THREE.Vector3(0.25, 0, 1).applyQuaternion(tilt), out.clone().negate(), M.shoulder.R.clone().add(new THREE.Vector3(-0.2, -0.45, -0.3)), { along: 0.45 });
+      // the elbow stays down and in front of the body, even mid-sip (pointed out and back, the arm went up
+      // like a salute and the hand covered the face)
+      hold('R', c.clone().addScaledVector(out, r * 1.05), new THREE.Vector3(0.25, 0, 1).applyQuaternion(tilt), out.clone().negate(), M.shoulder.R.clone().add(new THREE.Vector3(-0.12, -0.7 + 0.15 * sip, 0.15 + 0.25 * sip)), { along: 0.45 });
       curlFingers(B, 'R', 0.6);
     },
     read(t) {
@@ -382,11 +385,27 @@ export function makeMotion(person) {
       const q = qx.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
       setProp(paper, c, q);
       look(0.35);
-      // a hand at each side edge, thumb in front, palm facing in along the page
+      // reading: the eyes (and so the head) run along a line, flick back to the next one, and
+      // work down the column, then over to the next column
+      { const line = 3.2, lt = (t % line) / line, li = Math.floor(t / line), colN = Math.floor(li / 6) % 2;
+        const sweep = lt < 0.85 ? -0.16 + 0.32 * ss(lt / 0.85, 0, 1) : 0.16 - 0.32 * ss((lt - 0.85) / 0.15, 0, 1);
+        const yaw = sweep * 0.6 + (colN ? -0.12 : 0.12);                // (to the person's right = −y turn… mirrored for the page)
+        rotateBone(B.neck01, Y, yaw * 0.5); rotateBone(B.head, Y, yaw * 0.5);
+        look((li % 6) * 0.025); }
+      // a hand at each side edge, just outside it: the fingers curl round BEHIND the page and the thumb
+      // wraps over the edge onto the reader's side (palm facing in, the thumb went through the paper)
+      const nrm = new THREE.Vector3(0, 0, 1).applyQuaternion(q), up = new THREE.Vector3(0, 1, 0).applyQuaternion(qx);
       for (const [k, sg] of [['L', 1], ['R', -1]]) {
-        const edge = c.clone().add(new THREE.Vector3(sg * w * 0.47, -0.02 * S, 0).applyQuaternion(qx));
-        hold(k, edge, new THREE.Vector3(0, 1, 0.3).applyQuaternion(qx), new THREE.Vector3(-sg, 0, 0), M.shoulder[k].clone().add(new THREE.Vector3(sg * 0.35, -0.5, -0.2)), { along: 0.6, gap: 0.004 * S });
+        const inward = new THREE.Vector3(-sg, 0, 0).applyQuaternion(qx);
+        const edge = c.clone().add(new THREE.Vector3(sg * w * 0.5, -0.02 * S, 0).applyQuaternion(qx)).addScaledVector(inward, -0.012 * S).addScaledVector(nrm, -0.012 * S);
+        hold(k, edge, up.clone().addScaledVector(inward, 0.35), inward, M.shoulder[k].clone().add(new THREE.Vector3(sg * 0.3, -0.55, -0.25)), { along: 0.55, gap: 0.002 * S });
         curlFingers(B, k, 0.55);
+        // the thumb: forward round the edge onto the printed side, then along it
+        const aims = [nrm.clone().multiplyScalar(0.9).addScaledVector(inward, 0.5).addScaledVector(up, 0.2), inward.clone().addScaledVector(nrm, 0.25).addScaledVector(up, 0.15), inward.clone().addScaledVector(nrm, -0.05).addScaledVector(up, 0.1)];
+        for (let j = 1; j <= 3; j++) {
+          const b = B[`finger1-${j}.` + k], nx = B[`finger1-${j + 1}.` + k];
+          turnTo(b, nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent)), toW(aims[j - 1]));
+        }
       }
     },
     phone(t) {
@@ -397,14 +416,22 @@ export function makeMotion(person) {
         screen.position.z = 0.0047 * S; screen.userData.noInk = true; g.add(body, screen); return g;
       });
       showProp('phone'); breathe(t, 0.7);
-      const c = M.shoulder.R.clone().add(new THREE.Vector3(0.11 * S, -0.2 * S, 0.24 * S));
-      // the screen turned to the face: round, then tipped back
-      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.65).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
-      setProp(phone, c, q);
-      look(0.5 + 0.03 * Math.sin(t * 1.3));
-      // held from below in the right palm, fingers up its far side
-      hold('R', c.clone().add(new THREE.Vector3(0, 0, -0.008 * S).applyQuaternion(q)), new THREE.Vector3(0.15, 1, 0).applyQuaternion(q), new THREE.Vector3(0, 0, 1).applyQuaternion(q), M.shoulder.R.clone().add(new THREE.Vector3(-0.15, -0.5, -0.3)), { along: 0.55 });
-      curlFingers(B, 'R', 0.5);
+      // the palm turned up toward the face at chest height, then the phone laid IN that palm, from the
+      // hand's own bones (aimed separately, the two never agreed and the phone ended up beside the hand)
+      const c = M.shoulder.R.clone().add(new THREE.Vector3(0.12 * S, -0.17 * S, 0.24 * S));
+      const faceN = new THREE.Vector3(0, 0.62, -0.78), upF = new THREE.Vector3(0.12, 0.78, 0.62).normalize();
+      hold('R', c, upF, faceN, M.shoulder.R.clone().add(new THREE.Vector3(-0.12, -0.7, 0.1)), { along: 0.5 });
+      palmTo(B, 'R', toW(faceN));                                           // (the forearm turns palm-up: the wrist alone can't)
+      orientHand(B, 'R', toW(upF), toW(faceN));
+      curlFingers(B, 'R', 0);
+      rig.updateMatrixWorld(true);
+      { const w = wp(B['wrist.R']), kn = wp(B['finger3-1.R']), n = palmNormal(B, 'R'), f = kn.clone().sub(w).normalize();
+        const at = w.clone().lerp(kn, 0.75).addScaledVector(n, M.palmHalf + 0.006 * S).addScaledVector(f, 0.02 * S);
+        const xa = new THREE.Vector3().crossVectors(f, n).normalize(), m4 = new THREE.Matrix4().makeBasis(xa, f, n);
+        const qw = new THREE.Quaternion().setFromRotationMatrix(m4), qr = rig.getWorldQuaternion(new THREE.Quaternion()).invert();
+        setProp(phone, rig.worldToLocal(at), qr.multiply(qw)); }
+      // the fingers lie lightly along its sides
+      for (const f of [2, 3, 4, 5]) { const b = B[`finger${f}-2.R`]; rotateBone(b, hingeOf(B, 'R', palmNormal(B, 'R')), THREE.MathUtils.degToRad(12)); }
     },
   };
 

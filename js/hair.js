@@ -27,7 +27,7 @@ export const HAIRSTYLES = {
   lob:      { label: 'Long bob', th: 0.08, vol: 0.14, fringe: [0.55, 0.15], face: 0.88, curtain: { cut: 1.45, aline: 0.1, bell: 0.08, tuck: 0.03 }, locks: 40, lockW: 1.05, tip: 0.07 },
   ponytail: { label: 'Ponytail', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.55, extra: 'ponytail', taper: true },
   bun:      { label: 'Bun', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.55, extra: 'bun', taper: true },
-  curly:    { label: 'Curls', th: 0.17, vol: 0.18, fringe: [0.5, 0.06], face: 0.98, curtain: { cut: 0.55, aline: 0.1, bell: 0.25, tuck: 0.1 }, curl: 0.02 },
+  curly:    { label: 'Curls', th: 0.2, vol: 0.2, fringe: [0.5, 0.06], face: 0.98, curtain: { cut: 0.55, aline: 0.1, bell: 0.25, tuck: 0.1 }, curl: 0.02 },
 };
 
 const ss = THREE.MathUtils.smoothstep;
@@ -301,21 +301,32 @@ export function makeHair(H, { chin }, styleName, colour) {
   // curls: ringlets, locks that coil round their own path from the crown to the ends. (A
   // cloud of same-size balls, each outlined, read as bubble wrap on a bob.) Coils carry a
   // little further out than the mass, so the silhouette is springy, not a smooth helmet.
-  if (S.curl) for (const layer of [0, 1]) for (let j = 0; j < 21; j++) {
-    const th = -Math.PI + ((j + 0.5 * layer + 0.25 * rnd(j * 7 + layer)) / 21) * Math.PI * 2, col = flow(column(th)), fw = faceW(th);
-    const s0 = col.end * (layer ? 0.35 + 0.15 * rnd(j) : 0.04 + 0.06 * rnd(j + 9)), s1 = col.end * (1.0 + 0.06 * rnd(j * 5 + layer)) + (fw > 0.3 ? 0.04 * R : 0);   // (the front ones over the mass's edge: short of it, a smooth band framed the face)
-    const coil = R * (0.1 + 0.025 * rnd(j * 3 + layer)), pitch = R * (0.3 + 0.07 * rnd(j * 11)),   // (big, loose curls: tight little ones read as rope)
-    phase = rnd(j * 13 + layer) * 6.28;
-    const pts = [], N = 70, b = new THREE.Vector3(), tan = new THREE.Vector3();
-    for (let i = 0; i <= N; i++) {
-      const t = i / N, sAt = s0 + (s1 - s0) * t, c0 = along(col, sAt), o = outOf(c0);
-      tan.copy(along(col, sAt + 0.01 * R)).sub(c0).normalize(); b.crossVectors(tan, o).normalize();
-      const a = phase + (sAt / pitch) * Math.PI * 2, rr = coil * (0.55 + 0.45 * ss(t, 0, 0.25));   // tighter at the root
-      pts.push(c0.addScaledVector(o, R * (0.04 + 0.02 * layer) + rr * (1 + Math.sin(a)) * 0.6).addScaledVector(b, rr * Math.cos(a)));
-    }
-    const thick = R * (0.08 + 0.015 * rnd(j * 17 + layer));
-    lock(pts, (t) => thick * (0.7 + 0.3 * ss(t, 0, 0.1)) * (1 - 0.6 * ss(t, 0.75, 1)), (t) => thick * 0.8 * (1 - 0.6 * ss(t, 0.75, 1)), 0.88 + 0.24 * rnd(j * 19 + layer));
+  // curls as a drawing guide draws them: C-shaped curls, each a chunky spiral of about one and a
+  // quarter turns, in three sizes, laid over the mass in layers so the outline is a cloud of round
+  // curls. (Many tight coils down every column read as rope.)
+  if (S.curl) {
+    const sizes = [{ n: 22, r: 0.36, th: 0.22, u: 0.78 }, { n: 26, r: 0.3, th: 0.19, u: 0.5 }, { n: 22, r: 0.25, th: 0.16, u: 0.22 }];   // (sized to the head: at a fifth of this they were beads)
+    sizes.forEach((Z, layer) => { for (let j = 0; j < Z.n; j++) {
+      const th = -Math.PI + ((j + 0.37 * layer + 0.3 * rnd(j * 7 + layer)) / Z.n) * Math.PI * 2, col = flow(column(th)), fw = faceW(th);
+      // where along the hair this curl sits: the big ones low (the silhouette's bulk), small ones higher up
+      const u = THREE.MathUtils.clamp(Z.u + (rnd(j * 3 + layer * 7) - 0.5) * 0.3, 0.06, 1.0);
+      const sc = col.end * u + (fw > 0.3 ? 0.03 * R : 0), cen = along(col, sc), o = outOf(cen);
+      const tan = along(col, sc + 0.01 * R).sub(cen).normalize(), side = new THREE.Vector3().crossVectors(tan, o).normalize();
+      const rr = R * Z.r * (0.85 + 0.3 * rnd(j * 11 + layer)), turns = 1.25, dir = rnd(j * 17 + layer) > 0.5 ? 1 : -1, a0 = rnd(j * 13 + layer) * 6.28;
+      const pts = [];
+      for (let i = 0; i <= 40; i++) {
+        const t = i / 40, a = a0 + dir * t * turns * Math.PI * 2, r = rr * (1 - 0.35 * t);   // spiralling in a little
+        // the curl's ring stands out from the head (in the plane of the hair's flow and the outward
+        // direction), drifting down the hair as it turns: a C seen from the side, a ring from outside
+        pts.push(cen.clone().addScaledVector(o, R * (0.05 + 0.03 * layer) + r * (0.55 + 0.45 * Math.sin(a))).addScaledVector(tan, r * Math.cos(a) * 0.9 + rr * 0.5 * t).addScaledVector(side, r * 0.35 * Math.sin(a * 0.5)));
+      }
+      const thick = R * Z.th * (0.85 + 0.3 * rnd(j * 19 + layer));
+      // (both ends closed to a point: an open tube end showed the outline inside it, black specks)
+      const close = (t) => ss(t, 0, 0.08) * (1 - 0.96 * ss(t, 0.62, 1));
+      lock(pts, (t) => thick * (0.25 + 0.75 * close(t)), (t) => thick * 0.85 * (0.2 + 0.8 * close(t)), 0.9 + 0.2 * rnd(j * 23 + layer));
+    } });
   }
+
 
 
   // extras: a ponytail or a bun, gathered at the back of the head

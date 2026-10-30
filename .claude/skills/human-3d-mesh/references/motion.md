@@ -116,4 +116,14 @@ and the head looks down at the paper or phone. Lessons:
   from the shoulder). Pointed out to the side, the arms flared.
 - New activity: add a function to `BYSTANDERS` in js/motion.js; the maker's plaza deals
   them to standing citizens at random.
+- **Gripping a sheet** (newspaper): put the hand just OUTSIDE the edge, with the fingers curled
+  behind the page and the thumb aimed round the edge onto the reader's side. With the palm
+  facing in at the edge, the resting thumb went straight through the paper. Reading: the
+  head sweeps along a line, flicks back, and steps down the column.
+- **A sip keeps the elbow down and in front** (pole about (−0.12, −0.55, 0.4) from the
+  shoulder). Pointed out and back, the arm saluted and the hand covered the face.
+- **Lay a small prop IN the posed hand, from the hand's own bones** (wrist, middle knuckle,
+  `palmNormal`), rather than aiming prop and hand separately. They never agreed, and the
+  phone ended up beside the hand. Turning a palm up needs the forearm (`palmTo`), not just
+  the wrist.
 
