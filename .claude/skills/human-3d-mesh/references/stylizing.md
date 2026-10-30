@@ -63,9 +63,13 @@ fade in through the teens; children don't have them.
   Trousers are straight-leg (`legHang` with a gentle taper), and the town head is +8%.
 - **Proportions are enforced** (`BODY_RANGE`, `bodyRatios()` in js/anatomy.js). Front-view
   waist÷hip and shoulder÷hip widths, hip width÷stature and belly depth÷stature must fall in
-  a human range for the person's sex. Out of range, `buildBody` scales back the body-type
-  shaping (×0.8 a step), then moves the build toward average, until the body fits; it costs
-  about 6 ms a person. Children are exempt. Type recipes stacked on a heavy build had
+  a realistic range for the person's sex (a woman's waist ≈ 0.78 of her hip width, hips ≈ 22%
+  of her height; a man's waist ≈ 0.9 of his hips). Out of range, `buildBody` scales the body
+  type back a little and then CORRECTS the girths that are out (wider waist, narrower hips,
+  broader shoulders, less belly) until it fits, about 7 ms a person. The first, looser
+  limits (waist 0.6 of the hips, hips 26% of height) let unrealistic pears through, and
+  MakeHuman's own base woman falls outside the real range, so scaling the type back alone
+  can't fix her. Children are exempt. Type recipes stacked on a heavy build had
   reached hips 50 cm across and waists half the hip width. `enforce: false` turns it off,
   for the lab only.
 - Batches deal body types from a deck (men from the types that occur in men) and spread

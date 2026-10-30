@@ -89,8 +89,8 @@ seated and hung next to the handlebar instead of holding it. Now `hand(k, contac
   little back, the elbow soft and pointing BACK, the forearm carrying the hand slightly
   forward and out, the palm to the thigh, fingers gently curled (0.25). Arms angled out from
   the shoulder bowed the elbows sideways, a gunslinger's stance. To clear wide hips or a
-  skirt, `clearHips()` swings the FOREARM out from the elbow; the upper arm moves only when
-  that isn't enough. Before that, `clearSides()` angles the upper arm by the person's own
+  skirt, `clearHips()` angles the whole arm out from the shoulder, nearly straight (80% at
+  the shoulder, 20% at the elbow). All at the elbow made a V. Before that, `clearSides()` angles the upper arm by the person's own
   width so the elbow hangs just clear of the torso: at a fixed near-vertical angle, every
   wider body's arms pressed into its sides, elbows tucked in, forearms flared out.
 - **Rig checks (from rigging tutorials):** every bend goes through two-bone IK with a pole

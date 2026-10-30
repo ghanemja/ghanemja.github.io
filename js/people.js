@@ -651,11 +651,12 @@ function clearHips(sk, meshes, k) {
         }
       }
       if (need <= 0.002 * k) break;
-      // the forearm swings out from the elbow (the upper arm stays at the side: swung from the
-      // shoulder, the elbow bowed out); only a lot of clearance moves the upper arm too
-      const el = wp(B['lowerarm01.' + key]), a = Math.atan2(need, el.y - w.y) * 1.05;
-      rotateBone(B['lowerarm01.' + key], Z, s * Math.min(a, 0.3));
-      if (a > 0.3) rotateBone(B['upperarm01.' + key], Z, s * Math.atan2(need * 0.5, sh.y - w.y));
+      // the whole arm angles out from the shoulder, nearly straight, as on a person with wide hips,
+      // with only a little from the elbow (all at the elbow made a V; the upper arm can't tuck into
+      // the side any more, clearSides saw to that)
+      const el = wp(B['lowerarm01.' + key]);
+      rotateBone(B['upperarm01.' + key], Z, s * Math.atan2(need * 0.8, sh.y - w.y) * 1.05);
+      rotateBone(B['lowerarm01.' + key], Z, s * Math.atan2(need * 0.2, el.y - w.y) * 1.05);
     }
   }
   sk.root.updateMatrixWorld(true);

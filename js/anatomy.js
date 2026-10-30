@@ -178,10 +178,14 @@ export const DEFAULTS = { sex: 0, age: 25, muscle: 0.5, weight: 0.5, height: 0.5
 // (a pear woman's hips at 50 cm across, waists half the hip width). Children are exempt:
 // they have no waist to speak of. [woman, man]
 export const BODY_RANGE = {
-  whr: [[0.6, 0.86], [0.72, 0.98]],          // waist width ÷ hip width
-  shr: [[0.76, 1.2], [0.92, 1.32]],          // shoulder joints apart ÷ hip width
-  hipW: [[0.16, 0.262], [0.16, 0.25]],       // hip width ÷ stature
-  belly: [[0.09, 0.19], [0.09, 0.19]],       // belly depth ÷ stature
+  // (typical adults: a woman's waist ≈ 0.78 of her hip width, hips ≈ 22% of her height, shoulders
+  // about as wide as her hips; a man's waist ≈ 0.9 of his hips and shoulders clearly wider. The first
+  // limits allowed far past this, and MakeHuman's own base woman falls outside them, so a body can
+  // be corrected, not only have its type scaled back)
+  whr: [[0.7, 0.9], [0.82, 1.0]],            // waist width ÷ hip width
+  shr: [[0.84, 1.15], [0.98, 1.35]],         // shoulder joints apart ÷ hip width
+  hipW: [[0.18, 0.245], [0.17, 0.235]],      // hip width ÷ stature
+  belly: [[0.09, 0.175], [0.09, 0.18]],      // belly depth ÷ stature
 };
 let _torsoIds = null;
 export function bodyRatios(b) {
@@ -197,23 +201,32 @@ export function bodyRatios(b) {
   return { whr: waist / hipW, shr: J['upperarm01.L'].head.distanceTo(J['upperarm01.R'].head) / hipW, hipW: hipW / H, belly: belly / H };
 }
 function outOfRange(r, sex) {
-  let worst = 0;
+  let worst = 0; const off = {};
   for (const [k, [f, m]] of Object.entries(BODY_RANGE)) {
     const lo = f[0] + (m[0] - f[0]) * sex, hi = f[1] + (m[1] - f[1]) * sex;
-    worst = Math.max(worst, (lo - r[k]) / lo, (r[k] - hi) / hi);
+    off[k] = r[k] < lo ? (r[k] - lo) / lo : r[k] > hi ? (r[k] - hi) / hi : 0;     // − below, + above
+    worst = Math.max(worst, Math.abs(off[k]));
   }
-  return worst;                                                // > 0: outside the range by that fraction
+  return { worst, off };
 }
 
 export function buildBody(A, params = {}) {
   let b = buildBodyRaw(A, params);
   if (params.enforce === false || (b.P.age ?? 25) < 15) return b;
-  // scale back the body type and girths, then the build, until the body is a human one
-  for (let it = 0, f = 1, wb = 1; it < 8 && outOfRange(bodyRatios(b), b.P.sex) > 0; it++) {
-    if (f > 0.35) f *= 0.8; else wb *= 0.75;
-    const p2 = { ...params, shapeAmount: (params.shapeAmount ?? 1) * f, weight: 0.5 + ((params.weight ?? 0.5) - 0.5) * wb, muscle: 0.5 + ((params.muscle ?? 0.5) - 0.5) * wb };
-    for (const g of ['bust', 'waist', 'hips', 'shoulders', 'belly', 'seat']) if (params[g]) p2[g] = params[g] * f;
-    b = buildBodyRaw(A, p2); b.P.enforced = { shape: f, build: wb };
+  // scale back the body type a little, then correct the girths that are out (wider waist, narrower
+  // hips, broader shoulders, less belly) until the body is a human one
+  const corr = { waist: 0, hips: 0, shoulders: 0, belly: 0 };
+  for (let it = 0, f = 1; it < 16; it++) {
+    const { worst, off } = outOfRange(bodyRatios(b), b.P.sex);
+    if (worst <= 0.005) break;
+    if (f > 0.6) f *= 0.85;
+    if (off.whr < 0) { corr.waist += 0.12; corr.hips -= 0.06; } else if (off.whr > 0) { corr.waist -= 0.1; }
+    if (off.hipW > 0) corr.hips -= 0.12; else if (off.hipW < 0) corr.hips += 0.1;
+    if (off.shr < 0) { corr.shoulders += 0.12; } else if (off.shr > 0) corr.shoulders -= 0.1;
+    if (off.belly > 0) corr.belly -= 0.12;
+    const p2 = { ...params, shapeAmount: (params.shapeAmount ?? 1) * f };
+    for (const g of ['bust', 'waist', 'hips', 'shoulders', 'belly', 'seat']) p2[g] = (params[g] || 0) * f + (corr[g] || 0);
+    b = buildBodyRaw(A, p2); b.P.enforced = { shape: f, ...corr };
   }
   return b;
 }
