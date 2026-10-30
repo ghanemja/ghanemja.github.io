@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1920" />
+<title>Citizen Maker — hype reel</title>
+<!-- A scripted 1920×1080 reel for the Citizen Maker: the plaza (everyone strolling, sitting, riding) on the
+     left, one featured model at a time on the right cycling through actions, rigging and cartoon styles.
+     It is time-driven (window.__frame(t)) so tools/record-hype.mjs can render it frame by frame. -->
+<style>
+  @font-face { font-family: 'Caveat'; font-weight: 700; src: url(./fonts/caveat-latin-700-normal.woff2) format('woff2'); }
+  @font-face { font-family: 'Patrick Hand'; font-weight: 400; src: url(./fonts/patrick-hand-latin-400-normal.woff2) format('woff2'); }
+  :root { --paper: #f6efdf; --paper2: #efe4cc; --ink: #2a2230; --ink2: #5a4e5e; --accent: #e8604c; --gold: #e4b84f; --mint: #3f8f88; --sketch: 255px 14px 225px 16px / 16px 225px 14px 255px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--paper2); font-family: 'Patrick Hand', cursive; color: var(--ink); }
+  #plaza { position: absolute; left: 0; top: 0; width: 1260px; height: 1080px; }
+  #feat { position: absolute; left: 1260px; top: 0; width: 660px; height: 1080px; background: var(--paper); border-left: 5px solid var(--ink); }
+  canvas { display: block; }
+  #fc { position: absolute; left: 0; top: 140px; width: 660px; height: 610px; border-top: 3px dashed rgba(42,34,48,.35); border-bottom: 3px dashed rgba(42,34,48,.35); }
+  .pill { position: absolute; background: var(--paper); border: 3px solid var(--ink); border-radius: var(--sketch); box-shadow: 4px 5px 0 rgba(42,34,48,.85); }
+  #tag { left: 36px; top: 34px; padding: 10px 26px 12px; background: var(--accent); color: #fff7ea; font-family: 'Caveat'; font-weight: 700; font-size: 54px; line-height: 1; transform: rotate(-2deg); letter-spacing: .5px; }
+  #tag small { display: block; font-family: 'Patrick Hand'; font-size: 22px; letter-spacing: 3px; opacity: .92; margin-bottom: 2px; }
+  #cap { left: 36px; bottom: 34px; padding: 10px 22px; font-size: 30px; transform: rotate(-.6deg); }
+  #cap b { font-family: 'Caveat'; font-size: 40px; color: var(--accent); margin-right: 8px; }
+  #hd { position: absolute; left: 0; top: 0; width: 660px; height: 150px; padding: 26px 34px 0; }
+  #hd .k { font-size: 24px; letter-spacing: 3px; color: var(--ink2); }
+  #hd .n { font-family: 'Caveat'; font-weight: 700; font-size: 74px; line-height: 1; margin-top: 2px; }
+  #hd .n span { color: var(--accent); font-size: 40px; margin-left: 10px; }
+  #chips { position: absolute; left: 30px; top: 772px; width: 600px; display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .chip { min-width: 0; overflow: hidden; display: flex; align-items: center; gap: 16px; padding: 4px 20px; font-size: 30px; border: 3px solid var(--ink); border-radius: var(--sketch); background: #fff9ea; box-shadow: 3px 4px 0 rgba(42,34,48,.85); }
+  .chip i { font-style: normal; font-size: 21px; letter-spacing: 3px; color: var(--ink2); width: 130px; }
+  .chip b { font-family: 'Caveat'; font-size: 42px; line-height: 1.05; white-space: nowrap; }
+  .chip.hot { background: var(--gold); }
+  #dots { position: absolute; left: 0; top: 1050px; width: 660px; display: flex; gap: 12px; justify-content: center; }
+  #dots u { width: 22px; height: 12px; border: 2.5px solid var(--ink); border-radius: 8px; background: transparent; }
+  #dots u.on { background: var(--accent); }
+  #rig { position: absolute; right: 26px; top: 156px; padding: 6px 18px; font-size: 28px; background: var(--mint); color: #fff; border: 3px solid var(--ink); border-radius: var(--sketch); box-shadow: 3px 4px 0 rgba(42,34,48,.85); opacity: 0; }
+  .card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: rgba(243,234,215,.93); opacity: 0; }
+  .card h1 { font-family: 'Caveat'; font-weight: 700; font-size: 150px; line-height: .95; margin: 0; transform: rotate(-2deg); }
+  .card h1 span { color: var(--accent); }
+  .card .day { font-family: 'Caveat'; font-weight: 700; font-size: 220px; line-height: .9; color: var(--accent); text-shadow: 6px 7px 0 var(--ink); transform: rotate(-3deg); }
+  .card p { font-size: 44px; margin: 22px 0 0; color: var(--ink2); }
+  .card .url { margin-top: 26px; font-size: 46px; padding: 8px 30px; background: var(--gold); border: 3px solid var(--ink); border-radius: var(--sketch); box-shadow: 4px 5px 0 rgba(42,34,48,.85); }
+  #loading { position: absolute; inset: 0; background: var(--paper2); display: flex; align-items: center; justify-content: center; font-size: 60px; z-index: 9; }
+</style>
+</head>
+<body>
+<div id="loading">sketching the plaza…</div>
+<div id="plaza"></div>
+<div id="feat">
+  <div id="hd"><div class="k" id="hk">MEET</div><div class="n"><span style="margin:0;font-size:inherit" id="hn"></span><span id="ha"></span></div></div>
+  <div id="fc"></div>
+  <div id="rig">✓ rigged · <span id="bones"></span> bones</div>
+  <div id="chips">
+    <div class="chip" id="cAct"><i>ACTION</i><b></b></div>
+    <div class="chip" id="cRig"><i>RIGGING</i><b></b></div>
+    <div class="chip" id="cStyle"><i>DRAWN AS</i><b></b></div>
+    <div class="chip" id="cBody"><i>PROPORTIONS</i><b></b></div>
+  </div>
+  <div id="dots"></div>
+</div>
+<div class="pill" id="tag"><small>7 DAYS OF VIBES</small>DAY 6</div>
+<div class="pill" id="cap"><b>the plaza</b><span id="capN"></span></div>
+
+<div class="card" id="intro"><div class="day">DAY 6</div><h1>Citizen <span>Maker</span></h1><p>a whole town of rigged, dressed, hand-drawn people</p></div>
+<div class="card" id="outro"><h1>Citizen <span>Maker</span></h1><p>any age · any body · 10 drawing styles · rigged to move</p><div class="url">ghanemja.github.io/citizens.html</div><p style="font-size:34px;margin-top:30px">#7DaysOfVibes · Day 6</p></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { makePerson } from './js/people.js';
+import { makeBike } from './js/motion.js';
+import { paint, ink, styleTick, blobShadow } from './js/style.js';
+import { RENDER_STYLES, applyRenderStyle, applySceneStyle } from './js/render-styles.js';
+import { generateCitizens, toPersonSpec } from './js/citizens.js';
+
+const $ = (s) => document.querySelector(s);
+const TAU = Math.PI * 2, clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), ease = (x) => x * x * (3 - 2 * x);
+
+// ── two stages, each under the town's own light ──
+function stage(el, w, h) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1); renderer.setSize(w, h, false); renderer.domElement.style.cssText = `width:${w}px;height:${h}px`; el.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const sun = new THREE.DirectionalLight(0xfff2d8, 1.6); sun.position.set(14, 22, 10);
+  scene.add(new THREE.HemisphereLight(0xfff6e8, 0xd8c8b0, 1.35), sun);
+  const camera = new THREE.PerspectiveCamera(30, w / h, 0.05, 80);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(1.1, 64).rotateX(-Math.PI / 2), paint(0xe9dcc0, { hatch: 0.4 })); ground.position.y = -0.002;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.06, 1.1, 64).rotateX(-Math.PI / 2), paint(0x2a2230, { hatch: 0 })); ring.position.y = 0.001;
+  scene.add(ground, ring);
+  return { renderer, scene, camera, ground, ring, w, h, render: 'gouache' };
+}
+function setStyle(S, name) {
+  S.render = name; applySceneStyle(S.renderer, S.scene, name, { dpr: 1 });
+  for (const o of [S.ground, S.ring]) applyRenderStyle(o, name);
+  S.renderer.setSize(S.w, S.h, false);
+}
+const P = stage($('#plaza'), 1260, 1080), F = stage($('#fc'), 660, 610);
+P.ground.scale.setScalar(5.6); P.ring.scale.setScalar(5.6);
+F.ground.scale.setScalar(0.9); F.ring.scale.setScalar(0.9);
+setStyle(P, 'gouache'); setStyle(F, 'gouache');
+
+// ── the plaza: a batch of citizens, all ages, out for a stroll (positions are a pure function of time) ──
+const CROWD = 15;
+const crowd = generateCitizens(CROWD, { seed: 'day6', ageMin: 3, ageMax: 82, women: 0.5 });
+const bench = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.44, 0.42), paint(0x8a6a4e)); bench.position.set(0, 0.22, -0.3); ink(bench, 'fine');
+const props = new THREE.Group(); props.add(bench); applyRenderStyle(props, 'gouache'); P.scene.add(props);
+const folk = [];
+for (let i = 0; i < crowd.length; i++) {
+  $('#loading').textContent = `sketching the plaza… ${i + 1} / ${crowd.length}`;
+  const p = await makePerson(toPersonSpec(crowd[i], { render: 'gouache' }));
+  const role = i === 1 ? 'sit' : i % 4 === 3 ? 'bike' : i % 5 === 2 ? 'stand' : 'walk';
+  const ringN = role === 'bike' ? 3 : i % 3, onRing = Math.ceil(crowd.length / 3);
+  const f = { p, role, r: 1.5 + ringN * 0.8, a: (Math.floor(i / 3) / onRing) * TAU + ringN, dir: ringN % 2 ? 1 : -1, t: i * 0.37 };
+  if (role === 'bike') { f.bike = makeBike(p); p.group.add(f.bike.group); applyRenderStyle(f.bike.group, 'gouache'); }
+  if (role === 'sit') p.group.position.set(0.3, 0, -0.25 - p.motion.M.hipMid.z);
+  if (role === 'stand') {
+    const a = (i * 2.399) % TAU, R2 = 4.6;
+    f.act = p.motion.BYSTANDERS[(i * 7) % p.motion.BYSTANDERS.length];
+    p.group.position.set(Math.cos(a) * R2, 0, Math.sin(a) * R2); p.group.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
+  }
+  p.group.add(blobShadow(0.3)); P.scene.add(p.group); folk.push(f);
+}
+$('#capN').textContent = `${CROWD} citizens · every age · strolling, sitting, riding`;
+
+// the skeleton, drawn over the body: a ball at every joint and a stick to its parent (on top of everything)
+const BALL = new THREE.SphereGeometry(1, 10, 8), STICK = new THREE.CylinderGeometry(1, 1, 1, 8, 1).translate(0, 0.5, 0).rotateX(Math.PI / 2);
+function rigOverlay(p) {
+  const bones = []; p.group.traverse(o => { if (o.isBone) bones.push(o); });
+  const mat = (c) => new THREE.MeshBasicMaterial({ color: c, depthTest: false, depthWrite: false, transparent: true });
+  const g = new THREE.Group(), bm = mat(0xfff7ea), sm = mat(0xe8604c), pairs = [];
+  for (const b of bones) {
+    const ball = new THREE.Mesh(BALL, bm), stick = b.parent?.isBone ? new THREE.Mesh(STICK, sm) : null;
+    ball.renderOrder = 100; g.add(ball); if (stick) { stick.renderOrder = 99; g.add(stick); }
+    pairs.push({ b, ball, stick });
+  }
+  const a = new THREE.Vector3(), c = new THREE.Vector3();
+  g.bones = bones; g.sm = sm; g.bm = bm;
+  g.update = (k = 1) => {                                         // k: overall scale of the drawing (the person's pop)
+    for (const { b, ball, stick } of pairs) {
+      b.getWorldPosition(c); ball.position.copy(c);
+      const fine = /thumb|finger|index|middle|ring|pinky|toe|eye|jaw|tongue/i.test(b.name);
+      ball.scale.setScalar((fine ? 0.0075 : 0.017) * k);
+      if (stick) { b.parent.getWorldPosition(a); stick.position.copy(a); stick.lookAt(c); stick.scale.set((fine ? 0.0035 : 0.007) * k, (fine ? 0.0035 : 0.007) * k, Math.max(1e-4, a.distanceTo(c))); }
+    }
+  };
+  g.visible = false; return g;
+}
+
+// ── the featured cast: four people, one per proportion style ──
+const CAST = [
+  { key: 'real', label: 'Natural', note: 'true to life' },
+  { key: 'town', label: 'Town', note: 'a touch bigger' },
+  { key: 'storybook', label: 'Storybook', note: 'big bright eyes' },
+  { key: 'chibi', label: 'Chibi', note: 'head ×2.6' },
+];
+const cast = generateCitizens(4, { seed: 'day6-cast', ageMin: 24, ageMax: 44, women: 0.5 });
+for (let i = 0; i < 4; i++) {
+  $('#loading').textContent = `dressing the cast… ${i + 1} / 4`;
+  const s = toPersonSpec(cast[i], { render: 'gouache' }); s.style = CAST[i].key;
+  const p = await makePerson(s);
+  const helper = rigOverlay(p);
+  Object.assign(CAST[i], { c: cast[i], p, helper, bones: helper.bones.length });
+  p.group.visible = false; p.group.add(blobShadow(0.3)); F.scene.add(p.group, helper);
+}
+
+// ── the beats: who, what they're doing, how they're drawn ──
+const ACTIONS = { idle: 'Stand', walk: 'Walk', run: 'Run', sit: 'Sit', bike: 'Ride a bike', coffee: 'Coffee break', read: 'Read the paper', phone: 'Scroll the phone' };
+const STYLEN = { gouache: 'Gouache', anime: 'Anime', clay: 'Clay', lowpoly: 'Low-poly', sketch: 'Sketch', watercolor: 'Watercolour', comic: 'Comic', flat: 'Flat', pixel: 'Pixel', realistic: 'Realistic' };
+const BEATS = [
+  { who: 0, act: 'walk', render: 'gouache' },
+  { who: 0, act: 'run', render: 'sketch', rig: true },
+  { who: 1, act: 'sit', render: 'anime' },
+  { who: 1, act: 'bike', render: 'clay' },
+  { who: 2, act: 'coffee', render: 'watercolor' },
+  { who: 2, act: 'read', render: 'comic' },
+  { who: 3, act: 'phone', render: 'pixel' },
+  { who: 3, act: 'run', render: 'lowpoly', rig: true },
+];
+const T0 = 3.0, BEAT = 3.0, END = T0 + BEATS.length * BEAT, TOTAL = END + 3.4;
+$('#dots').innerHTML = BEATS.map(() => '<u></u>').join('');
+
+let beatNow = -1, prop = null, shown = null;
+function setBeat(k) {
+  beatNow = k;
+  const b = BEATS[k], C = CAST[b.who];
+  if (shown && shown !== C) { shown.p.group.visible = false; shown.helper.visible = false; }
+  if (prop) { (prop.group ?? prop).parent?.remove(prop.group ?? prop); prop = null; }
+  shown = C; C.p.group.visible = true;
+  setStyle(F, b.render); C.p.setRender(b.render); C.helper.visible = !!b.rig;
+  C.helper.sm.color.set(b.render === 'sketch' ? 0xe8604c : 0x3f8f88);
+  if (b.act === 'bike') { prop = makeBike(C.p); C.p.group.add(prop.group); applyRenderStyle(prop.group, b.render); }
+  if (b.act === 'sit') {
+    const h = C.p.motion.M.knee.L.y * 0.97, m = new THREE.Mesh(new THREE.BoxGeometry(0.5, h, 0.42), paint(0x8a6a4e));
+    m.position.set(0, h / 2, C.p.motion.M.hipMid.z - 0.12); ink(m, 'fine');
+    const g = new THREE.Group(); g.add(m); applyRenderStyle(g, b.render); C.p.group.add(g); prop = g;
+  }
+  $('#hk').textContent = `FEATURED · ${k + 1} OF ${BEATS.length}`;
+  $('#hn').textContent = C.c.name; $('#ha').textContent = `${Math.round(C.c.age)}`;
+  $('#cAct b').textContent = ACTIONS[b.act];
+  $('#cRig b').textContent = `${C.bones} bones · ${b.act === 'bike' ? 'pedals & grips' : b.act === 'sit' ? 'hips & knees' : 'IK limbs'}`;
+  $('#cStyle b').textContent = STYLEN[b.render];
+  $('#cBody b').textContent = `${C.label} — ${C.note}`;
+  $('#bones').textContent = C.bones;
+  [...$('#dots').children].forEach((d, i) => d.classList.toggle('on', i === k));
+}
+
+// ── one frame at time t ──
+function frame(t) {
+  // intro / outro cards
+  $('#intro').style.opacity = String(t < 2.2 ? 1 : 1 - clamp((t - 2.2) / 0.7));
+  $('#outro').style.opacity = String(clamp((t - END) / 0.6));
+  $('#tag').style.transform = `rotate(-2deg) scale(${t < 2.9 ? 0 : 1 + 0.12 * Math.max(0, 1 - (t - 2.9) * 3)})`;
+  $('#feat').style.transform = `translateX(${(1 - ease(clamp((t - 2.4) / 0.8))) * 700}px)`;
+  $('#cap').style.opacity = String(clamp((t - 2.8) / 0.5));
+
+  // the plaza
+  for (const f of folk) {
+    const m = f.p.motion, tt = t + f.t;
+    if (f.role === 'sit') { m.pose('sit', tt, { seatY: 0.44 }); continue; }
+    if (f.role === 'stand') { m.pose(f.act, tt); continue; }
+    const v = f.role === 'bike' ? m.speed('walk') * 2.4 : m.speed('walk');
+    const a = f.a + f.dir * v / f.r * t;
+    f.p.group.position.set(Math.cos(a) * f.r, 0, Math.sin(a) * f.r);
+    f.p.group.rotation.y = Math.atan2(-Math.sin(a) * f.dir, Math.cos(a) * f.dir);
+    m.pose(f.role, tt, f.bike ? { bike: f.bike, speed: v } : {});
+  }
+  const pa = 0.5 + t * 0.075, push = 1 - 0.06 * clamp(t / 6);
+  P.camera.position.set(Math.sin(pa) * 11.2 * push, 4.9 - 0.5 * Math.sin(t * 0.3), Math.cos(pa) * 11.2 * push); P.camera.lookAt(0, 0.8, 0);
+  styleTick(t, P.w, P.h); P.renderer.render(P.scene, P.camera);
+
+  // the featured model
+  const k = clamp(Math.floor((t - T0) / BEAT), 0, BEATS.length - 1);
+  if (k !== beatNow) setBeat(k);
+  const b = BEATS[k], C = CAST[b.who], bt = t - T0 - k * BEAT;
+  const m = C.p.motion;
+  m.pose(b.act, t, prop?.spec ? { bike: prop, speed: m.speed('walk') * 2.2 } : {});
+  const base = { walk: 1.1, run: 1.1, sit: 0.9, bike: 0.7, coffee: 0.45, read: 0.45, phone: 0.45, idle: 0.5 }[b.act];
+  C.p.group.rotation.y = base + (bt / BEAT - 0.5) * 0.7;
+  const pop = 1 + 0.08 * Math.max(0, 1 - bt * 4);                  // a little pop on every cut
+  C.p.group.scale.setScalar(pop);
+  const Hh = C.p.body.P.stature ?? 1.7, wide = b.act === 'bike';
+  const span = Hh * (wide ? 1.45 : 1.12) * (C.key === 'chibi' ? 1.05 : 1), ty = b.act === 'sit' ? Hh * 0.38 : Hh * 0.5;
+  const dist = span / 2 / Math.tan(THREE.MathUtils.degToRad(15)) / Math.min(1, F.camera.aspect * 1.1);
+  F.camera.position.set(0, ty + dist * 0.1, dist); F.camera.lookAt(0, ty, 0);
+  const wob = Math.sin(t * 2.2) * 0.02; C.p.group.rotation.y += wob;
+  C.helper.visible = !!b.rig; if (b.rig) C.helper.update(pop);
+  $('#rig').style.opacity = b.rig ? String(ease(clamp(bt / 0.4)) * (1 - ease(clamp((bt - 2.6) / 0.4)))) : '0';
+  $('#cRig').classList.toggle('hot', !!b.rig); $('#cAct').classList.toggle('hot', !b.rig && bt < 0.0);
+  styleTick(t, F.w, F.h); F.renderer.render(F.scene, F.camera);
+}
+
+window.__hype = { total: TOTAL, frame };
+$('#loading').remove();
+frame(0);
+window.__ready = true;
+</script>
+</body>
+</html>
