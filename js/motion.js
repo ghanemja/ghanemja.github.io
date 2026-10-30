@@ -67,7 +67,9 @@ const hingeOf = (B, k, N) => wp(B['finger3-1.' + k]).sub(wp(B['wrist.' + k])).no
 // grip 0 = a relaxed hand, 1 = a closed grip (round a handlebar)
 export function curlFingers(B, k, grip = 0) {
   const N = palmNormal(B, k), midDir = wp(B['finger3-2.' + k]).sub(wp(B['finger3-1.' + k])).normalize();
-  if (grip === 0) {
+  if (grip < 0.5) {
+    // (any hand short of a full grip: at grip 0.25 or 0.55 this was skipped, and the base mesh's
+    // fingers stayed fanned out wide)
     // close the base mesh's splay: each finger turns (in the palm's plane) most of the way
     // toward the middle finger's line, leaving the small natural fan of a relaxed hand
     for (const [f, keep] of [[2, 0.12], [4, 0.15], [5, 0.25]]) {
@@ -84,7 +86,8 @@ export function curlFingers(B, k, grip = 0) {
   [[2, [14, 26, 14]], [3, [18, 32, 16]], [4, [22, 38, 18]], [5, [28, 44, 20]]].forEach(([f, ang]) => {
     for (let j = 1; j <= 3; j++) {
       const b = B[`finger${f}-${j}.` + k], nx = B[`finger${f}-${j + 1}.` + k];
-      const dir = nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent)), a = THREE.MathUtils.degToRad(grip ? add[j - 1] : ang[j - 1]);
+      // a relaxed hand's cascade, deepening toward a fist as grip rises
+      const dir = nx ? wp(nx).sub(wp(b)) : wp(b).sub(wp(b.parent)), a = THREE.MathUtils.degToRad(grip >= 0.5 ? add[j - 1] : ang[j - 1] + (add[j - 1] / Math.max(grip, 1e-6) - ang[j - 1]) * grip * 0.6);
       turnTo(b, dir, dir.clone().applyAxisAngle(hingeOf(B, k, N), a));
     }
   });
@@ -161,7 +164,7 @@ export function relaxedPose(sk) {
     turnTo(B['upperarm01.' + k], wp(B['lowerarm01.' + k]).sub(wp(B['upperarm01.' + k])), new THREE.Vector3(s * 0.07, -1, -0.05));
     turnTo(B['lowerarm01.' + k], wp(B['wrist.' + k]).sub(wp(B['lowerarm01.' + k])), new THREE.Vector3(s * 0.12, -1, 0.2));
     palmTo(B, k, new THREE.Vector3(-s, 0, 0.2));                  // palm to the thigh
-    curlFingers(B, k, 0.25);
+    curlFingers(B, k, 0.15);
   }
 }
 

@@ -96,4 +96,7 @@ seated and hung next to the handlebar instead of holding it. Now `hand(k, contac
 - **Rig checks (from rigging tutorials):** every bend goes through two-bone IK with a pole
   target, so knees and elbows can't fold backwards; and look at the shoulders and armpits
   side-on in a lit style, where deformation breaks first.
+- **The base mesh's fingers are splayed.** `curlFingers` must close that splay for every hand
+  short of a full grip (`grip < 0.5`), not only at grip 0: a relaxed hand at 0.25 skipped the
+  step, and every citizen's fingers fanned out wide.
 
