@@ -502,7 +502,7 @@ function headMap(body) {
   // character that read as a huge forehead; a fixed elevation per style ignored the face.)
   // Found as the elevation where the scalp at the front reaches that height.
   const [el, er] = eyeCentres(body), browY = (el.y + er.y) / 2 + 0.27 * el.distanceTo(er), { chin } = headHeight(body);
-  const hairY = browY + 0.25 * (browY - chin);
+  const hairY = browY + 0.16 * (browY - chin);   // (a quarter read as a high, receding hairline)
   let lo2 = -0.2, hi2 = 0.999;
   for (let it = 0; it < 30; it++) { const e = (lo2 + hi2) / 2, d = new THREE.Vector3(0, e, Math.sqrt(1 - e * e)); if (C.y + d.y * scalp(d) < hairY) lo2 = e; else hi2 = e; }
   return { C, radius, scalp, reach, R: Rside, hairlineE: (lo2 + hi2) / 2 };

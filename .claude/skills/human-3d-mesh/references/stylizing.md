@@ -277,11 +277,10 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   above its neighbour (at one height they z-fight into noisy stripes), dark at the root
   with a band of shine. The shell beneath, in the locks' shade, keeps coverage and the
   clean hairline. A ponytail or bun has locks pulled back from the hairline to the tie,
-  and its tail is locks twisting round a core. Curls are C-shaped curls (as drawing guides
-  draw them): chunky spirals of about 1¼ turns in three sizes, about a third of the head's
-  radius across, layered over the mass, closed to a point at both ends. Beads (a fifth that
-  size) read as spots on a helmet, tight coils down every column read as rope, and open
-  tube ends showed black specks. Too many locks makes the outline busy: about
+  and its tail is locks twisting round a core. Curly hair is a cloud: rounded curl bumps
+  IN the mass's surface (cell-like, outward only, at two sizes about 3–6 cm), with the crevices
+  between them shaded dark and a big, belled volume. Every tube approach (ringlets, C-curls,
+  balls) looked like a sculpted wig. Too many locks makes the outline busy: about
   32–40 per layer.
 - **A hairline thins to nothing.** Every edge of short hair (except a fringe that hangs over
   the forehead) is a hairline: the shell and the locks ride the same tapered surface
@@ -299,7 +298,8 @@ js/render-styles.js) only changes how it's drawn, and can be swapped at any time
   monotone cubic, so it can't overshoot. The temple is a rounded corner. No strand ripples
   at the crown, where they all meet in a spike.
 - **The hairline is placed from the face, not per style:** `headMap()` gives `hairlineE`,
-  the elevation a quarter of the brow-to-chin height above the brows. Styles that show
+  the elevation 0.16 of the brow-to-chin height above the brows (a quarter read as high and
+  receding). Styles that show
   the forehead start there; a fringe comes down from it, never higher. Real average
   proportions (the face in thirds, the forehead near half the brow-to-chin height) read as
   a huge forehead on a drawn character, and so did fixed per-style elevations.

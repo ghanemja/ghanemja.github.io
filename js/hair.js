@@ -27,7 +27,7 @@ export const HAIRSTYLES = {
   lob:      { label: 'Long bob', th: 0.08, vol: 0.14, fringe: [0.55, 0.15], face: 0.88, curtain: { cut: 1.45, aline: 0.1, bell: 0.08, tuck: 0.03 }, locks: 40, lockW: 1.05, tip: 0.07 },
   ponytail: { label: 'Ponytail', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.55, extra: 'ponytail', taper: true },
   bun:      { label: 'Bun', th: 0.06, vol: 0.06, fringe: [0.6, 0], face: 1.0, side: -0.3, back: -0.55, extra: 'bun', taper: true },
-  curly:    { label: 'Curls', th: 0.2, vol: 0.2, fringe: [0.5, 0.06], face: 0.98, curtain: { cut: 0.55, aline: 0.1, bell: 0.25, tuck: 0.1 }, curl: 0.02 },
+  curly:    { label: 'Curls', th: 0.26, vol: 0.24, cloud: true, fringe: [0.5, 0.06], face: 0.98, curtain: { cut: 0.6, aline: 0.05, bell: 0.35, tuck: 0.18 }, curl: 0.19 },
 };
 
 const ss = THREE.MathUtils.smoothstep;
@@ -55,8 +55,11 @@ export function makeHair(H, { chin }, styleName, colour) {
   // drifting a little as they run down; none at the crown, where they would meet in a star
   const clump = (th, u) => (0.55 * Math.sin(th * 9 + 0.6 * u + 0.8 * Math.sin(th * 4)) + 0.3 * Math.sin(th * 13 + 2.1 - 0.4 * u) + 0.15 * Math.sin(th * 21 + 0.7)) * ss(u, 0.1, 0.35);
   // curls: soft lumps a few centimetres across (again, coarse enough for the grid to carry)
-  const curlN = (p) => S.curl ? S.curl * R * (Math.sin(p.x * 9 / R) * Math.sin(p.y * 8 / R + 1) * Math.sin(p.z * 7.5 / R + 2) * 0.7
-    + 0.3 * Math.sin(p.x * 15 / R + p.z * 13 / R) * Math.sin(p.y * 14 / R)) : 0;
+  // curly hair: a cloud of rounded curls IN the mass's surface: bumps everywhere outward (never pits),
+  // cell-like, at two sizes. (Separate curl tubes looked like a powdered wig made of pasta.)
+  const bump = (p, f, o) => Math.sqrt(Math.abs(Math.sin(p.x * f / R + o) * Math.sin(p.y * f * 0.93 / R + 1.7 * o) * Math.sin(p.z * f * 1.07 / R + 0.6 * o)));
+  const curlF = (p) => 0.55 * bump(p, 10, 0.3) + 0.45 * bump(p.clone().applyAxisAngle(new THREE.Vector3(0.3, 1, 0.2).normalize(), 0.8), 17, 1.1);
+  const curlN = (p) => S.curl ? S.curl * R * curlF(p) : 0;
   // the hair's outer surface over the head at (θ, e): scalp + thickness + crown volume + strand grooves
   const onHead = (th, e) => {
     // (on whichever is higher above the ears, the smoothed scalp or the real head: the smoothed one dipped
@@ -67,7 +70,7 @@ export function makeHair(H, { chin }, styleName, colour) {
   const faceW = (th) => 1 - ss(Math.abs(th), S.face, S.face + 0.32);                   // 1 across the face … 0 behind the temples
   // a style that shows the forehead starts at the person's own hairline (H.hairlineE, the face in
   // thirds); one with a fringe brings it down over the forehead, never up past that line
-  const front = S.fringe[0] >= 0.45 ? (H.hairlineE ?? S.fringe[0]) + (S.hairline ?? 0) : Math.min(S.fringe[0], (H.hairlineE ?? 1) - 0.12);
+  const front = S.fringe[0] >= 0.45 ? (H.hairlineE ?? S.fringe[0]) + (S.hairline ?? 0) : Math.min(S.fringe[0], (H.hairlineE ?? 1) - 0.2);   // (a fringe comes down close to the brows)
   const fringeE = (th) => front + S.fringe[1] * Math.sin(th);                     // a side-swept fringe (a clean line: "choppy" read as messy)
   // where short hair ends, all the way round: across the forehead, a little higher at the
   // temples, straight DOWN in front of the ear as a sideburn, up and over the ear, then down
@@ -145,7 +148,8 @@ export function makeHair(H, { chin }, styleName, colour) {
       if (S.locks && !S.curl) { const d = p.clone().sub(C).normalize(); p.addScaledVector(d, R * 0.045 * clump(th, u) * (1 - ss(u, 0.92, 1))); }
       P.push(p.x, p.y, p.z);
       const e = (p.y - C.y) / R, r = (strand(th) * 0.5 + (S.locks ? clump(th, u) * 0.9 : 0)) * (1 - ss(u, 0, 0.25));   // (no stripes at the top: they met in a star)
-      c.copy(base).lerp(dark, 0.5 * Math.max(0, -r) + 0.25 * (1 - ss(u, 0, 0.12)))     // grooves between clumps, darker at the roots
+      const crev = S.curl ? 0.85 * Math.pow(1 - curlF(p), 1.5) : 0;                                   // (curly: the crevices between curls in shadow)
+      c.copy(base).lerp(dark, 0.5 * Math.max(0, -r) * (S.curl ? 0 : 1) + crev + 0.25 * (1 - ss(u, 0, 0.12)))     // grooves between clumps, darker at the roots
         .lerp(shine, 0.55 * Math.exp(-((e - 0.5) ** 2) / 0.02) * THREE.MathUtils.clamp(0.4 + 0.6 * r, 0, 1));
       Cc.push(c.r, c.g, c.b);
     }
@@ -308,7 +312,7 @@ export function makeHair(H, { chin }, styleName, colour) {
   // curls as a drawing guide draws them: C-shaped curls, each a chunky spiral of about one and a
   // quarter turns, in three sizes, laid over the mass in layers so the outline is a cloud of round
   // curls. (Many tight coils down every column read as rope.)
-  if (S.curl) {
+  if (S.curl && S.curlTubes) {
     const sizes = [{ n: 22, r: 0.36, th: 0.22, u: 0.78 }, { n: 26, r: 0.3, th: 0.19, u: 0.5 }, { n: 22, r: 0.25, th: 0.16, u: 0.22 }];   // (sized to the head: at a fifth of this they were beads)
     sizes.forEach((Z, layer) => { for (let j = 0; j < Z.n; j++) {
       const th = -Math.PI + ((j + 0.37 * layer + 0.3 * rnd(j * 7 + layer)) / Z.n) * Math.PI * 2, col = flow(column(th)), fw = faceW(th);
