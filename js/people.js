@@ -603,6 +603,33 @@ function shoes(body, look, sk) {
   return out;
 }
 
+// the upper arm hangs just clear of the torso, a small gap at the waist: angled by this person's own
+// width (a fixed angle pressed the arms of every wider body into its sides, elbows tucked in)
+function clearSides(sk, body, tops, k) {
+  const B = sk.byName, Z = new THREE.Vector3(0, 0, 1), p = new THREE.Vector3();
+  for (const key of ['L', 'R']) {
+    const s = key === 'L' ? 1 : -1;
+    for (let it = 0; it < 4; it++) {
+      sk.root.updateMatrixWorld(true);
+      const sh = wp(B['upperarm01.' + key]), el = wp(B['lowerarm01.' + key]);
+      let side = 0;                                               // the torso's (shirt's) outer edge at elbow height, this side
+      for (const m of tops) {
+        const P = m.geometry.attributes.position, W = m.geometry.attributes.skinWeight, I = m.geometry.attributes.skinIndex;
+        for (let i = 0; i < P.count; i++) {
+          p.fromBufferAttribute(P, i);
+          if (p.x * s <= 0 || Math.abs(p.y - el.y) > 0.03 * k || Math.abs(p.z - el.z) > 0.07 * k) continue;
+          let arm = 0; for (let c = 0; c < 4; c++) { const n = sk.skeleton.bones[I.getComponent(i, c)].name; if (/arm|wrist|finger|shoulder/.test(n)) arm += W.getComponent(i, c); }
+          if (arm < 0.2) side = Math.max(side, p.x * s);
+        }
+      }
+      const want = side + 0.045 * k + 0.012 * k, have = el.x * s;          // the elbow joint: arm's half-thickness plus a small gap off the side
+      if (!side || have >= want - 0.002 * k) break;
+      rotateBone(B['upperarm01.' + key], Z, s * Math.atan2(want - have, sh.y - el.y));
+    }
+  }
+  sk.root.updateMatrixWorld(true);
+}
+
 // the relaxed arms swing out just far enough that the hands hang clear of what's worn at the
 // hips: on wide hips or a skirt, arms hanging at a fixed angle went straight into the cloth
 function clearHips(sk, meshes, k) {
@@ -755,6 +782,7 @@ export async function makePerson(spec = {}) {
   sk.byName.head.add(atHead);
 
   relaxedPose(sk);
+  clearSides(sk, body, cloth.top, k);
   clearHips(sk, cloth.bottom, k);
   const tag = (g, role) => g.traverse(o => { if (o.isMesh && !o.userData.role) o.userData.role = role; });
   for (const g of shoeGroups) { g.children[0].userData.role = 'shoe'; g.children[1].userData.role = 'sole'; }
