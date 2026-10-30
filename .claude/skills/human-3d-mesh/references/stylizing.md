@@ -221,6 +221,12 @@ realistic light that reads as a painted-on body. The fit goes in three steps:
   vertices (y, z) through it after each stage (fit → drape → hang). The stage that
   changes it is the culprit. Looking at renders alone took several wrong guesses.
 
+- **Don't smooth a woman into a man.** The fit smoothing leaves the front of the chest out
+  (just a small-scale pass rounds the bust into one soft shape, never a point), and the
+  women's waist÷hip WIDTH floor is 0.6, below MakeHuman's measured average woman (0.64). At
+  0.7 the check widened every woman's waist and broadened her shoulders, and with the bust
+  smoothed away the women came out as the men. Always compare a woman and a man side by
+  side, front-on, in clay.
 - **Cloth skims over anatomy, it never shows it.** After draping, the shirt's torso (hip to
   chest) and the bottoms' seat and crotch get their own spatial smoothing, followed by a
   pit-filling pass. The lit styles (clay, realistic) showed the navel and the crotch through

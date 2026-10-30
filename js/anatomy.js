@@ -182,8 +182,11 @@ export const BODY_RANGE = {
   // about as wide as her hips; a man's waist ≈ 0.9 of his hips and shoulders clearly wider. The first
   // limits allowed far past this, and MakeHuman's own base woman falls outside them, so a body can
   // be corrected, not only have its type scaled back)
-  whr: [[0.7, 0.9], [0.82, 1.0]],            // waist width ÷ hip width
-  shr: [[0.84, 1.15], [0.98, 1.35]],         // shoulder joints apart ÷ hip width
+  // (front-view widths, not tape-measure ratios: a woman's waist is ~0.62–0.82 of her hip WIDTH. A
+  // floor at 0.7 sat above MakeHuman's measured average woman, so every woman had her waist widened
+  // and shoulders broadened into a man's box)
+  whr: [[0.6, 0.84], [0.8, 1.0]],            // waist width ÷ hip width
+  shr: [[0.78, 1.1], [0.98, 1.35]],          // shoulder joints apart ÷ hip width
   hipW: [[0.18, 0.245], [0.17, 0.235]],      // hip width ÷ stature
   belly: [[0.09, 0.175], [0.09, 0.18]],      // belly depth ÷ stature
   thigh: [[0.8, 1.0], [0.8, 0.98]],          // width across both upper thighs ÷ hip width (no saddlebags)

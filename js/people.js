@@ -681,7 +681,20 @@ export async function makePerson(spec = {}) {
     const hipY = body.joints['upperleg01.L'].head.y, H0 = body.P.stature;
     const wUp = Float32Array.from(wT, (v, i) => v * THREE.MathUtils.smoothstep(fitPos[i * 3 + 1], hipY - 0.035 * H0, hipY + 0.005 * H0));   // down to just above the crotch
     const kS = H0 / 1.7;                                   // (sizes scale with the person: a child's torso is a third as wide)
-    spatialSmooth(fitPos, A.tris.body, wUp, { sigma: 0.05 * kS }); spatialSmooth(fitPos, A.tris.body, wUp, { sigma: 0.025 * kS, rounds: 6, outOnly: true });   // then fill what's left of any pit (the navel)
+    // …but never the bust: smoothing the chest away gave every woman a man's flat torso. The front of the
+    // chest is left to the light pit-filling pass only (the top still hangs from it)
+    const shY = body.joints['upperarm01.L'].head.y, cz0 = body.joints['spine03'].head.z;
+    const bustW = new Float32Array(wUp.length);
+    for (let i = 0; i < wUp.length; i++) {
+      const y = fitPos[i * 3 + 1], z = fitPos[i * 3 + 2], x = Math.abs(fitPos[i * 3]);
+      const band = THREE.MathUtils.smoothstep(y, shY - 0.17 * H0, shY - 0.13 * H0) * (1 - THREE.MathUtils.smoothstep(y, shY - 0.04 * H0, shY - 0.01 * H0));
+      const front = THREE.MathUtils.smoothstep(z - cz0, 0.0, 0.04 * H0) * (1 - THREE.MathUtils.smoothstep(x, 0.1 * H0, 0.14 * H0));
+      wUp[i] *= 1 - 0.9 * band * front * (1 - body.P.sex * 0.6);
+      bustW[i] = band * front;
+    }
+    spatialSmooth(fitPos, A.tris.body, wUp, { sigma: 0.05 * kS });
+    // small-scale smoothing over the bust: one soft rounded shape, never a nipple's point under the shirt
+    spatialSmooth(fitPos, A.tris.body, bustW, { sigma: 0.022 * kS, rounds: 5 }); spatialSmooth(fitPos, A.tris.body, wUp, { sigma: 0.025 * kS, rounds: 6, outOnly: true });   // then fill what's left of any pit (the navel)
     smoothSurface(fitPos, A.tris.body, 8, { weight: wT }); }
   const fitBody = { ...body, pos: fitPos };
   // the smoothing flattens the navel into a knot of tiny folded triangles whose normals point
