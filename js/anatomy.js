@@ -23,11 +23,40 @@
 // height in scene units; MakeHuman's own units are decimetres.
 import * as THREE from 'three';
 
-const dec = (s, T) => { const b = Uint8Array.from(atob(s), c => c.charCodeAt(0)); return new T(b.buffer); };
+// an array arrives as base64 text (the .json files) or already unpacked (the .pack files)
+const dec = (s, T) => { if (typeof s !== 'string') return s; const b = Uint8Array.from(atob(s), c => c.charCodeAt(0)); return new T(b.buffer); };
+
+// ── the .pack files (tools/human/pack.mjs): the same data as the .json, about half the download ──
+// gzip( u32 header length | header JSON | arrays ), each array in the header as { $: [codec, offset, count] }
+const unplane = (src, off, n, width) => { const out = new Uint8Array(n * width); for (let p = 0; p < width; p++) for (let i = 0; i < n; i++) out[i * width + p] = src[off + p * n + i]; return out; };
+const CODECS = {
+  f32p: (src, off, n) => new Float32Array(unplane(src, off, n, 4).buffer),
+  u8: (src, off, n) => src.slice(off, off + n),
+  u16d: (src, off, n) => { const d = new Uint16Array(unplane(src, off, n, 2).buffer); for (let i = 1; i < n; i++) d[i] = (d[i] + d[i - 1]) & 0xffff; return d; },
+  i16z3: (src, off, n) => {
+    const m = n / 3, out = new Int16Array(n);
+    for (let ax = 0; ax < 3; ax++) { const z = new Uint16Array(unplane(src, off + ax * m * 2, m, 2).buffer); for (let j = 0; j < m; j++) out[j * 3 + ax] = (z[j] >>> 1) ^ -(z[j] & 1); }
+    return out;
+  },
+};
+export async function unpack(bytes) {
+  let u8 = new Uint8Array(bytes);
+  if (u8[0] === 0x1f && u8[1] === 0x8b) u8 = new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  const len = new DataView(u8.buffer, u8.byteOffset).getUint32(0, true);
+  const J = JSON.parse(new TextDecoder().decode(u8.subarray(4, 4 + len))), data = u8.subarray(4 + len);
+  const revive = (o) => { for (const k in o) { const v = o[k]; if (v && typeof v === 'object') { if (Array.isArray(v.$)) o[k] = CODECS[v.$[0]](data, v.$[1], v.$[2]); else revive(v); } } return o; };
+  return revive(J);
+}
+// the .pack where the browser can unzip it (all current ones), the .json otherwise
+const loadData = (name) => {
+  const json = () => fetch(new URL(`../models/human/${name}.json`, import.meta.url)).then(r => r.json());
+  if (typeof DecompressionStream === 'undefined') return json();
+  return fetch(new URL(`../models/human/${name}.pack`, import.meta.url)).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then(unpack).catch(json);
+};
 
 let _anat = null;
-export function loadAnatomy(url = new URL('../models/human/makehuman.json', import.meta.url)) {
-  if (!_anat) _anat = fetch(url).then(r => r.json()).then((J) => {
+export function loadAnatomy(url) {
+  if (!_anat) _anat = (url ? fetch(url).then(r => r.json()) : loadData('makehuman')).then((J) => {
     const A = { n: J.n, base: dec(J.pos, Float32Array), bones: J.bones, joints: J.joints, q: J.q, tris: {}, targets: {} };
     for (const [k, v] of Object.entries(J.tris)) A.tris[k] = dec(v, Uint16Array);
     A.skinI = dec(J.skinI, Uint8Array); A.skinW = dec(J.skinW, Uint8Array);
@@ -42,8 +71,8 @@ export function loadAnatomy(url = new URL('../models/human/makehuman.json', impo
 
 // baby / child / old shapes live in a second file, fetched the first time someone isn't a young adult
 let _ages = null;
-export function loadAges(A, url = new URL('../models/human/ages.json', import.meta.url)) {
-  if (!_ages) _ages = fetch(url).then(r => r.json()).then((J) => {
+export function loadAges(A, url) {
+  if (!_ages) _ages = (url ? fetch(url).then(r => r.json()) : loadData('ages')).then((J) => {
     for (const [k, v] of Object.entries(J.targets)) A.targets[k] = { q: v.q, idx: dec(v.idx, Uint16Array), d: dec(v.d, Int16Array) };
     A.hasAges = true; return A;
   });
