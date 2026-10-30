@@ -125,31 +125,33 @@ function showcase(K, place) {
   pool.renderOrder = 3;
 }
 const SHOW = {
+  behaviors(F, w, h) {                         // a lab monitor with rulers along two edges
+    const ticks = (c, cw, ch) => {
+      c.fillStyle = '#f3ead7'; c.fillRect(0, 0, cw, ch);
+      c.fillStyle = '#2a2230';
+      for (let x = 0; x < cw; x += 8) c.fillRect(x, 0, 2, x % 64 === 0 ? ch * 0.7 : x % 32 === 0 ? ch * 0.5 : ch * 0.3);
+    };
+    frameBars(F, w, h, 0.12, (len, t, hz) => new THREE.Mesh(rb(hz ? len : t, hz ? t : len, 0.08, 0.01),
+      paint(0xffffff, { map: stripeTex(ticks, len, t, hz), hatch: 0.3, unique: true })));
+    // corner brackets, like the frame is bolted to the test rig
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) F.box(0.2, 0.2, 0.04, paint(0x6f7d92), sx * (w / 2 + 0.06), sy * (h / 2 + 0.06), 0.05, 0.02);
+  },
+  qr(F, w, h) {                                // the screen IS a QR code: finder squares in three corners
+    frameBars(F, w, h, 0.08, (len, t, hz) => new THREE.Mesh(rb(hz ? len : t, hz ? t : len, 0.06, 0.01), paint(0x2a2230, { hatch: 0 })));
+    const ink = paint(0x2a2230, { hatch: 0 }), paper = paint(0xf6efdf, { hatch: 0 });
+    for (const [sx, sy] of [[-1, 1], [1, 1], [-1, -1]]) {
+      const x = sx * (w / 2 + 0.04), y = sy * (h / 2 + 0.04);
+      F.box(0.56, 0.56, 0.03, ink, x, y, 0.05, 0.01);
+      F.box(0.4, 0.4, 0.03, paper, x, y, 0.06, 0.008);
+      F.box(0.24, 0.24, 0.03, ink, x, y, 0.07, 0.008);
+    }
+    // the fourth corner gets the small alignment square
+    F.box(0.22, 0.22, 0.03, ink, w / 2 + 0.04, -h / 2 - 0.04, 0.05, 0.01);
+    F.box(0.13, 0.13, 0.03, paper, w / 2 + 0.04, -h / 2 - 0.04, 0.06, 0.008);
+    F.box(0.06, 0.06, 0.03, ink, w / 2 + 0.04, -h / 2 - 0.04, 0.07, 0.006);
+  },
   default(F, w, h) {
     frameBars(F, w, h, 0.1, (len, t, hz) => new THREE.Mesh(rb(hz ? len : t, hz ? t : len, 0.08, 0.02), paint(PAL.gold)));
-  },
-  charterscope(F, w, h) {                       // a navigator's chart in walnut, brass at the corners
-    const wal = paint(0x4a3020), brass = paint(PAL.gold), t = 0.16;
-    frameBars(F, w, h, t, (len, tt, hz) => new THREE.Mesh(rb(hz ? len : tt, hz ? tt : len, 0.1, 0.03), wal));
-    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
-      F.box(0.24, 0.24, 0.03, brass, sx * (w / 2 + t / 2), sy * (h / 2 + t / 2), 0.055, 0.02);
-      F.put(new THREE.SphereGeometry(0.03, 8, 6), brass, sx * (w / 2 + t / 2), sy * (h / 2 + t / 2), 0.08);
-    }
-    F.box(0.9, 0.12, 0.02, brass, 0, -h / 2 - t / 2, 0.06, 0.01);
-  },
-  'inbox-zero'(F, w, h) {                       // an airmail envelope's edge, red and blue stripes all round
-    const t = 0.14;
-    const air = (c, cw, ch) => { c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, cw, ch); for (let x = -ch, k = 0; x < cw + ch; x += 42, k++) { c.fillStyle = k % 2 ? '#c23f36' : '#2f4f9a'; c.beginPath(); c.moveTo(x, ch); c.lineTo(x + 18, ch); c.lineTo(x + 18 + ch, 0); c.lineTo(x + ch, 0); c.fill(); } };
-    frameBars(F, w, h, t, (len, tt, hz) => new THREE.Mesh(rb(hz ? len : tt, hz ? tt : len, 0.06, 0.015), paint(0xffffff, { map: stripeTex(air, len, tt, hz), hatch: 0.3, unique: true })));
-    // a big postmark stamped over the top-right corner
-    const pm = F.flat(0.62, 0.62, texMat(160, 160, (c, cw, ch) => {
-      c.fillStyle = '#fbf6ea'; c.fillRect(14, 14, cw - 28, ch - 28);
-      c.strokeStyle = '#c23f36'; c.lineWidth = 6; c.setLineDash([8, 6]); c.strokeRect(10, 10, cw - 20, ch - 20); c.setLineDash([]);
-      c.fillStyle = '#e8604c'; c.fillRect(30, 30, cw - 60, ch - 60);
-      c.fillStyle = '#fff'; c.font = `700 30px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('zero', cw / 2, ch / 2 + 4);
-      c.font = `400 16px ${HAND}`; c.fillText('first class', cw / 2, ch / 2 + 28);
-    }), w / 2 + 0.02, h / 2 - 0.05, 0.06, [0, 0, -0.12]);
-    pm.renderOrder = 2;
   },
   yarnflow(F, w, h) {                          // a frame wrapped in chunky yarn, pom-poms at the corners
     const cols = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8];
@@ -342,60 +344,6 @@ function counter(K, x, z, accent) {
 
 // ── per-app set dressing ────────────────────────────────────────────────────
 const SETS = {
-  charterscope(K) {
-    // the decision board: the charter pinned in the middle, today's competitor moves
-    // around it, each stamped with its verdict and strung back to the charter
-    K.flat(1.6, 1.03, texMat(512, 330, (c, w, h) => {
-      c.fillStyle = '#caa87c'; c.fillRect(0, 0, w, h);
-      c.strokeStyle = '#8a6448'; c.lineWidth = 10; c.strokeRect(5, 5, w - 10, h - 10);
-      const V = { ADOPT: '#3f8f5a', MONITOR: '#c08a2a', REJECT: '#8a8494', PIVOT: '#7a5bb5' };
-      const cards = [[40, 34, 'ADOPT'], [190, 34, 'MONITOR'], [360, 34, 'ADOPT'], [40, 200, 'REJECT'], [360, 200, 'PIVOT']];
-      const cx = 256, cy = 190;
-      c.strokeStyle = '#e8604c'; c.lineWidth = 3;
-      for (const [x, y] of cards) { c.beginPath(); c.moveTo(x + 55, y + 45); c.lineTo(cx, cy); c.stroke(); }
-      for (const [x, y, v] of cards) {
-        c.fillStyle = '#f6efdf'; c.fillRect(x, y, 110, 90);
-        c.strokeStyle = INKC; c.lineWidth = 2; c.strokeRect(x, y, 110, 90);
-        c.strokeStyle = '#b9b2a4'; for (let l = 0; l < 3; l++) { c.beginPath(); c.moveTo(x + 10, y + 46 + l * 13); c.lineTo(x + 100 - l * 18, y + 46 + l * 13); c.stroke(); }
-        c.fillStyle = V[v]; c.fillRect(x + 8, y + 10, 66, 20);
-        c.font = `700 14px ${HAND}`; c.fillStyle = '#fff'; c.fillText(v, x + 12, y + 25);
-      }
-      c.fillStyle = '#fff8e6'; c.fillRect(cx - 62, cy - 34, 124, 68);
-      c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(cx - 62, cy - 34, 124, 68);
-      c.font = `700 22px ${SCRIPT}`; c.fillStyle = INKC; c.textAlign = 'center';
-      c.fillText('our charter', cx, cy - 6); c.font = `400 14px ${HAND}`; c.fillStyle = '#5a4e5e';
-      c.fillText('goals · anti-goals', cx, cy + 18);
-      c.fillStyle = '#e8604c'; c.beginPath(); c.arc(cx, cy - 34, 6, 0, 7); c.fill();
-    }), -3.05, 1.8, -D + 0.56, [0, 0.0, 0]);
-    // a brass telescope on a tripod, trained on the competition
-    const scope = new THREE.Group(); scope.position.set(3.3, 0, -D + 2.6); scope.rotation.y = -0.7;
-    const Sk = kit(scope), wood = paint(0x6b4a34), brass = paint(PAL.gold);
-    for (let i = 0; i < 3; i++) { const a = i * Math.PI * 2 / 3; Sk.box(0.04, 1.05, 0.04, wood, Math.sin(a) * 0.2, 0.5, Math.cos(a) * 0.2, 0.012, [Math.cos(a) * 0.2, 0, -Math.sin(a) * 0.2]); }
-    Sk.put(new THREE.CylinderGeometry(0.045, 0.07, 0.7, 14), brass, 0, 1.08, 0.05, [1.25, 0, 0]);
-    Sk.put(new THREE.CylinderGeometry(0.08, 0.08, 0.06, 16), brass, 0, 1.19, 0.38, [1.25, 0, 0]);
-    Sk.put(new THREE.SphereGeometry(0.05, 10, 8), wood, 0, 1.02, 0);
-    ink(scope, 'fine');
-    K.g.add(scope);
-    // a stack of yesterday's digests
-    for (let i = 0; i < 7; i++) K.box(0.52, 0.035, 0.38, paint(i % 2 ? 0xf6efdf : 0xefe4cc), -3.1 + i * 0.012, 0.12 + i * 0.037, -D + 1.2, 0.006, [0, (i % 3 - 1) * 0.12, 0]);
-  },
-  'inbox-zero'(K) {
-    // the pigeonholes, some stuffed with letters
-    const ph = kit(new THREE.Group()); ph.g.position.set(-2.9, 0, -D + 0.75);
-    const wood = paint(0x8a6448);
-    for (let r = 0; r < 4; r++) ph.box(1.7, 0.05, 0.42, wood, 0, 0.55 + r * 0.38, 0);
-    for (let cI = 0; cI < 5; cI++) ph.box(0.05, 1.2, 0.42, wood, -0.85 + cI * 0.425, 1.12, 0);
-    for (let i = 0; i < 8; i++) {
-      const cI = i % 4, r = (i * 7) % 3;
-      ph.box(0.26, 0.2, 0.03, paint(0xf6eedb), -0.64 + cI * 0.425, 0.72 + r * 0.38, 0.19, 0.008, [0, 0, (i % 3 - 1) * 0.15]);
-    }
-    ph.box(1.8, 0.1, 0.5, wood, 0, 0.45, 0);
-    ph.box(1.8, 0.4, 0.44, paint(0xc23f36), 0, 0.22, 0);
-    K.g.add(ph.g); ink(ph.g, 'fine');
-    // parcels waiting to go out
-    for (const [x, y, z, s] of [[0.4, 0.19, -D + 1.0, 0.38], [0.75, 0.16, -D + 1.15, 0.32], [0.55, 0.5, -D + 1.05, 0.3]])
-      K.box(s, s * 0.8, s, paint(0xc8a47c), x, y, z, 0.02, [0, x * 2, 0]);
-  },
   yarnflow(K) {
     // cubbies of yarn, every colour in the palette
     const sh = kit(new THREE.Group()); sh.g.position.set(-2.8, 0, -D + 0.75);
@@ -808,91 +756,7 @@ const EXTRA = {
     });
   },
 
-  charterscope(K) {
-    // the radar on its console: a sweep goes round and competitor blips light up as it passes
-    const con = kit(new THREE.Group()); con.g.position.set(1.9, 0, -1.7);
-    con.box(1.0, 0.6, 0.7, paint(0x5a6a7a), 0, 0.3, 0, 0.04);
-    con.put(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 32), paint(0x2a2230, { hatch: 0 }), 0, 0.62, 0);
-    ink(con.g, 'fine');
-    K.g.add(con.g);
-    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.36, 40), new THREE.MeshBasicMaterial({ color: 0x1f4a3a }));
-    glass.rotation.x = -Math.PI / 2; glass.position.set(1.9, 0.652, -1.7); K.g.add(glass);
-    const rings = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.18, 40), new THREE.MeshBasicMaterial({ color: 0x5fd39a }));
-    rings.rotation.x = -Math.PI / 2; rings.position.set(1.9, 0.654, -1.7); K.g.add(rings);
-    const sweep = new THREE.Mesh(new THREE.CircleGeometry(0.35, 24, 0, 0.6), new THREE.MeshBasicMaterial({ color: 0x5fd39a, transparent: true, opacity: 0.55 }));
-    sweep.rotation.x = -Math.PI / 2; sweep.position.set(1.9, 0.656, -1.7); K.g.add(sweep);
-    const blips = [[0.22, 0.6], [0.12, 2.1], [0.28, 3.4], [0.18, 4.6], [0.3, 5.5]].map(([r, a]) => {
-      const m = new THREE.Mesh(new THREE.CircleGeometry(0.022, 12), new THREE.MeshBasicMaterial({ color: 0xc8ffd8, transparent: true }));
-      m.rotation.x = -Math.PI / 2; m.position.set(1.9 + Math.cos(a) * r, 0.658, -1.7 - Math.sin(a) * r); K.g.add(m);
-      return { m, a };
-    });
-    LIVE.push((t) => {
-      const ang = (t * 1.6) % (Math.PI * 2);
-      sweep.rotation.z = ang;
-      for (const b of blips) {
-        const since = ((ang - b.a) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-        b.m.material.opacity = Math.max(0.08, 1 - since / 2.5);
-      }
-    });
-    // verdict notes taped to the side walls
-    for (const [x, y, z, ry, tilt, v, col] of [[-W / 2 + 0.06, 1.7, -2.2, Math.PI / 2, 0.08, 'ADOPT', '#3f8f5a'], [-W / 2 + 0.06, 1.3, -1.5, Math.PI / 2, -0.06, 'MONITOR', '#c08a2a'], [W / 2 - 0.06, 1.8, -3.4, -Math.PI / 2, 0.1, 'REJECT', '#8a8494']]) {
-      const memo = K.flat(0.5, 0.62, texMat(128, 160, (c, w, h) => {
-        c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h);
-        c.strokeStyle = '#b9b2a4'; c.lineWidth = 2;
-        for (let l = 0; l < 5; l++) { c.beginPath(); c.moveTo(12, 64 + l * 16); c.lineTo(w - 12, 64 + l * 16); c.stroke(); }
-        c.fillStyle = col; c.fillRect(10, 14, w - 20, 34);
-        c.fillStyle = '#fff'; c.font = `700 20px ${HAND}`; c.textAlign = 'center';
-        c.fillText(v, w / 2, 39);
-      }), x, y, z, [0, ry, tilt]);
-      memo.renderOrder = 1;
-    }
-  },
 
-  'inbox-zero'(K) {
-    // letters on the wing: a relay of envelopes flying chute → out-basket
-    const basket = kit(new THREE.Group()); basket.g.position.set(-0.6, 0, -4.4);
-    basket.put(new THREE.CylinderGeometry(0.3, 0.24, 0.3, 12, 1, true), paint(0xc8a47c, { side: THREE.DoubleSide }), 0, 0.16, 0);
-    for (let i = 0; i < 4; i++) basket.box(0.26, 0.02, 0.18, paint(0xf6eedb), (i % 2) * 0.06 - 0.03, 0.3 + i * 0.022, 0, 0.006, [0, i * 0.8, 0.06]);
-    K.g.add(basket.g); ink(basket.g, 'fine');
-    const from = new THREE.Vector3(3.4, 2.1, -4.9), to = new THREE.Vector3(-0.6, 0.45, -4.4);
-    const env = () => {
-      const g = new THREE.Group(), E = kit(g);
-      E.box(0.3, 0.2, 0.02, paint(0xf6eedb), 0, 0, 0, 0.006);
-      const fl = new THREE.Shape([[-0.14, 0.09], [0.14, 0.09], [0, -0.02]].map(([a, b2]) => new THREE.Vector2(a, b2)));
-      E.put(new THREE.ExtrudeGeometry(fl, { depth: 0.004, bevelEnabled: false }), paint(0xe6d9bc), 0, 0, 0.012);
-      E.put(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 10), paint(PAL.accent), 0, 0, 0.02, [Math.PI / 2, 0, 0]);
-      ink(g, 'fine');
-      K.g.add(g);
-      return g;
-    };
-    const flyers = [env(), env(), env()];
-    LIVE.push((t) => {
-      flyers.forEach((g, i) => {
-        const s = ((t * 0.3 + i / 3) % 1);
-        g.position.lerpVectors(from, to, s);
-        g.position.y += Math.sin(s * Math.PI) * 1.1;        // a nice lob
-        g.rotation.set(s * 7 + i, i * 2.1, Math.sin(t * 3 + i) * 0.4);
-        g.visible = s > 0.02 && s < 0.97;
-      });
-    });
-    // a drift of unsorted post on the floor
-    for (let i = 0; i < 9; i++) {
-      const x = -3.3 + (i * 0.73) % 2.2, z = -4.9 + (i * 1.17) % 1.3;
-      K.box(0.28, 0.015, 0.19, paint(i % 3 ? 0xf6eedb : 0xefe4cc), x, 0.012 + (i % 3) * 0.013, z, 0.005, [0, i * 1.3, 0]);
-    }
-    // the mailroom clock, running fast (deadline energy)
-    const clockG = new THREE.Group(); clockG.position.set(W / 2 - 0.06, 2.1, -3.2); clockG.rotation.y = -Math.PI / 2;
-    const CK = kit(clockG);
-    CK.put(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 20), paint(0xf6eedb), 0, 0, 0, [Math.PI / 2, 0, 0]);
-    CK.put(new THREE.TorusGeometry(0.3, 0.028, 8, 24), paint(0xc23f36), 0, 0, 0);
-    const hourH = CK.box(0.035, 0.15, 0.015, paint(0x2a2230, { hatch: 0 }), 0, 0.06, 0.028, 0.005);
-    const minH = CK.box(0.025, 0.24, 0.015, paint(0x2a2230, { hatch: 0 }), 0, 0.1, 0.032, 0.005);
-    hourH.geometry = hourH.geometry.clone(); hourH.geometry.translate(0, -0.06, 0); hourH.position.y = 0;
-    minH.geometry = minH.geometry.clone(); minH.geometry.translate(0, -0.1, 0); minH.position.y = 0;
-    ink(clockG, 'fine');
-    K.g.add(clockG);
-    LIVE.push((t) => { minH.rotation.z = -t * 0.9; hourH.rotation.z = -t * 0.075; });
-  },
 
   deckgpt(K) {
     // the projector beam, flickering like real celluloid
@@ -1105,7 +969,7 @@ const EXTRA = {
 
 // ─── FURNISHING: every room reads as a lived-in shop, not a bare box ────────
 const ACCENT = {
-  charterscope: 0x3f5872, 'inbox-zero': 0xc23f36, yarnflow: 0x8f7ae8, deckgpt: 0xb03a30,
+  behaviors: 0x3f5872, qr: 0x2a2230, yarnflow: 0x8f7ae8, deckgpt: 0xb03a30,
   splatform: 0xe8604c, 'borrowed-eyes': 0x2f5a52, gallery: 0x6a4a8a, library: 0x8e2f3a,
 };
 function furnish(K, id, wallHex, theme) {
@@ -1123,33 +987,148 @@ function furnish(K, id, wallHex, theme) {
 
 // one centrepiece per room in the open floor, tied to what the app does
 const CENTER = {
-  charterscope(K) {     // a globe on a reading table: the competition, worldwide
-    const x = -2.0, z = -1.7, wood = paint(0x6b4a34);
-    K.put(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 24), wood, x, 0.72, z);
-    K.put(new THREE.CylinderGeometry(0.05, 0.08, 0.7, 10), wood, x, 0.36, z);
-    K.put(new THREE.CylinderGeometry(0.22, 0.26, 0.04, 16), wood, x, 0.02, z);
-    const globe = new THREE.Group(); globe.position.set(x, 1.05, z); globe.rotation.z = 0.4; K.g.add(globe);
-    const sea = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 18), paint(0xffffff, { map: canvasTex(128, 64, (c, w, h) => {
-      c.fillStyle = '#8fc3c9'; c.fillRect(0, 0, w, h); c.fillStyle = '#a8b994';
-      for (const [px, py, r] of [[20, 22, 12], [40, 40, 9], [70, 18, 14], [95, 34, 11], [110, 50, 6], [60, 50, 7]]) { c.beginPath(); c.ellipse(px, py, r, r * 0.7, 0.3, 0, 7); c.fill(); }
-    }), hatch: 0 }));
-    globe.add(sea);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.012, 6, 32, Math.PI * 1.4), paint(PAL.gold)); ring.rotation.z = -0.9; globe.add(ring);
-    K.put(new THREE.CylinderGeometry(0.03, 0.06, 0.12, 10), paint(PAL.gold), x, 0.8, z);
-    LIVE.push((t) => { sea.rotation.y = t * 0.4; });
-    K.cols.push({ x0: x - 0.45, x1: x + 0.45, z0: z - 0.45, z1: z + 0.45 });
+  behaviors(K) {
+    // ── every object gets the same pokes: pushed, tilted, dropped ──
+    const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const steel = paint(0x6f7d92), dark = paint(0x2a2230, { hatch: 0 });
+    // the push bench: a bar sweeps across; the can slides, the bottle tips
+    {
+      const x = -2.4, z = -2.0;
+      K.box(1.5, 0.1, 1.1, paint(0xe6edf0), x, 0.05, z, 0.02);
+      for (const dz of [-0.48, 0.48]) K.box(1.5, 0.05, 0.05, steel, x, 0.14, z + dz, 0.01);
+      const bar = K.box(0.07, 0.07, 0.9, paint(0xe8604c), x - 0.62, 0.32, z, 0.015);
+      const can = K.put(new THREE.CylinderGeometry(0.08, 0.08, 0.2, 18), paint(0xe4b84f), x - 0.2, 0.2, z - 0.22);
+      const tip = new THREE.Group(); tip.position.set(x - 0.15, 0.1, z + 0.22); K.g.add(tip);
+      tip.add(new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.3, 4, 12).translate(-0.05, 0.2, 0), paint(0x7fb3a8)));
+      K.flat(0.62, 0.16, texMat(256, 64, (c, w, h) => {
+        c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h); c.font = `700 30px ${HAND}`; c.fillStyle = '#f2d27a'; c.textAlign = 'center'; c.fillText('PUSH  ·  85% height', w / 2, 42);
+      }), x, 0.11, z + 0.56, [-Math.PI / 2 + 0.6, 0, 0]);
+      LIVE.push((t) => {
+        const s = (t * 0.22) % 1, reset = s > 0.86 || s < 0.05;
+        const bx = -0.62 + (smooth(0.05, 0.45, s) - smooth(0.62, 0.85, s)) * 0.95;
+        bar.position.x = x + bx;
+        // the can slides ahead of the bar's face and stays where it was left
+        can.position.x = x + (reset ? -0.2 : Math.max(-0.2, (s < 0.5 ? bx : 0.33) + 0.115));
+        // the bottle tips about its far edge once the bar meets it, and stays down
+        const meet = bx + 0.035 + 0.25;
+        tip.rotation.z = reset ? 0 : -(s < 0.5 ? Math.min(Math.PI / 2, Math.max(0, meet * 4)) : Math.PI / 2);
+      });
+      K.cols.push({ x0: x - 0.8, x1: x + 0.8, z0: z - 0.6, z1: z + 0.6 });
+    }
+    // the ramp: a plank tilts up; the crate holds, then lets go and slides off
+    {
+      const x = 2.4, z = -1.8;
+      K.box(0.12, 0.3, 0.9, steel, x + 0.75, 0.15, z, 0.02);
+      const hinge = new THREE.Group(); hinge.position.set(x + 0.75, 0.3, z); K.g.add(hinge);
+      const plank = new THREE.Mesh(rb(1.5, 0.05, 0.8, 0.015), paint(0xc8a47c)); plank.position.set(-0.75, 0, 0); hinge.add(plank);
+      const crate = new THREE.Mesh(rb(0.22, 0.22, 0.22, 0.02), paint(0xe8604c)); hinge.add(crate);
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.08, 14, 10), paint(0x8f7ae8)); hinge.add(ball);
+      // a protractor on its stand reads the angle
+      const prot = K.put(new THREE.CircleGeometry(0.3, 24, 0, Math.PI), paint(0xf6efdf, { side: THREE.DoubleSide }), x + 0.9, 0.32, z + 0.46);
+      prot.userData.noInk = true;
+      const needle = K.box(0.28, 0.015, 0.01, dark, x + 0.9, 0.32, z + 0.47, 0.004);
+      needle.geometry.translate(-0.14, 0, 0);
+      LIVE.push((t) => {
+        const s = (t * 0.18) % 1;
+        const a = 0.6 * smooth(0.0, 0.55, s) * (1 - smooth(0.8, 0.95, s));
+        hinge.rotation.z = -a;
+        needle.rotation.z = a;
+        // the crate sticks until ~19°, then slides down the plank (local −x)
+        const slip = Math.max(0, s - 0.3) * 4.5, u = -0.35 - slip * slip;
+        crate.position.set(Math.max(-1.6, u), 0.135, -0.18);
+        crate.visible = u > -1.5 && s < 0.8;
+        // the ball rolls from the start
+        const v = -0.45 - Math.pow(Math.max(0, s - 0.08) * 3, 2);
+        ball.position.set(Math.max(-1.6, v), 0.105, 0.2); ball.rotation.z = -v * 6;
+        ball.visible = v > -1.5 && s < 0.8;
+      });
+      K.cols.push({ x0: x - 0.9, x1: x + 1.0, z0: z - 0.55, z1: z + 0.55 });
+    }
+    // the drop rig: a gantry lets a box fall onto the target, and it bounces
+    {
+      const x = -3.1, z = -4.3;
+      for (const dx of [-0.6, 0.6]) K.box(0.07, 2.1, 0.07, steel, x + dx, 1.05, z, 0.015);
+      K.box(1.3, 0.07, 0.07, steel, x, 2.1, z, 0.015);
+      K.box(0.16, 0.12, 0.16, dark, x, 2.0, z, 0.02);
+      const box = K.box(0.24, 0.24, 0.24, paint(0x7fb3a8), x, 1.8, z, 0.03);
+      LIVE.push((t) => {
+        const s = (t * 0.3) % 1, T = s * 3.2;          // seconds into the drop
+        let y, rot = 0;
+        if (T < 0.55) y = 1.8 - 0.5 * 9.8 * T * T * 1.0;
+        else { const k = T - 0.55, e = 0.45; let tt = k, amp = 0.45, per = 0.6; y = 0; while (tt > per && per > 0.05) { tt -= per; amp *= e; per *= Math.sqrt(e); } y = amp * 4 * (tt / per) * (1 - tt / per); rot = Math.min(0.6, k * 0.8); }
+        box.position.y = Math.max(0.12, y + 0.12); box.rotation.z = rot; box.rotation.x = rot * 0.5;
+      });
+      K.cols.push({ x0: x - 0.7, x1: x + 0.7, z0: z - 0.4, z1: z + 0.4 });
+    }
   },
-  'inbox-zero'(K) {     // the sorting table: todo / waiting / done trays, letters in each
-    const x = 2.3, z = -1.55, wood = paint(0x8a6448);
-    K.box(1.5, 0.06, 0.7, wood, x, 0.75, z, 0.02);
-    for (const [dx, dz] of [[-0.68, -0.3], [0.68, -0.3], [-0.68, 0.3], [0.68, 0.3]]) K.box(0.06, 0.74, 0.06, wood, x + dx, 0.37, z + dz, 0.015);
-    [['todo', 0xe8604c, 4], ['waiting', 0xe4b84f, 2], ['done', 0x7fb3a8, 5]].forEach(([label, col, n], i) => {
-      const tx = x - 0.48 + i * 0.48;
-      K.box(0.4, 0.06, 0.5, paint(col), tx, 0.81, z, 0.01);
-      for (let k = 0; k < n; k++) K.box(0.3, 0.012, 0.2, paint(0xf6eedb), tx, 0.85 + k * 0.014, z + 0.04, 0.003, [0, (k % 3 - 1) * 0.12, 0]);
-      K.flat(0.36, 0.09, texMat(128, 32, (c, w, h) => { c.fillStyle = '#' + new THREE.Color(col).getHexString(); c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.font = `700 22px ${HAND}`; c.textAlign = 'center'; c.fillText(label, w / 2, 24); }), tx, 0.8, z + 0.256);
-    });
-    K.cols.push({ x0: x - 0.8, x1: x + 0.8, z0: z - 0.4, z1: z + 0.4 });
+  qr(K) {
+    // ── the map table: seven regions, each one waking up in turn ──
+    {
+      const x = -2.3, z = -1.9, wood = paint(0x6b4a34);
+      K.box(1.5, 0.06, 1.0, wood, x, 0.72, z, 0.02);
+      for (const [dx, dz] of [[-0.68, -0.43], [0.68, -0.43], [-0.68, 0.43], [0.68, 0.43]]) K.box(0.06, 0.7, 0.06, wood, x + dx, 0.35, z + dz, 0.015);
+      K.box(1.36, 0.04, 0.86, paint(0x8fc3c9), x, 0.77, z, 0.01);
+      const regs = [[-0.48, -0.2, 0.34, 0.36, 0xa8b994], [-0.48, 0.18, 0.34, 0.3, 0xe1b95c], [-0.12, -0.15, 0.36, 0.44, 0xdc9e9a], [-0.12, 0.22, 0.36, 0.26, 0xd58b63], [0.24, -0.12, 0.34, 0.5, 0xe8d77a], [0.24, 0.25, 0.34, 0.22, 0xe8a0a0], [0.5, -0.08, 0.16, 0.4, 0xb7a3c6]];
+      const tiles = regs.map(([dx, dz, rw, rd, col], i) => {
+        const g = new THREE.Group(); g.position.set(x + dx, 0.8, z + dz); K.g.add(g);
+        g.add(new THREE.Mesh(rb(rw - 0.02, 0.05, rd - 0.02, 0.01), paint(col)));
+        const pin = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.08, 8).rotateX(Math.PI), paint(0xe8604c)); pin.position.y = 0.09; g.add(pin);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), paint(0xe8604c)); head.position.y = 0.14; g.add(head);
+        return { g, pin, head };
+      });
+      LIVE.push((t) => {
+        const on = Math.floor(t * 0.8) % tiles.length;
+        tiles.forEach((tl, i) => {
+          const k = i === on ? Math.sin((t * 0.8 % 1) * Math.PI) : 0;
+          tl.g.position.y = 0.8 + k * 0.05;
+          tl.pin.position.y = 0.09 + k * 0.12; tl.head.position.y = 0.14 + k * 0.12;
+        });
+      });
+      K.cols.push({ x0: x - 0.8, x1: x + 0.8, z0: z - 0.55, z1: z + 0.55 });
+    }
+    // ── the sculpture: a little company model breaks into pixels that land on its QR code ──
+    {
+      const x = 2.3, z = -2.0;
+      K.put(new THREE.CylinderGeometry(0.32, 0.38, 0.75, 20), paint(0xf6efdf), x, 0.375, z);
+      K.put(new THREE.CylinderGeometry(0.36, 0.36, 0.04, 20), paint(0x2a2230, { hatch: 0 }), x, 0.77, z);
+      const n = 9, cell = 0.07, R = rng(8);
+      // the model: a little shop with a roof and a door, as voxels
+      const model = [];
+      for (let yy = 0; yy < 4; yy++) for (let xx = 0; xx < 4; xx++) for (let zz = 0; zz < 3; zz++) {
+        if (yy < 3 && (xx === 0 || xx === 3 || zz === 0 || zz === 2)) model.push([xx - 1.5, yy, zz - 1, yy === 0 && xx === 1 && zz === 2 ? 0x2a2230 : 0xe8604c]);
+        else if (yy === 3 && zz === 1) model.push([xx - 1.5, yy, zz - 1, 0xe4b84f]);
+      }
+      // the code: a 9×9 with finder corners
+      const code = [];
+      const fd = (i, j) => (i === 0 || i === 2 || j === 0 || j === 2) || (i === 1 && j === 1);
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        let on;
+        if (i < 3 && j < 3) on = fd(i, j); else if (i > n - 4 && j < 3) on = fd(i - (n - 3), j); else if (i < 3 && j > n - 4) on = fd(i, j - (n - 3));
+        else on = R() < 0.5;
+        if (on) code.push([i - (n - 1) / 2, (n - 1) - j]);
+      }
+      const N = Math.max(model.length, code.length);
+      const px = [];
+      for (let k = 0; k < N; k++) {
+        const m = new THREE.Mesh(rb(cell * 0.92, cell * 0.92, cell * 0.92, 0.008), paint(0xffffff, { unique: true }));
+        m.userData.noInk = true; K.g.add(m);
+        const a = model[k % model.length], b = code[k % code.length];
+        px.push({ m, a: new THREE.Vector3(x + a[0] * cell, 0.82 + a[1] * cell, z + a[2] * cell), ca: new THREE.Color(a[3]),
+          b: new THREE.Vector3(x + b[0] * cell, 0.82 + b[1] * cell, z + 0.1), d: R() * 0.25 });
+      }
+      const ink = new THREE.Color(0x2a2230), P = new THREE.Vector3();
+      LIVE.push((t) => {
+        const s = (t * 0.12) % 1;
+        px.forEach((p) => {
+          const f = Math.min(1, Math.max(0, (s - 0.2 - p.d) / 0.18)) - Math.min(1, Math.max(0, (s - 0.7 - p.d) / 0.18));
+          const e = f * f * (3 - 2 * f);
+          P.lerpVectors(p.a, p.b, e); P.y += Math.sin(e * Math.PI) * 0.25;
+          p.m.position.copy(P); p.m.rotation.set(e * 3, e * 2, 0);
+          p.m.material.color.copy(p.ca).lerp(ink, e);
+        });
+      });
+      K.cols.push({ x0: x - 0.45, x1: x + 0.45, z0: z - 0.45, z1: z + 0.45 });
+    }
   },
   deckgpt(K) {          // a popcorn cart by the door
     const x = -2.9, z = -1.3;
@@ -1371,87 +1350,94 @@ function grannySquare(c, x0, y0, s, cols) {
 }
 
 const THEMES = {
-  'borrowed-eyes': { mural: forestMural, floor: forestFloor, bare: true, rug: false },
-  charterscope: {
-    wash: [0.4, '#efe4c8'],
-    tile: [512, 2.0, (c, w, h) => {             // an old sea chart
-      c.fillStyle = '#eadcb4'; c.fillRect(0, 0, w, h);
-      const R = rng(3);
-      for (let i = 0; i < 300; i++) { c.fillStyle = `rgba(150,120,70,${R() * 0.08})`; c.beginPath(); c.arc(R() * w, R() * h, 4 + R() * 20, 0, 7); c.fill(); }
-      c.strokeStyle = 'rgba(80,110,140,0.25)'; c.lineWidth = 1;
+  behaviors: {
+    wash: [0.15, '#e6edf0'],
+    tile: [256, 1.0, (c, w, h) => {             // engineering graph paper
+      c.fillStyle = '#e6edf0'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(70,110,150,0.16)'; c.lineWidth = 1;
+      for (let i = 0; i <= w; i += 16) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i, h); c.stroke(); c.beginPath(); c.moveTo(0, i); c.lineTo(w, i); c.stroke(); }
+      c.strokeStyle = 'rgba(70,110,150,0.4)'; c.lineWidth = 2;
       for (let i = 0; i <= w; i += 64) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i, h); c.stroke(); c.beginPath(); c.moveTo(0, i); c.lineTo(w, i); c.stroke(); }
-      // coastlines
-      c.fillStyle = '#d6c595'; c.strokeStyle = 'rgba(90,70,50,0.7)'; c.lineWidth = 2;
-      for (const [cx, cy, r] of [[90, 380, 70], [400, 120, 55], [330, 430, 35]]) {
-        c.beginPath();
-        for (let a = 0; a <= 6.3; a += 0.3) { const rr = r * (0.7 + R() * 0.5); a === 0 ? c.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr) : c.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
-        c.closePath(); c.fill(); c.stroke();
-      }
-      // rhumb lines and a compass rose
-      const ox = 230, oy = 260;
-      c.strokeStyle = 'rgba(160,60,50,0.25)';
-      for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + Math.cos(a) * 400, oy + Math.sin(a) * 400); c.stroke(); }
-      for (let k = 0; k < 8; k++) {
-        const a = k * Math.PI / 4, l = k % 2 ? 26 : 50;
-        c.fillStyle = k % 2 ? '#4a6a8a' : '#2a2230';
-        c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + Math.cos(a - 0.3) * 10, oy + Math.sin(a - 0.3) * 10); c.lineTo(ox + Math.cos(a) * l, oy + Math.sin(a) * l); c.closePath(); c.fill();
-      }
-      c.strokeStyle = '#2a2230'; c.lineWidth = 2; c.beginPath(); c.arc(ox, oy, 34, 0, 7); c.stroke();
-      // a dotted route
-      c.setLineDash([6, 8]); c.strokeStyle = 'rgba(200,80,60,0.6)'; c.lineWidth = 2.5;
-      c.beginPath(); c.moveTo(0, 470); c.bezierCurveTo(150, 330, 300, 380, 512, 200); c.stroke(); c.setLineDash([]);
+      // a faint trajectory sketched on the paper: a dropped box, bouncing
+      c.strokeStyle = 'rgba(232,96,76,0.35)'; c.setLineDash([5, 5]); c.lineWidth = 2;
+      c.beginPath(); c.moveTo(20, 40); c.quadraticCurveTo(70, 40, 100, 200); c.quadraticCurveTo(130, 130, 160, 200); c.quadraticCurveTo(180, 170, 200, 200); c.stroke(); c.setLineDash([]);
     }],
-    floor: (c, w, h) => {
-      planksDraw(c, w, h, ['#6b4a34', '#74513a', '#62432f', '#7a573e'], 24);
-      // a brass compass rose inlaid between the globe and the radar
-      const ox = w / 2, oy = h * 0.6, r = h * 0.2;
-      c.fillStyle = '#e9dcb4'; c.beginPath(); c.arc(ox, oy, r, 0, 7); c.fill();
-      c.strokeStyle = '#c9a24a'; c.lineWidth = 8; c.stroke();
-      c.lineWidth = 2; c.beginPath(); c.arc(ox, oy, r * 0.82, 0, 7); c.stroke();
-      for (let k = 0; k < 16; k++) {
-        const a = k * Math.PI / 8 - Math.PI / 2, l = r * (k % 4 === 0 ? 0.95 : k % 2 ? 0.45 : 0.68);
-        c.fillStyle = k % 2 ? '#3f5872' : (k % 4 ? '#c9a24a' : '#2a2230');
-        c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + Math.cos(a - 0.2) * r * 0.16, oy + Math.sin(a - 0.2) * r * 0.16); c.lineTo(ox + Math.cos(a) * l, oy + Math.sin(a) * l); c.lineTo(ox + Math.cos(a + 0.2) * r * 0.16, oy + Math.sin(a + 0.2) * r * 0.16); c.closePath(); c.fill();
+    floor: (c, w, h) => {                      // lab tiles, hazard tape round each test station
+      for (let i = 0; i < 16; i++) for (let j = 0; j < 12; j++) {
+        c.fillStyle = (i + j) % 2 ? '#cdd2d3' : '#c3c8ca'; c.fillRect(i * w / 16, j * h / 12, w / 16, h / 12);
       }
-      c.fillStyle = '#2a2230'; c.font = `700 ${r * 0.2}px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText('N', ox, oy - r * 1.08 + r * 0.2);
+      c.strokeStyle = 'rgba(90,100,105,0.5)'; c.lineWidth = 2;
+      for (let i = 0; i <= 16; i++) { c.beginPath(); c.moveTo(i * w / 16, 0); c.lineTo(i * w / 16, h); c.stroke(); }
+      for (let j = 0; j <= 12; j++) { c.beginPath(); c.moveTo(0, j * h / 12); c.lineTo(w, j * h / 12); c.stroke(); }
+      const X = (x) => (x + W / 2) / W * w, Z = (z) => (z + D - 0.5) / D * h;
+      const tape = (x0, z0, x1, z1) => {
+        const a = X(x0), b = Z(z0), cw = X(x1) - a, ch = Z(z1) - b, t = 14;
+        c.save(); c.beginPath(); c.rect(a, b, cw, ch); c.rect(a + t, b + t, cw - 2 * t, ch - 2 * t); c.clip('evenodd');
+        c.fillStyle = '#e4b84f'; c.fillRect(a, b, cw, ch);
+        c.fillStyle = '#2a2230';
+        for (let k = -ch; k < cw; k += 24) { c.beginPath(); c.moveTo(a + k, b + ch); c.lineTo(a + k + 12, b + ch); c.lineTo(a + k + 12 + ch, b); c.lineTo(a + k + ch, b); c.fill(); }
+        c.restore();
+      };
+      tape(-3.3, -2.75, -1.5, -1.25);          // the push bench
+      tape(1.45, -2.65, 3.35, -1.0);           // the ramp
+      tape(-3.85, -5.05, -2.35, -3.55);        // the drop zone
+      // a target where the drop lands
+      const tx = X(-3.1), tz = Z(-4.3);
+      for (const [r, col] of [[46, '#e8604c'], [32, '#f6efdf'], [18, '#e8604c']]) { c.fillStyle = col; c.beginPath(); c.arc(tx, tz, r, 0, 7); c.fill(); }
     },
     rug: false,
   },
-  'inbox-zero': {
-    wash: [0.45, '#f3dfc2'],
-    tile: [256, 0.8, (c, w, h) => {             // envelopes and stamps
-      c.fillStyle = '#f3dfc2'; c.fillRect(0, 0, w, h);
-      const R = rng(11);
-      for (let i = 0; i < 6; i++) {
-        const x = (i % 3) * w / 3 + 20 + R() * 20, y = Math.floor(i / 3) * h / 2 + 30 + R() * 30, rot = (R() - 0.5) * 0.5;
+  qr: {
+    wash: [0.2, '#e3ece8'],
+    tile: [512, 2.2, (c, w, h) => {             // a contour map, pins in it
+      c.fillStyle = '#e3ece8'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(60,110,100,0.12)'; c.lineWidth = 1;
+      for (let i = 0; i <= w; i += 64) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i, h); c.stroke(); c.beginPath(); c.moveTo(0, i); c.lineTo(w, i); c.stroke(); }
+      const R = rng(21);
+      for (let k = 0; k < 5; k++) {
+        const cx = R() * w, cy = R() * h, base = 40 + R() * 50, ph = R() * 6;
         wrap9(w, h, (ox, oy) => {
-          c.save(); c.translate(x + ox, y + oy); c.rotate(rot);
-          if (i % 2) {
-            c.fillStyle = '#fbf6ea'; c.fillRect(-26, -16, 52, 32);
-            c.strokeStyle = 'rgba(42,34,48,0.55)'; c.lineWidth = 1.5; c.strokeRect(-26, -16, 52, 32);
-            c.beginPath(); c.moveTo(-26, -16); c.lineTo(0, 3); c.lineTo(26, -16); c.stroke();
-            for (let k = -26; k < 26; k += 8) { c.fillStyle = (k / 8) % 2 ? '#c23f36' : '#3f5aa8'; c.fillRect(k, 13, 4, 3); }
-          } else {
-            c.fillStyle = '#fff'; c.fillRect(-14, -17, 28, 34);
-            c.fillStyle = ['#e8604c', '#7fb3a8', '#e4b84f'][i % 3]; c.fillRect(-10, -13, 20, 22);
-            c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(0, -3, 5, 0, 7); c.fill();
-            c.strokeStyle = 'rgba(42,34,48,0.4)'; c.lineWidth = 1.2; c.beginPath(); c.arc(12, 8, 12, 0, 7); c.stroke();
+          for (let ring = 0; ring < 5; ring++) {
+            const rr = base - ring * 9;
+            if (rr < 6) break;
+            c.strokeStyle = ring === 0 ? 'rgba(60,110,100,0.4)' : 'rgba(60,110,100,0.22)'; c.lineWidth = ring === 0 ? 2 : 1.4;
+            c.beginPath();
+            for (let a = 0; a <= 6.3; a += 0.2) {
+              const r2 = rr * (1 + 0.22 * Math.sin(a * 3 + ph) + 0.1 * Math.sin(a * 5 + ph * 2));
+              const x = cx + ox + Math.cos(a) * r2 * 1.3, y = cy + oy + Math.sin(a) * r2;
+              a === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+            }
+            c.closePath(); c.stroke();
           }
-          c.restore();
+        });
+      }
+      for (let k = 0; k < 6; k++) {
+        const x = R() * w, y = R() * h;
+        wrap9(w, h, (ox, oy) => {
+          c.fillStyle = ['#e8604c', '#3f5aa8', '#e4b84f'][k % 3];
+          c.beginPath(); c.arc(x + ox, y + oy - 10, 7, 0, 7); c.fill();
+          c.beginPath(); c.moveTo(x + ox - 6, y + oy - 7); c.lineTo(x + ox, y + oy + 4); c.lineTo(x + ox + 6, y + oy - 7); c.fill();
         });
       }
     }],
-    floor: (c, w, h) => {                      // post-office checker tiles
-      const n = 16;
-      for (let i = 0; i < n; i++) for (let j = 0; j < n * 0.75; j++) {
-        c.fillStyle = (i + j) % 2 ? '#2f2a36' : '#f1ebdf'; c.fillRect(i * w / n, j * w / n, w / n, w / n);
+    floor: (c, w, h) => {                      // the floor is a QR code, laid in tiles
+      planksDraw(c, w, h, ['#c49f72', '#bd9a6e', '#c7a476', '#b8956a'], 20);
+      const n = 25, size = h * 0.66, m = size / n, x0 = w / 2 - size / 2, y0 = h * 0.56 - size / 2, R = rng(5);
+      c.fillStyle = '#f6efdf'; c.fillRect(x0 - m * 2, y0 - m * 2, size + m * 4, size + m * 4);
+      c.strokeStyle = '#2a2230'; c.lineWidth = 3; c.strokeRect(x0 - m * 2, y0 - m * 2, size + m * 4, size + m * 4);
+      const finder = (i, j) => i >= 0 && i < 7 && j >= 0 && j < 7 && (i === 0 || i === 6 || j === 0 || j === 6 || (i > 1 && i < 5 && j > 1 && j < 5));
+      const inFinder = (i, j) => (i < 8 && j < 8) || (i > n - 9 && j < 8) || (i < 8 && j > n - 9);
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        let on;
+        if (inFinder(i, j)) on = finder(i, j) || finder(i - (n - 7), j) || finder(i, j - (n - 7));
+        else if (i === 6 || j === 6) on = (i + j) % 2 === 0;
+        else on = R() < 0.48;
+        if (on) { c.fillStyle = '#2a2230'; c.fillRect(x0 + i * m + 1, y0 + j * m + 1, m - 2, m - 2); }
       }
-      c.strokeStyle = 'rgba(120,110,100,0.4)'; c.lineWidth = 1;
-      for (let i = 0; i <= n; i++) { c.beginPath(); c.moveTo(i * w / n, 0); c.lineTo(i * w / n, h); c.stroke(); c.beginPath(); c.moveTo(0, i * w / n); c.lineTo(w, i * w / n); c.stroke(); }
     },
     rug: false,
   },
+  'borrowed-eyes': { mural: forestMural, floor: forestFloor, bare: true, rug: false },
   yarnflow: {
     wash: [0.3, '#f2d9d6'],
     tile: [128, 0.36, (c, w, h) => {             // knitted stockinette: rows of little Vs
@@ -1680,6 +1666,26 @@ const topLoops = (y = 2.45) => [
 ];
 
 const ENV = {
+  behaviors(K) {
+    // hazard tape running round the top of the walls
+    const tape = paint(0xffffff, { map: (() => { const t = canvasTex(128, 16, (c, w, h) => { c.fillStyle = '#e4b84f'; c.fillRect(0, 0, w, h); c.fillStyle = '#2a2230'; for (let x = -h; x < w; x += 32) { c.beginPath(); c.moveTo(x, h); c.lineTo(x + 16, h); c.lineTo(x + 16 + h, 0); c.lineTo(x + h, 0); c.fill(); } }); t.wrapS = THREE.RepeatWrapping; t.repeat.set(30, 1); return t; })(), hatch: 0, unique: true });
+    K.flat(W, 0.1, tape, 0, 2.62, -D + 0.53);
+    for (const s of [-1, 1]) K.flat(D, 0.1, tape, s * (W / 2 - 0.03), 2.62, -D / 2 + 0.5, [0, -s * Math.PI / 2, 0]);
+  },
+  qr(K) {
+    // pennants, each printed with its own little code
+    const R = rng(3);
+    for (const pts of topLoops()) bunting(K, pts, 12, (p, a, i) => {
+      const f = K.flat(0.18, 0.22, texMat(60, 72, (c, w, h) => {
+        c.fillStyle = '#f6efdf'; c.beginPath(); c.moveTo(2, 2); c.lineTo(w - 2, 2); c.lineTo(w / 2, h - 2); c.closePath(); c.fill();
+        c.strokeStyle = INKC; c.lineWidth = 3; c.stroke();
+        c.save(); c.clip(); c.fillStyle = INKC;
+        for (let gx = 0; gx < 5; gx++) for (let gy = 0; gy < 4; gy++) if (R() < 0.5) c.fillRect(12 + gx * 7, 8 + gy * 7, 7, 7);
+        c.restore();
+      }), p.x, p.y - 0.1, p.z, [0, a, 0]);
+      f.material.side = THREE.DoubleSide;
+    });
+  },
   'borrowed-eyes'(K) {
     // ── a forest paradise: trees, ferns, vines, a pond, fireflies, butterflies ──
     tree(K, -3.45, -2.35, 5);
@@ -1827,18 +1833,6 @@ const ENV = {
       pm.userData.noInk = i % 2 === 0;
     });
   },
-  'inbox-zero'(K) {
-    // envelope bunting: little letters pegged on a line
-    for (const pts of topLoops()) bunting(K, pts, 13, (p, a, i) => {
-      const e = K.flat(0.22, 0.14, texMat(88, 56, (c, w, h) => {
-        c.fillStyle = i % 3 === 1 ? '#f6e7c0' : '#fbf6ea'; c.fillRect(0, 0, w, h);
-        c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3);
-        c.beginPath(); c.moveTo(2, 2); c.lineTo(w / 2, h * 0.55); c.lineTo(w - 2, 2); c.stroke();
-        c.fillStyle = ['#e8604c', '#7fb3a8', '#e4b84f'][i % 3]; c.fillRect(w - 20, 8, 12, 14);
-      }), p.x, p.y - 0.08, p.z, [0, a, (i % 2 ? 0.08 : -0.08)]);
-      e.material.side = THREE.DoubleSide;
-    });
-  },
   deckgpt(K) {
     // marquee bulbs chasing round the top of the walls
     const bulbs = [], on = new THREE.MeshBasicMaterial({ color: 0xfff1b0 }), off = new THREE.MeshBasicMaterial({ color: 0x9a7a40 });
@@ -1850,18 +1844,6 @@ const ENV = {
     // a gold proscenium band under the bulbs
     K.box(W - 0.1, 0.14, 0.04, paint(PAL.gold), 0, 2.48, -D + 0.54, 0.01);
     for (const s of [-1, 1]) K.box(0.04, 0.14, D - 0.1, paint(PAL.gold), s * (W / 2 - 0.03), 2.48, -D / 2 + 0.5, 0.01);
-  },
-  charterscope(K) {
-    // signal flags strung across the room
-    const fl = ['#e8604c', '#e4b84f', '#3f5872', '#f6eedb', '#3f8f5a'];
-    for (const pts of topLoops()) bunting(K, pts, 12, (p, a, i) => {
-      const f = K.flat(0.18, 0.2, texMat(64, 72, (c, w, h) => {
-        c.fillStyle = fl[i % 5]; c.beginPath(); c.moveTo(2, 2); c.lineTo(w - 2, 2); c.lineTo(w / 2, h - 2); c.closePath(); c.fill();
-        c.strokeStyle = INKC; c.lineWidth = 3; c.stroke();
-        if (i % 2) { c.fillStyle = fl[(i + 2) % 5]; c.beginPath(); c.arc(w / 2, h * 0.3, 8, 0, 7); c.fill(); }
-      }), p.x, p.y - 0.1, p.z, [0, a, 0]);
-      f.material.side = THREE.DoubleSide;
-    });
   },
   splatform(K) {
     // paint dripping off the top of every wall
@@ -1879,7 +1861,7 @@ const ENV = {
 };
 
 const ROOM_WALL = {
-  charterscope: 0x8a7358, 'inbox-zero': 0xb8574d, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
+  behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
   splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a,
 };
 

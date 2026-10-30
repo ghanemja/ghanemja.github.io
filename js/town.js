@@ -14,12 +14,12 @@ const PAVE = 1.42;               // the pavement depth shopUnit lays down
 
 // exterior looks, keyed by app id (the engine's own shop language)
 const FRONTS = {
-  charterscope: { kind: 'books', w: 2.0, wall: 0x93abc0, front: 0x3f5872, trim: 0xf6eedb, roof: 'mansard', up: 'bay', blade: 'book', door: 1, sign: { gold: true, bg: '#2f3f55' } },
+  behaviors: { kind: 'lab', w: 2.0, wall: 0xc9d3da, front: 0x3f5872, trim: 0xf6eedb, roof: 'mansard', up: 'bay', blade: 'cube', door: 1, sign: { bg: '#2a2230', fg: '#f2d27a' } },
   yarnflow: { kind: 'yarn', w: 1.74, wall: 0xdc9e9a, front: 0x8f7ae8, trim: 0xfffaf0, roof: 'gable', roofCol: PAL.roofSlate, up: 'arch', blade: 'yarn', door: 1, sign: { bg: '#f6eedb', fg: '#6a55c4' } },
   'borrowed-eyes': { kind: 'frames', w: 1.9, wall: 0x7fb3a8, front: 0x2f5a52, trim: 0xf6eedb, roof: 'parapet', up: 'arch', blade: 'frame', door: -1, sign: { bg: '#2f5a52', fg: '#f6eedb' } },
   deckgpt: { kind: 'cinema', w: 2.3, wall: 0xf1e4c8, front: 0x7fb3a8, trim: 0xfffaf0, special: 'cinema', door: 0, sign: { bg: '#2a2230', fg: '#f2d27a' }, marquee: 'NOW SHOWING ★ DECKGPT', bladeText: 'DECK' },
   splatform: { kind: 'toys', w: 1.9, wall: 0xe1b95c, front: 0xd8573f, trim: 0xfffaf0, roof: 'gable', roofCol: PAL.roofRed, awning: [0xd8573f, 0xf6eedb], blade: 'balloon', door: -1, sign: { bg: '#fff4e0', fg: '#d8573f' } },
-  'inbox-zero': { kind: 'post', w: 1.92, wall: 0xf1e4c8, front: 0xc23f36, trim: 0xfffaf0, roof: 'parapet', blade: 'envelope', door: 0, sign: { bg: '#c23f36', fg: '#f6eedb' } },
+  qr: { kind: 'qr', w: 1.92, wall: 0xf1e4c8, front: 0x2a2230, trim: 0xfffaf0, roof: 'parapet', blade: 'qr', door: 0, sign: { bg: '#f6eedb', fg: '#2a2230' } },
   gallery: { kind: 'frames', w: 2.14, wall: 0xb7a3c6, front: 0x2a2230, trim: 0xf6eedb, roof: 'deco', up: 'arch', blade: 'frame', door: 1, sign: { gold: true, bg: '#2a2230' } },
 };
 // purely decorative neighbours, between the real shops
@@ -95,11 +95,11 @@ export function buildTown(scene) {
   }
 
   // ── north terraces (z < 0) ──
-  let x = terrace(scene, [appSpec('charterscope'), DECO.bakery], -8.2, -1, out);
+  let x = terrace(scene, [appSpec('behaviors'), DECO.bakery], -8.2, -1, out);
   terrace(scene, [appSpec('yarnflow'), DECO.cafe, appSpec('borrowed-eyes')], x + 1.3, -1, out);
   // ── south terraces (z > 0): specs listed west→east, laid mirrored ──
   terrace(scene, [appSpec('deckgpt'), appSpec('splatform')], -8.2, 1, out);
-  terrace(scene, [appSpec('inbox-zero'), DECO.flowers, appSpec('gallery')], -2.7, 1, out);
+  terrace(scene, [appSpec('qr'), DECO.flowers, appSpec('gallery')], -2.7, 1, out);
 
   // ── the library closes the street at the east end, facing west ──
   const lib = library({ w: 3.5, pave: [0.4, 0.4] });

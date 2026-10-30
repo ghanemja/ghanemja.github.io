@@ -247,6 +247,30 @@ const DISPLAY = {
     fr(w * 0.7, h * 0.24, w * 0.22, h * 0.36, '#efe6d6');                 // empty
     lettering(c, 'bespoke framing', w / 2, h * 0.82, h * 0.12, '#8a6448');
   },
+  lab(c, w, h, r) {
+    // a test bench: a ramp, a pusher, a can mid-slide, a bottle mid-topple
+    c.fillStyle = '#d9e2e6'; c.fillRect(0, h * 0.62, w, h * 0.38);
+    for (let x = 0; x < w; x += 20) { c.fillStyle = (x / 20) % 2 ? '#e4b84f' : '#2a2230'; c.fillRect(x, h * 0.6, 10, 6); }
+    c.beginPath(); c.moveTo(w * 0.08, h * 0.6); c.lineTo(w * 0.4, h * 0.6); c.lineTo(w * 0.08, h * 0.36); c.closePath();
+    c.fillStyle = '#c8a47c'; c.fill(); c.strokeStyle = INK; c.lineWidth = 3; c.stroke();
+    c.save(); c.translate(w * 0.2, h * 0.43); c.rotate(0.64); rect(c, -12, -12, 24, 22, '#e8604c'); c.restore();
+    rect(c, w * 0.5, h * 0.34, 8, h * 0.26, '#6f7d92');
+    rect(c, w * 0.56, h * 0.46, w * 0.08, h * 0.14, '#93abc0');
+    c.save(); c.translate(w * 0.8, h * 0.6); c.rotate(0.9); rect(c, -8, -h * 0.22, 16, h * 0.22, '#7fb3a8'); c.restore();
+    lettering(c, 'push · tilt · drop', w / 2, h * 0.16, h * 0.11, '#2a2230');
+  },
+  qr(c, w, h, r) {
+    // a QR code in the window, and a little map pin
+    c.fillStyle = '#f6efdf'; c.fillRect(w * 0.3, h * 0.12, h * 0.62, h * 0.62);
+    const n = 11, m = h * 0.56 / n, x0 = w * 0.3 + h * 0.03, y0 = h * 0.15;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const fin = (i < 3 && j < 3) || (i > n - 4 && j < 3) || (i < 3 && j > n - 4);
+      if (fin ? !(i % (n - 3) === 1 && j % (n - 3) === 1) : r() < 0.5) { c.fillStyle = '#2a2230'; c.fillRect(x0 + i * m, y0 + j * m, m, m); }
+    }
+    blob(c, w * 0.16, h * 0.4, 14, 14, '#e8604c');
+    c.beginPath(); c.moveTo(w * 0.16 - 10, h * 0.45); c.lineTo(w * 0.16, h * 0.62); c.lineTo(w * 0.16 + 10, h * 0.45); c.fill(); c.stroke();
+    lettering(c, 'scan me', w * 0.82, h * 0.42, h * 0.12, '#fff4d6');
+  },
   post(c, w, h, r) {
     for (let k = 0; k < 5; k++) rect(c, w * (0.08 + k * 0.17), h * (0.55 + (k % 2) * 0.08), w * 0.14, h * 0.1, '#f6eedb', 2);
     rect(c, w * 0.6, h * 0.25, w * 0.3, h * 0.22, '#c8a47c');
@@ -440,6 +464,18 @@ function emblem(K, kind) {
     const sh = shape([[-0.15, -0.12], [0.15, -0.12], [0.15, 0.12], [-0.15, 0.12]]);
     sh.holes.push(new THREE.Path([[-0.09, -0.06], [0.09, -0.06], [0.09, 0.06], [-0.09, 0.06]].map(([a, b]) => new THREE.Vector2(a, b))));
     K.put(extrude(sh, 0.03, 0.012), P(PAL.gold), 0, 0, -0.015);
+  } else if (kind === 'cube') {
+    // a crate caught mid-topple off a little ramp
+    K.box(0.32, 0.04, 0.16, P(0xc8a47c), 0, -0.14, 0, 0.01, [0, 0, 0.35]);
+    K.box(0.15, 0.15, 0.15, P(PAL.accent), 0.02, 0.0, 0, 0.02, [0, 0, 0.6]);
+  } else if (kind === 'qr') {
+    K.box(0.3, 0.3, 0.03, P(0xf6eedb), 0, 0, 0, 0.01);
+    for (const [x, y] of [[-1, 1], [1, 1], [-1, -1]]) {
+      K.box(0.09, 0.09, 0.02, DARK(), x * 0.085, y * 0.085, 0.02, 0.005);
+      K.box(0.05, 0.05, 0.02, P(0xf6eedb), x * 0.085, y * 0.085, 0.025, 0.005);
+      K.box(0.025, 0.025, 0.02, DARK(), x * 0.085, y * 0.085, 0.03, 0.004);
+    }
+    for (const [x, y] of [[0.02, 0.0], [0.08, -0.06], [-0.02, -0.08], [0.06, 0.06], [0.1, -0.1]]) K.box(0.03, 0.03, 0.02, DARK(), x, y, 0.02, 0.004);
   } else if (kind === 'envelope') {
     K.box(0.3, 0.2, 0.03, P(0xf6eedb), 0, 0, 0, 0.012);
     K.put(extrude(shape([[-0.14, 0.09], [0.14, 0.09], [0, -0.02]]), 0.005, 0.005), P(0xe6d9bc), 0, 0, 0.016);

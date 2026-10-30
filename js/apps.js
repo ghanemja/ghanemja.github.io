@@ -3,20 +3,20 @@
 // what its room says inside, and where "open the real thing" goes.
 export const APPS = [
   {
-    id: 'charterscope', title: 'CharterScope', trade: 'Competitor Watch',
-    url: 'https://ghanemja.github.io/charterscope/', repo: 'https://github.com/ghanemja/charterscope',
-    shot: 'screenshots/charterscope.png',
-    desc: 'Charter-anchored competitive intelligence. Write your goals once; every morning it turns what your competitors shipped into ADOPT / MONITOR / REJECT calls with an engineer-day cost.',
-    how: 'Watches GitHub, arXiv and Hacker News; every call is scored against your charter and cited to a source it actually fetched (fabricated citations are quarantined).',
-    note: 'A prompt forgets every morning — this keeps a deduped ledger and a scored track record. Open source, bring your own LLM.',
+    id: 'behaviors', title: 'Behavior Search', trade: 'The Proving Ground',
+    url: 'https://ghanemja.github.io/behaviors/', repo: 'https://github.com/ghanemja/behaviors',
+    shot: 'screenshots/behaviors.png',
+    desc: 'Search NVIDIA SimReady 3D objects by how they move, not how they look. All 2,166 rigid assets got the same pokes in a physics simulator: pushed low, pushed high, tilted on a ramp, dropped.',
+    how: 'Search ranks objects by how they reacted: rollout statistics or a self-supervised JEPA embedding. Tested on probes no model saw, in MuJoCo and in NVIDIA PhysX.',
+    note: '106,757 simulated probe runs, every number regenerated from scratch on a CPU. No GPUs used.',
   },
   {
-    id: 'inbox-zero', title: 'Inbox Zero', trade: 'The Mailroom',
-    url: 'https://ghanemja.github.io/inbox-zero-board/', repo: 'https://github.com/ghanemja/inbox-zero-board',
-    shot: 'screenshots/inbox-zero-board.png',
-    desc: 'Turns your inbox into a calm task board: what you need to do next, who owes you a reply, and what can be skimmed.',
-    how: 'Mail is read on your own machine and sorted by a local model — nothing goes to a third party. Today, Board, Waiting on, Delegate and Insights views.',
-    note: 'Your inbox as to-dos, not a scroll. The demo runs on fake data.',
+    id: 'qr', title: 'QR Compass', trade: 'The Map Room',
+    url: 'https://ghanemja.github.io/qr/', repo: 'https://github.com/ghanemja/qr',
+    shot: 'screenshots/qr-compass.png',
+    desc: "America's biggest companies on a 3D map, each one drawn as its own little model, and every model turns into that company's scannable QR code.",
+    how: 'Seven regions on a tiled slab; hover one and its models wake up, click it and it breaks off into a moving world. Tap a model and it breaks into pixels that land on its QR code.',
+    note: 'The 2019 Fortune 500 plus hand-picked startups. Paste any link and the model becomes a QR code for it.',
   },
   {
     id: 'yarnflow', title: 'YarnFlow', trade: 'Pattern Haberdashery',
