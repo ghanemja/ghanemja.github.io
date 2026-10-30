@@ -98,5 +98,7 @@ seated and hung next to the handlebar instead of holding it. Now `hand(k, contac
   side-on in a lit style, where deformation breaks first.
 - **The base mesh's fingers are splayed.** `curlFingers` must close that splay for every hand
   short of a full grip (`grip < 0.5`), not only at grip 0: a relaxed hand at 0.25 skipped the
-  step, and every citizen's fingers fanned out wide.
+  step, and every citizen's fingers fanned out wide. Then the relaxed cascade itself must be
+  gentle: about 8–15° at the knuckle, 15–25° at the middle joint and 8–12° at the tip, more
+  toward the pinky. Up to 90° in all read as a claw.
 

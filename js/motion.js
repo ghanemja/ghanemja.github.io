@@ -83,7 +83,9 @@ export function curlFingers(B, k, grip = 0) {
   }
   // a cascade: each finger curls a little more than the last, toward the palm
   const add = [55, 60, 35].map(a => a * grip);
-  [[2, [14, 26, 14]], [3, [18, 32, 16]], [4, [22, 38, 18]], [5, [28, 44, 20]]].forEach(([f, ang]) => {
+  // a relaxed hand rests only gently bent (knuckle, middle, tip joints, degrees; more toward the
+  // pinky). At up to 90° in all it read as a claw
+  [[2, [8, 15, 8]], [3, [10, 18, 9]], [4, [12, 21, 10]], [5, [15, 25, 12]]].forEach(([f, ang]) => {
     for (let j = 1; j <= 3; j++) {
       const b = B[`finger${f}-${j}.` + k], nx = B[`finger${f}-${j + 1}.` + k];
       // a relaxed hand's cascade, deepening toward a fist as grip rises
@@ -164,7 +166,7 @@ export function relaxedPose(sk) {
     turnTo(B['upperarm01.' + k], wp(B['lowerarm01.' + k]).sub(wp(B['upperarm01.' + k])), new THREE.Vector3(s * 0.07, -1, -0.05));
     turnTo(B['lowerarm01.' + k], wp(B['wrist.' + k]).sub(wp(B['lowerarm01.' + k])), new THREE.Vector3(s * 0.12, -1, 0.2));
     palmTo(B, k, new THREE.Vector3(-s, 0, 0.2));                  // palm to the thigh
-    curlFingers(B, k, 0.15);
+    curlFingers(B, k, 0);
   }
 }
 
