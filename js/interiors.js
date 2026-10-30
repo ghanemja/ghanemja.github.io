@@ -45,30 +45,20 @@ function fitLine(c, text, px, font, maxW) {
 const css = (hex) => '#' + new THREE.Color(hex).getHexString();
 
 const _loader = new THREE.TextureLoader();
-// every framed screen drifts gently (a slow Ken Burns pan) so it reads as a
-// living picture, not a poster; frames with a recorded clip play real footage
-const ANIM = [];
 const LIVE = [];                            // per-frame animations: f(t), local room coords
 export function tickInteriors(t) {
   for (const f of LIVE) f(t);
-  for (const a of ANIM) {
-    const tex = a.mat.map;
-    if (!tex) continue;
-    if (tex.isVideoTexture) continue;                  // footage moves by itself
-    const z = 1 - 0.045 * (0.5 + 0.5 * Math.sin(t * 0.21 + a.ph));
-    tex.repeat.set(z, z);
-    tex.offset.set(
-      (1 - z) * (0.5 + 0.28 * Math.sin(t * 0.13 + a.ph * 2)),
-      (1 - z) * (0.5 + 0.28 * Math.cos(t * 0.17 + a.ph)),
-    );
-  }
 }
-function shotMat(url, clip) {
-  const t = _loader.load(url);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+function shotMat(url, clip, aspect = 1.6) {
+  const crop = (tex, iw, ih) => {
+    const ia = iw / ih;
+    if (ia > aspect) { tex.repeat.set(aspect / ia, 1); tex.offset.set((1 - aspect / ia) / 2, 0); }
+    else { tex.repeat.set(1, ia / aspect); tex.offset.set(0, 1 - ia / aspect); }     // keep the top of the page
+  };
+  const t = _loader.load(url, (tx) => crop(tx, tx.image.width, tx.image.height));
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-  const m = paint(0xffffff, { map: t, hatch: 0, unique: true });
-  ANIM.push({ mat: m, ph: ANIM.length * 2.4 });
+  const m = new THREE.MeshBasicMaterial({ map: t, toneMapped: false });
   if (clip) {
     const v = document.createElement('video');
     v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
@@ -76,6 +66,7 @@ function shotMat(url, clip) {
     const swap = () => {
       const vt = new THREE.VideoTexture(v);
       vt.colorSpace = THREE.SRGBColorSpace;
+      crop(vt, v.videoWidth, v.videoHeight);
       m.map = vt; m.needsUpdate = true;
     };
     v.addEventListener('playing', swap, { once: true });
@@ -97,7 +88,8 @@ function framedShot(K, url, w, h, x, y, z, rot, clip) {
   F.box(w + 0.14, 0.07, 0.06, fr, 0, -h / 2 - 0.035, 0);
   F.box(0.07, h, 0.06, fr, -w / 2 - 0.035, 0, 0);
   F.box(0.07, h, 0.06, fr, w / 2 + 0.035, 0, 0);
-  F.flat(w, h, shotMat(url, clip), 0, 0, 0.012);
+  F.box(w + 0.06, h + 0.06, 0.03, paint(0x2a2230, { hatch: 0 }), 0, 0, -0.01, 0.01);
+  F.flat(w, h, shotMat(url, clip, w / h), 0, 0, 0.012);
   K.g.add(grp);
   return grp;
 }
@@ -123,6 +115,10 @@ function plankMat() {
 
 // ── one room: origin at the middle of the OPEN front edge, inside is −z ──
 const W = 8, D = 6, H = 2.7;
+// the app's screen fills the middle of the back wall
+const SCR_W = 3.44, SCR_H = 2.15, SCR_Y = 1.15;
+// the plaque and the counter stand off to the sides, out of its way
+const PLQ_X = -2.9, CTR_X = 2.9;
 function roomShell(K, wallHex, place, theme) {
   const wall = paint(wallHex, { hatch: 0.6 }), trim = paint(0xfffaf0);
   const tm = themeMats(theme, place.id);
@@ -139,7 +135,7 @@ function roomShell(K, wallHex, place, theme) {
     K.box(W, 0.045, 0.04, trim, 0, 2.08, -D + 0.53);
   }
   // the shop's name over the back wall
-  K.flat(2.6, 0.42, texMat(768, 128, (c, w, h) => {
+  K.flat(2.1, 0.35, texMat(768, 128, (c, w, h) => {
     // a paper banner behind the lettering, so it reads on any wallpaper
     c.fillStyle = '#f6efdf'; c.strokeStyle = INKC; c.lineWidth = 5;
     c.beginPath(); c.roundRect(w * 0.12, 6, w * 0.76, h - 12, 22); c.fill(); c.stroke();
@@ -147,7 +143,7 @@ function roomShell(K, wallHex, place, theme) {
     c.fillText(place.title, w / 2, h * 0.38);
     c.font = `400 ${h * 0.26}px ${HAND}`; c.fillStyle = '#5a4e5e';
     c.fillText('— ' + place.trade + ' —', w / 2, h * 0.8);
-  }), 0, 2.38, -D + 0.54);
+  }), 0, 2.4, -D + 0.68);
   // a rug
   if (theme?.rug !== false) {
   const rug = K.flat(2.6, 1.7, texMat(256, 160, (c, w, h) => {
@@ -204,7 +200,7 @@ const SETS = {
   charterscope(K) {
     // the decision board: the charter pinned in the middle, today's competitor moves
     // around it, each stamped with its verdict and strung back to the charter
-    K.flat(1.7, 1.1, texMat(512, 330, (c, w, h) => {
+    K.flat(1.6, 1.03, texMat(512, 330, (c, w, h) => {
       c.fillStyle = '#caa87c'; c.fillRect(0, 0, w, h);
       c.strokeStyle = '#8a6448'; c.lineWidth = 10; c.strokeRect(5, 5, w - 10, h - 10);
       const V = { ADOPT: '#3f8f5a', MONITOR: '#c08a2a', REJECT: '#8a8494', PIVOT: '#7a5bb5' };
@@ -225,7 +221,7 @@ const SETS = {
       c.fillText('our charter', cx, cy - 6); c.font = `400 14px ${HAND}`; c.fillStyle = '#5a4e5e';
       c.fillText('goals · anti-goals', cx, cy + 18);
       c.fillStyle = '#e8604c'; c.beginPath(); c.arc(cx, cy - 34, 6, 0, 7); c.fill();
-    }), -2.4, 1.35, -D + 0.56, [0, 0.0, 0]);
+    }), -3.05, 1.8, -D + 0.56, [0, 0.0, 0]);
     // a brass telescope on a tripod, trained on the competition
     const scope = new THREE.Group(); scope.position.set(2.9, 0, -D + 1.3); scope.rotation.y = -0.7;
     const Sk = kit(scope), wood = paint(0x6b4a34), brass = paint(PAL.gold);
@@ -252,7 +248,7 @@ const SETS = {
     ph.box(1.8, 0.4, 0.44, paint(0xc23f36), 0, 0.22, 0);
     K.g.add(ph.g); ink(ph.g, 'fine');
     // the kanban board itself: todo / waiting / done
-    K.flat(1.9, 1.15, texMat(560, 340, (c, w, h) => {
+    K.flat(1.75, 1.06, texMat(560, 340, (c, w, h) => {
       c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h);
       c.strokeStyle = INKC; c.lineWidth = 6; c.strokeRect(3, 3, w - 6, h - 6);
       const cols = [['todo', '#e8604c', 4], ['waiting', '#e4b84f', 2], ['done', '#7fb3a8', 5]];
@@ -267,7 +263,7 @@ const SETS = {
           c.beginPath(); c.moveTo(x + 18, 92 + k * 52); c.lineTo(x + 110, 92 + k * 52); c.stroke();
         }
       });
-    }), 2.3, 1.3, -D + 0.56);
+    }), 3.0, 1.85, -D + 0.56);
     // parcels waiting to go out
     for (const [x, y, z, s] of [[0.4, 0.19, -D + 1.0, 0.38], [0.75, 0.16, -D + 1.15, 0.32], [0.55, 0.5, -D + 1.05, 0.3]])
       K.box(s, s * 0.8, s, paint(0xc8a47c), x, y, z, 0.02, [0, x * 2, 0]);
@@ -298,18 +294,18 @@ const SETS = {
       c.setLineDash([]);
       c.fillStyle = '#e8604c'; c.beginPath(); c.arc(w / 2, h / 2, 26, 0, 7); c.fill();
       c.strokeStyle = INKC; c.lineWidth = 3; c.stroke();
-    }), 2.95, 1.45, -D + 0.56);
+    }), 3.05, 1.85, -D + 0.56);
     // a basket with needles
     K.put(new THREE.CylinderGeometry(0.3, 0.22, 0.3, 12, 1, true), paint(0xc8a47c, { side: THREE.DoubleSide }), 1.1, 0.15, -D + 1.1);
     for (const a of [-0.3, 0.1, 0.5]) K.box(0.025, 0.85, 0.025, paint(0x6b4a34), 1.1 + a * 0.3, 0.5, -D + 1.1, 0.008, [0, 0, a]);
   },
   deckgpt(K) {
     // the silver screen, playing the app
-    K.box(3.3, 2.0, 0.08, paint(0x2a2230, { hatch: 0 }), 0, 1.35, -D + 0.62, 0.03);
-    K.flat(3.0, 1.78, shotMat('screenshots/pptgpt.png'), 0, 1.35, -D + 0.67);
+    K.box(SCR_W + 0.3, SCR_H + 0.2, 0.08, paint(0x2a2230, { hatch: 0 }), 0, SCR_Y, -D + 0.62, 0.03);
+    K.flat(SCR_W, SCR_H, shotMat('screenshots/pptgpt.png', null, SCR_W / SCR_H), 0, SCR_Y, -D + 0.67);
     // red curtains either side
     for (const s of [-1, 1]) {
-      const cur = K.put(new THREE.CylinderGeometry(0.22, 0.26, 2.2, 10), paint(0xb03a30), s * 1.9, 1.25, -D + 0.68);
+      const cur = K.put(new THREE.CylinderGeometry(0.22, 0.26, 2.2, 10), paint(0xb03a30), s * (SCR_W / 2 + 0.3), 1.25, -D + 0.68);
       cur.scale.z = 0.55;
     }
     // two rows of seats
@@ -361,7 +357,7 @@ const SETS = {
       },
     ];
     comps.forEach((draw, i) => {
-      const x = [-2.6, -0.5, 2.6][i], z = -D + (i === 1 ? 1.9 : 1.0);
+      const x = [-2.6, -1.9, 2.6][i], z = -D + (i === 1 ? 3.0 : 1.0);
       const E = kit(new THREE.Group()); E.g.position.set(x, 0, z); E.g.rotation.y = (1 - i) * 0.25;
       const wood = paint(PAL.bark);
       for (const s of [-1, 1]) E.box(0.045, 1.5, 0.045, wood, s * 0.24, 0.75, 0, 0.012, [0, 0, -s * 0.22]);
@@ -395,14 +391,14 @@ const SETS = {
       ['owl', (c, w, h) => { c.fillStyle = '#4a4258'; c.fillRect(0, 0, w, h); c.fillStyle = '#e4b84f'; c.beginPath(); c.arc(w / 2, h / 2, 52, 0, 7); c.fill(); c.strokeStyle = INKC; c.lineWidth = 5; c.stroke(); c.fillStyle = '#111'; c.beginPath(); c.arc(w / 2, h / 2, 30, 0, 7); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.arc(w / 2 - 11, h / 2 - 11, 9, 0, 7); c.fill(); }],
     ];
     eyes.forEach(([name, draw], i) => {
-      const x = [-3.05, -1.95, 3.05][i];
-      K.put(new THREE.TorusGeometry(0.42, 0.05, 10, 28), paint(PAL.gold), x, 1.5, -D + 0.58, [0, 0, 0]);
-      const face = K.flat(0.8, 0.66, texMat(200, 164, draw), x, 1.5, -D + 0.57);
-      face.geometry = new THREE.CircleGeometry(0.4, 28);
+      const x = [-3.45, -2.55, 3.05][i], y = 1.9;
+      K.put(new THREE.TorusGeometry(0.34, 0.045, 10, 28), paint(PAL.gold), x, y, -D + 0.58, [0, 0, 0]);
+      const face = K.flat(0.8, 0.66, texMat(200, 164, draw), x, y, -D + 0.57);
+      face.geometry = new THREE.CircleGeometry(0.32, 28);
       K.flat(0.7, 0.18, texMat(256, 64, (c, w, h) => {
         c.font = `400 ${h * 0.62}px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle';
         c.fillText('the ' + name + "'s", w / 2, h / 2);
-      }), x, 0.95, -D + 0.57);
+      }), x, y - 0.47, -D + 0.57);
     });
     // the field camera on its tripod
     const cam = kit(new THREE.Group()); cam.g.position.set(2.7, 0, -D + 1.6); cam.g.rotation.y = -0.6;
@@ -440,10 +436,10 @@ const SETS = {
     };
     const HPI = Math.PI / 2;
     // back wall, salon-hung around the footage frame
-    hang('a2', 0.9, 2.0, 2.1, -D + 0.56, 0, 0.06);
-    hang('a9', 1.1, 2.65, 1.15, -D + 0.56, 0, -0.04);
-    hang('a11', 0.55, 1.5, 1.05, -D + 0.56, 0, 0.09);
-    hang('a5', 0.85, -1.65, 2.25, -D + 0.56, 0, -0.07);
+    hang('a2', 0.9, 2.65, 2.05, -D + 0.56, 0, 0.06);
+    hang('a9', 1.1, 2.75, 1.05, -D + 0.56, 0, -0.04);
+    hang('a11', 0.55, 3.62, 1.95, -D + 0.56, 0, 0.09);
+    hang('a5', 0.85, -2.75, 2.05, -D + 0.56, 0, -0.07);
     hang('a12', 0.52, -3.55, 2.05, -D + 0.56, 0, 0.05);
     // the side walls got the overflow
     hang('a3', 0.95, -W / 2 + 0.06, 1.6, -4.3, HPI, -0.08);
@@ -844,7 +840,7 @@ const EXTRA = {
     ink(brushG, 'fine');
     LIVE.push((t) => {
       const s = Math.sin(t * 1.4);
-      brushG.position.set(-0.5 + s * 0.28, 1.12 + Math.abs(Math.cos(t * 2.8)) * 0.06, -D + 2.0);
+      brushG.position.set(-1.9 + s * 0.28, 1.12 + Math.abs(Math.cos(t * 2.8)) * 0.06, -D + 3.1);
       brushG.rotation.z = 0.5 + s * 0.3;
       brushG.rotation.x = -0.25;
     });
@@ -1574,12 +1570,15 @@ function bunting(K, pts, n, make) {               // a sagging string with thing
   const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)));
   const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.006, 4), paint(0x2a2230, { hatch: 0 }));
   tube.userData.noInk = true; K.g.add(tube);
+  n = Math.max(3, Math.round(n * curve.getLength() / 7));        // n is per 7 m of string
   for (let i = 1; i < n; i++) { const t = i / n, p = curve.getPoint(t), tg = curve.getTangent(t); make(p, Math.atan2(-tg.z, tg.x), i); }
 }
 const sag = (a, b, d = 0.25) => [a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - d, (a[2] + b[2]) / 2], b];
 // three strings round the top of the room: along the back wall, then down each side
 const topLoops = (y = 2.45) => [
-  sag([-W / 2 + 0.1, y, -D + 0.62], [W / 2 - 0.1, y, -D + 0.62], 0.3),
+  // (the back wall's string stops either side of the screen)
+  sag([-W / 2 + 0.1, y, -D + 0.62], [-SCR_W / 2 - 0.15, y, -D + 0.62], 0.2),
+  sag([SCR_W / 2 + 0.15, y, -D + 0.62], [W / 2 - 0.1, y, -D + 0.62], 0.2),
   sag([-W / 2 + 0.08, y, -D + 0.7], [-W / 2 + 0.08, y, -0.2], 0.3),
   sag([W / 2 - 0.08, y, -D + 0.7], [W / 2 - 0.08, y, -0.2], 0.3),
 ];
@@ -1587,8 +1586,8 @@ const topLoops = (y = 2.45) => [
 const ENV = {
   'borrowed-eyes'(K) {
     // ── a forest paradise: trees, ferns, vines, a pond, fireflies, butterflies ──
-    tree(K, -3.45, -3.5, 5);
-    tree(K, 3.45, -3.0, 9);
+    tree(K, -3.45, -2.35, 5);
+    tree(K, 3.45, -2.0, 9);
     // a leafy canopy along the top of every wall
     const greens = [0x5e9d5e, 0x4f8f58, 0x6fae66, 0x86a868, 0x3f7a4c];
     const canopyAt = (x, z, i) => { const p = K.put(new THREE.IcosahedronGeometry(0.28 + (i % 3) * 0.07, 1), paint(greens[i % 5], { hatch: 0.5 }), x, 2.62 + (i % 2) * 0.08, z); p.scale.y = 0.7; };
@@ -1598,7 +1597,7 @@ const ENV = {
     const leafM = cutout(leafTex()), vineM = paint(0x3f6a3c), vines = [];
     const vr = rng(23);
     const vineSpots = [];
-    for (let x = -3.6; x <= 3.6; x += 0.55) if (Math.abs(x) > 1.25 || vr() < 0.3) vineSpots.push([x + vr() * 0.2, -D + 0.75]);
+    for (let x = -3.6; x <= 3.6; x += 0.45) if (Math.abs(x) > SCR_W / 2 + 0.15) vineSpots.push([x + vr() * 0.2, -D + 0.75]);
     for (const s of [-1, 1]) for (let z = -4.6; z <= -0.6; z += 0.6) vineSpots.push([s * (W / 2 - 0.25), z + vr() * 0.2]);
     vineSpots.forEach(([x, z], i) => {
       const len = 0.5 + vr() * 1.0, g = new THREE.Group(); g.position.set(x, 2.6, z); K.g.add(g);
@@ -1617,13 +1616,13 @@ const ENV = {
     });
     LIVE.push((t) => { for (const [g, ph] of vines) { g.rotation.z = Math.sin(t * 0.7 + ph) * 0.05; g.rotation.x = Math.cos(t * 0.5 + ph) * 0.04; } });
     // ferns and flowers in the undergrowth, out of the walkway
-    [[-3.6, -0.3, 1.2], [3.6, -0.3, 1.2], [-3.6, -2.4, 0.9], [3.6, -1.6, 0.8], [-2.4, -4.9, 0.9], [0.9, -5.0, 0.7], [-0.6, -5.0, 0.6], [2.2, -5.1, 0.8], [-3.6, -4.9, 1.0], [3.6, -4.9, 1.1]]
+    [[-3.6, -0.3, 1.2], [3.6, -0.3, 1.2], [-3.6, -3.4, 0.9], [3.6, -3.0, 0.8], [-2.4, -4.9, 0.9], [0.9, -5.0, 0.7], [-0.6, -5.0, 0.6], [2.2, -5.1, 0.8], [-3.6, -4.9, 1.0], [3.6, -4.9, 1.1]]
       .forEach(([x, z, s], i) => fern(K, x, z, s, i + 1));
     for (const s of [-1, 1]) K.cols.push({ x0: s * 3.6 - 0.45, x1: s * 3.6 + 0.45, z0: -0.75, z1: 0.2 });
-    [[-3.75, -2.0, 0.9, 0xf29bb4], [-3.7, -2.8, 0.7, 0xe8604c], [3.75, -2.0, 0.85, 0xf6c453], [3.7, -1.2, 0.65, 0xb7a3e6], [-1.6, -5.2, 0.75, 0xe8604c], [1.4, -5.2, 0.9, 0xf29bb4], [-3.75, -4.2, 0.95, 0xf6c453], [3.75, -4.3, 0.75, 0xe8604c]]
+    [[-3.75, -1.4, 0.9, 0xf29bb4], [-3.7, -3.2, 0.7, 0xe8604c], [3.75, -2.8, 0.85, 0xf6c453], [3.7, -1.2, 0.65, 0xb7a3e6], [-1.6, -5.2, 0.75, 0xe8604c], [1.4, -5.2, 0.9, 0xf29bb4], [-3.75, -4.2, 0.95, 0xf6c453], [3.75, -4.3, 0.75, 0xe8604c]]
       .forEach(([x, z, h, col], i) => bloom(K, x, z, h, col, i * 13 + 5));
     // mushrooms at the tree roots
-    for (const [x, z, s] of [[-3.0, -3.2, 1], [-3.1, -3.85, 0.7], [3.0, -2.6, 0.9], [2.95, -3.35, 0.6], [-0.2, -1.1, 0.5]]) {
+    for (const [x, z, s] of [[-2.95, -2.1, 1], [-3.05, -2.75, 0.7], [3.0, -1.6, 0.9], [2.95, -2.35, 0.6], [-0.2, -1.1, 0.5]]) {
       K.put(new THREE.CylinderGeometry(0.03 * s, 0.04 * s, 0.12 * s, 8), paint(0xf6eedb), x, 0.06 * s, z);
       const cap = K.put(new THREE.SphereGeometry(0.08 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), paint(0xd2483e), x, 0.11 * s, z);
       for (let k = 0; k < 4; k++) K.put(new THREE.SphereGeometry(0.012 * s, 6, 5), paint(0xffffff, { hatch: 0 }), x + Math.cos(k * 1.6) * 0.05 * s, 0.11 * s + 0.055 * s, z + Math.sin(k * 1.6) * 0.05 * s).userData.noInk = true;
@@ -1802,9 +1801,9 @@ export function buildInteriors(scene) {
     CENTER[place.id]?.(K);
     EXTRA[place.id]?.(K);
     if (place.id !== 'deckgpt' && place.id !== 'library' && place.shot)
-      framedShot(K, place.shot, 1.9, 1.19, 0, 1.45, -D + 0.6, null, place.clip);
-    plaque(K, -1.25, -D + 2.1);
-    counter(K, 1.6, -D + 2.3, 0);
+      framedShot(K, place.shot, SCR_W, SCR_H, 0, SCR_Y, -D + 0.6, null, place.clip);
+    plaque(K, PLQ_X, -D + 2.1);
+    counter(K, CTR_X, -D + 2.3, 0);
     SETS[place.id]?.(K);
     // a soft pool of light on the floor
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
@@ -1815,13 +1814,13 @@ export function buildInteriors(scene) {
       spawn: { x: ox, z: oz - 0.9, yaw: Math.PI },     // just inside, facing the room
       bounds: { x0: ox - W / 2 + 0.25, x1: ox + W / 2 - 0.25, z0: oz - D + 0.8, z1: oz + 0.42 },
       colliders: [
-        { x0: ox - 2.0, x1: ox - 0.6, z0: oz - D + 1.75, z1: oz - D + 2.45 },   // plaque
-        { x0: ox + 0.7, x1: ox + 2.5, z0: oz - D + 1.95, z1: oz - D + 2.65 },   // counter
+        { x0: ox + PLQ_X - 0.4, x1: ox + PLQ_X + 0.4, z0: oz - D + 1.75, z1: oz - D + 2.45 },   // plaque
+        { x0: ox + CTR_X - 0.9, x1: ox + CTR_X + 0.9, z0: oz - D + 1.95, z1: oz - D + 2.65 },   // counter
         ...K.cols.map(c => ({ x0: ox + c.x0, x1: ox + c.x1, z0: oz + c.z0, z1: oz + c.z1 })),
       ],
       interact: [
-        { x: ox - 1.25, z: oz - D + 2.55, r: 1.0, label: 'read the plaque', act: { type: 'card', place } },
-        { x: ox + 1.6, z: oz - D + 2.75, r: 1.1, label: `open ${place.title} →`, act: { type: 'visit', url: place.url, place } },
+        { x: ox + PLQ_X, z: oz - D + 2.55, r: 1.0, label: 'read the plaque', act: { type: 'card', place } },
+        { x: ox + CTR_X, z: oz - D + 2.75, r: 1.1, label: `open ${place.title} →`, act: { type: 'visit', url: place.url, place } },
         { x: ox, z: oz + 0.1, r: 1.0, label: 'back to the street', act: { type: 'exit' } },
       ],
     };
