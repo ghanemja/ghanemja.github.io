@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { PAL, paint, ink, blobShadow } from './style.js';
 import { APPS, LIBRARY, PLACES } from './apps.js';
+import { bush } from './props.js';
 
 const INKC = '#2a2230';
 const HAND = '"Patrick Hand", "Comic Sans MS", cursive', SCRIPT = '"Caveat", "Patrick Hand", cursive';
@@ -970,6 +971,151 @@ const EXTRA = {
   },
 };
 
+// ─── FURNISHING: every room reads as a lived-in shop, not a bare box ────────
+const ACCENT = {
+  charterscope: 0x3f5872, 'inbox-zero': 0xc23f36, yarnflow: 0x8f7ae8, deckgpt: 0xb03a30,
+  splatform: 0xe8604c, 'borrowed-eyes': 0x2f5a52, gallery: 0x6a4a8a, library: 0x8e2f3a,
+};
+function furnish(K, id, wallHex) {
+  const acc = ACCENT[id] ?? 0x8a6448, trim = paint(0xfffaf0);
+  const panel = paint(new THREE.Color(wallHex).multiplyScalar(0.84).getHex(), { hatch: 0.5 });
+  // wainscot: a darker lower panel and a chair rail round all three walls
+  K.box(W - 0.1, 0.9, 0.03, panel, 0, 0.45, -D + 0.52, 0.01);
+  K.box(W - 0.1, 0.05, 0.06, trim, 0, 0.92, -D + 0.54, 0.015);
+  for (const s of [-1, 1]) {
+    K.box(0.03, 0.9, D - 0.1, panel, s * (W / 2 - 0.02), 0.45, -D / 2 + 0.5, 0.01);
+    K.box(0.06, 0.05, D - 0.1, trim, s * (W / 2 - 0.04), 0.92, -D / 2 + 0.5, 0.015);
+  }
+  // two pendant lamps over the floor
+  const cord = paint(0x2a2230, { hatch: 0 }), shade = paint(acc), bulb = paint(0xfff1c8, { emissive: 0xffd98a, hatch: 0 });
+  for (const x of [-1.7, 1.7]) {
+    K.put(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6), cord, x, 2.95, -2.0).userData.noInk = true;
+    const sh = K.put(new THREE.LatheGeometry([[0.03, 0], [0.06, 0.02], [0.2, -0.16], [0.22, -0.2], [0.03, 0.0]].map(([a, b]) => new THREE.Vector2(a, b)), 20), shade, x, 2.7, -2.0);
+    sh.material = paint(acc, { side: THREE.DoubleSide });
+    K.put(new THREE.SphereGeometry(0.06, 12, 10), bulb, x, 2.53, -2.0).userData.noInk = true;
+  }
+  // potted plants in the front corners
+  const pot = paint(PAL.terracotta);
+  for (const s of [-1, 1]) {
+    const x = s * (W / 2 - 0.45), z = -0.25;
+    K.put(new THREE.LatheGeometry([[0.001, 0], [0.18, 0], [0.24, 0.36], [0.27, 0.38], [0.001, 0.38]].map(([a, b]) => new THREE.Vector2(a, b)), 18), pot, x, 0, z);
+    const b = bush(0.55); b.position.set(x, 0.32, z); K.g.add(b);
+    K.cols.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3 });
+  }
+  // a wall shelf of knick-knacks on each side wall, toward the back
+  if (id !== 'gallery') for (const s of [-1, 1]) {
+    const x = s * (W / 2 - 0.13), z = -4.55, y = 1.35, wood = paint(0x8a6448);
+    K.box(0.24, 0.04, 1.0, wood, x, y, z, 0.01);
+    for (const dz of [-0.4, 0.4]) K.box(0.18, 0.12, 0.03, wood, x + s * 0.02, y - 0.08, z + dz, 0.008);
+    const cols = [acc, PAL.gold, PAL.teal, PAL.rose, 0xf6eedb];
+    for (let i = 0; i < 3; i++) K.box(0.14, 0.2 + (i % 2) * 0.04, 0.05, paint(cols[i]), x, y + 0.12 + (i % 2) * 0.02, z - 0.38 + i * 0.06, 0.01);
+    K.put(new THREE.CylinderGeometry(0.05, 0.05, 0.14, 12), paint(0xcfe6ef, { opacity: 0.85, hatch: 0 }), x, y + 0.09, z + 0.05);
+    K.put(new THREE.LatheGeometry([[0.001, 0], [0.05, 0], [0.065, 0.1], [0.001, 0.1]].map(([a, b]) => new THREE.Vector2(a, b)), 12), pot, x, y + 0.02, z + 0.32);
+    const sp = bush(0.14); sp.position.set(x, y + 0.11, z + 0.32); K.g.add(sp);
+  }
+  // a small framed print by the door on each side wall
+  if (id !== 'gallery') for (const s of [-1, 1]) {
+    const x = s * (W / 2 - 0.05), ry = -s * Math.PI / 2;
+    const fr = new THREE.Group(); fr.position.set(x, 1.55, -0.6); fr.rotation.y = ry;
+    const F = kit(fr), gold = paint(PAL.gold);
+    F.box(0.52, 0.04, 0.03, gold, 0, 0.32, 0); F.box(0.52, 0.04, 0.03, gold, 0, -0.32, 0);
+    F.box(0.04, 0.64, 0.03, gold, -0.25, 0, 0); F.box(0.04, 0.64, 0.03, gold, 0.25, 0, 0);
+    F.flat(0.46, 0.6, texMat(120, 156, (c, w, h) => {
+      c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#' + new THREE.Color(acc).getHexString(); c.globalAlpha = 0.8;
+      c.beginPath(); c.arc(w * (s < 0 ? 0.4 : 0.6), h * 0.42, w * 0.28, 0, 7); c.fill();
+      c.globalAlpha = 0.6; c.fillStyle = '#e4b84f'; c.fillRect(w * 0.15, h * 0.68, w * 0.7, h * 0.12);
+    }), 0, 0, 0.018);
+    K.g.add(fr);
+  }
+}
+
+// one centrepiece per room in the open floor, tied to what the app does
+const CENTER = {
+  charterscope(K) {     // a globe on a reading table: the competition, worldwide
+    const x = -2.0, z = -1.7, wood = paint(0x6b4a34);
+    K.put(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 24), wood, x, 0.72, z);
+    K.put(new THREE.CylinderGeometry(0.05, 0.08, 0.7, 10), wood, x, 0.36, z);
+    K.put(new THREE.CylinderGeometry(0.22, 0.26, 0.04, 16), wood, x, 0.02, z);
+    const globe = new THREE.Group(); globe.position.set(x, 1.05, z); globe.rotation.z = 0.4; K.g.add(globe);
+    const sea = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 18), paint(0xffffff, { map: canvasTex(128, 64, (c, w, h) => {
+      c.fillStyle = '#8fc3c9'; c.fillRect(0, 0, w, h); c.fillStyle = '#a8b994';
+      for (const [px, py, r] of [[20, 22, 12], [40, 40, 9], [70, 18, 14], [95, 34, 11], [110, 50, 6], [60, 50, 7]]) { c.beginPath(); c.ellipse(px, py, r, r * 0.7, 0.3, 0, 7); c.fill(); }
+    }), hatch: 0 }));
+    globe.add(sea);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.012, 6, 32, Math.PI * 1.4), paint(PAL.gold)); ring.rotation.z = -0.9; globe.add(ring);
+    K.put(new THREE.CylinderGeometry(0.03, 0.06, 0.12, 10), paint(PAL.gold), x, 0.8, z);
+    LIVE.push((t) => { sea.rotation.y = t * 0.4; });
+    K.cols.push({ x0: x - 0.45, x1: x + 0.45, z0: z - 0.45, z1: z + 0.45 });
+  },
+  'inbox-zero'(K) {     // the sorting table: todo / waiting / done trays, letters in each
+    const x = 2.3, z = -1.55, wood = paint(0x8a6448);
+    K.box(1.5, 0.06, 0.7, wood, x, 0.75, z, 0.02);
+    for (const [dx, dz] of [[-0.68, -0.3], [0.68, -0.3], [-0.68, 0.3], [0.68, 0.3]]) K.box(0.06, 0.74, 0.06, wood, x + dx, 0.37, z + dz, 0.015);
+    [['todo', 0xe8604c, 4], ['waiting', 0xe4b84f, 2], ['done', 0x7fb3a8, 5]].forEach(([label, col, n], i) => {
+      const tx = x - 0.48 + i * 0.48;
+      K.box(0.4, 0.06, 0.5, paint(col), tx, 0.81, z, 0.01);
+      for (let k = 0; k < n; k++) K.box(0.3, 0.012, 0.2, paint(0xf6eedb), tx, 0.85 + k * 0.014, z + 0.04, 0.003, [0, (k % 3 - 1) * 0.12, 0]);
+      K.flat(0.36, 0.09, texMat(128, 32, (c, w, h) => { c.fillStyle = '#' + new THREE.Color(col).getHexString(); c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.font = `700 22px ${HAND}`; c.textAlign = 'center'; c.fillText(label, w / 2, 24); }), tx, 0.8, z + 0.256);
+    });
+    K.cols.push({ x0: x - 0.8, x1: x + 0.8, z0: z - 0.4, z1: z + 0.4 });
+  },
+  deckgpt(K) {          // a popcorn cart by the door
+    const x = -2.9, z = -1.3;
+    K.box(0.7, 0.75, 0.5, paint(0xb03a30), x, 0.45, z, 0.04);
+    K.box(0.76, 0.05, 0.56, paint(PAL.gold), x, 0.85, z, 0.015);
+    K.box(0.6, 0.45, 0.42, paint(0xcfe6ef, { opacity: 0.5, hatch: 0 }), x, 1.1, z, 0.03).userData.noInk = true;
+    for (let i = 0; i < 18; i++) K.put(new THREE.SphereGeometry(0.035, 7, 6), paint(0xf3e3b8), x - 0.22 + (i % 6) * 0.09, 0.92 + Math.floor(i / 6) * 0.05, z - 0.12 + (i % 3) * 0.1).userData.noInk = true;
+    K.box(0.76, 0.06, 0.56, paint(0xb03a30), x, 1.36, z, 0.02);
+    for (const sx of [-0.25, 0.25]) K.put(new THREE.TorusGeometry(0.1, 0.025, 8, 16), paint(0x2a2230, { hatch: 0 }), x + sx, 0.1, z + 0.27);
+    K.cols.push({ x0: x - 0.4, x1: x + 0.4, z0: z - 0.3, z1: z + 0.3 });
+  },
+  splatform(K) {        // the artist's palette table, brushes in a jar
+    const x = 0.9, z = -1.7, wood = paint(0x8a6448);
+    K.put(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 24), wood, x, 0.7, z);
+    K.put(new THREE.CylinderGeometry(0.05, 0.08, 0.68, 10), wood, x, 0.34, z);
+    const pal = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.025, 28), paint(0xe2c79a)); pal.scale.set(1.2, 1, 0.85); pal.position.set(x, 0.74, z); K.g.add(pal);
+    [[0xe8604c, -0.2, -0.1], [0xe4b84f, -0.05, -0.17], [0x7fb3a8, 0.12, -0.14], [0x8f7ae8, 0.22, 0.02], [0x5f8cc8, 0.05, 0.12]].forEach(([col, dx, dz]) => {
+      const d = K.put(new THREE.SphereGeometry(0.05, 10, 8), paint(col), x + dx, 0.755, z + dz); d.scale.y = 0.4; d.userData.noInk = true;
+    });
+    K.put(new THREE.CylinderGeometry(0.07, 0.06, 0.16, 12), paint(0xcfe6ef, { opacity: 0.8, hatch: 0 }), x - 0.25, 0.81, z + 0.15).userData.noInk = true;
+    for (let i = 0; i < 4; i++) K.put(new THREE.CylinderGeometry(0.008, 0.01, 0.32, 6), paint(PAL.bark), x - 0.25 + (i - 1.5) * 0.02, 0.92, z + 0.15, [0, 0, (i - 1.5) * 0.15]);
+    K.cols.push({ x0: x - 0.45, x1: x + 0.45, z0: z - 0.45, z1: z + 0.45 });
+  },
+  'borrowed-eyes'(K) {  // a giant eye under a glass dome, looking around the room
+    const x = 1.6, z = -1.8, wood = paint(0x4a4258);
+    K.put(new THREE.CylinderGeometry(0.22, 0.28, 0.8, 16), wood, x, 0.4, z);
+    K.put(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 20), paint(PAL.gold), x, 0.82, z);
+    const eye = new THREE.Group(); eye.position.set(x, 1.05, z); K.g.add(eye);
+    eye.add(new THREE.Mesh(new THREE.SphereGeometry(0.17, 24, 18), paint(0xfbf8f1, { hatch: 0 })));
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 14), paint(0x5f9a6a, { hatch: 0 })); iris.scale.z = 0.4; iris.position.z = 0.15; iris.userData.noInk = true; eye.add(iris);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 10), paint(0x111014, { hatch: 0 })); pupil.scale.z = 0.4; pupil.position.z = 0.175; pupil.userData.noInk = true; eye.add(pupil);
+    const dome = K.put(new THREE.SphereGeometry(0.26, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), paint(0xdff0f6, { opacity: 0.28, hatch: 0, side: THREE.DoubleSide }), x, 0.85, z); dome.userData.noInk = true;
+    LIVE.push((t) => { eye.rotation.y = 0.9 * Math.sin(t * 0.5) + 0.25 * Math.sin(t * 1.7); eye.rotation.x = 0.25 * Math.sin(t * 0.8); });
+    K.cols.push({ x0: x - 0.35, x1: x + 0.35, z0: z - 0.35, z1: z + 0.35 });
+  },
+  gallery(K) {          // a museum bench to sit and look
+    const x = -1.2, z = -1.6;
+    K.box(1.4, 0.12, 0.45, paint(0x6a4a8a), x, 0.44, z, 0.05);
+    K.box(1.3, 0.3, 0.38, paint(0x2a2230, { hatch: 0 }), x, 0.2, z, 0.03);
+    K.cols.push({ x0: x - 0.75, x1: x + 0.75, z0: z - 0.3, z1: z + 0.3 });
+  },
+  library(K) {          // a reading table with a green banker's lamp and a chair
+    const x = 2.2, z = -1.5, wood = paint(0x6b4a34);
+    K.box(1.1, 0.06, 0.65, wood, x, 0.74, z, 0.02);
+    for (const [dx, dz] of [[-0.5, -0.27], [0.5, -0.27], [-0.5, 0.27], [0.5, 0.27]]) K.box(0.06, 0.72, 0.06, wood, x + dx, 0.36, z + dz, 0.015);
+    K.put(new THREE.CylinderGeometry(0.07, 0.09, 0.03, 12), paint(PAL.gold), x - 0.3, 0.79, z - 0.12);
+    K.put(new THREE.CylinderGeometry(0.012, 0.012, 0.25, 6), paint(PAL.gold), x - 0.3, 0.92, z - 0.12);
+    const sh = K.put(new THREE.CylinderGeometry(0.12, 0.12, 0.24, 16, 1, false, 0, Math.PI), paint(0x2f6f4a, { side: THREE.DoubleSide }), x - 0.3, 1.06, z - 0.12, [0, 0, Math.PI / 2]);
+    K.put(new THREE.SphereGeometry(0.04, 10, 8), paint(0xfff1c8, { emissive: 0xffd98a, hatch: 0 }), x - 0.3, 1.02, z - 0.12).userData.noInk = true;
+    for (const s of [-1, 1]) K.box(0.18, 0.012, 0.26, paint(0xfbf6ea), x + 0.12 + s * 0.09, 0.78, z + 0.05, 0.004, [0, 0, s * 0.12]);
+    K.box(0.42, 0.06, 0.4, paint(0x8e2f3a), x, 0.46, z + 0.62, 0.03);
+    K.box(0.42, 0.45, 0.06, paint(0x8e2f3a), x, 0.72, z + 0.82, 0.03);
+    for (const [dx, dz] of [[-0.18, 0.45], [0.18, 0.45], [-0.18, 0.8], [0.18, 0.8]]) K.box(0.04, 0.44, 0.04, wood, x + dx, 0.22, z + dz, 0.01);
+    K.cols.push({ x0: x - 0.6, x1: x + 0.6, z0: z - 0.35, z1: z + 0.85 });
+  },
+};
+
 const ROOM_WALL = {
   charterscope: 0xcfdbe4, 'inbox-zero': 0xf3dfc2, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
   splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0xcfc3dc, library: 0xe8ddc2,
@@ -981,7 +1127,10 @@ export function buildInteriors(scene) {
     const ox = -105 + i * 30, oz = -45;
     const g = new THREE.Group(); g.position.set(ox, 0, oz);
     const K = kit(g);
+    K.cols = [];
     roomShell(K, ROOM_WALL[place.id] ?? 0xe8ddc2, place);
+    furnish(K, place.id, ROOM_WALL[place.id] ?? 0xe8ddc2);
+    CENTER[place.id]?.(K);
     EXTRA[place.id]?.(K);
     if (place.id !== 'deckgpt' && place.id !== 'library' && place.shot)
       framedShot(K, place.shot, 1.9, 1.19, 0, 1.45, -D + 0.6, null, place.clip);
@@ -999,6 +1148,7 @@ export function buildInteriors(scene) {
       colliders: [
         { x0: ox - 2.0, x1: ox - 0.6, z0: oz - D + 1.75, z1: oz - D + 2.45 },   // plaque
         { x0: ox + 0.7, x1: ox + 2.5, z0: oz - D + 1.95, z1: oz - D + 2.65 },   // counter
+        ...K.cols.map(c => ({ x0: ox + c.x0, x1: ox + c.x1, z0: oz + c.z0, z1: oz + c.z1 })),
       ],
       interact: [
         { x: ox - 1.25, z: oz - D + 2.55, r: 1.0, label: 'read the plaque', act: { type: 'card', place } },
