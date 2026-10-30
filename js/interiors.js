@@ -2027,7 +2027,7 @@ const MINI = {
     const BOOKS = [
       ['whiteboard', 'A coding agent draws what it’s doing on a whiteboard: its plan, its decisions and why, its progress.'],
       ['equalizer', 'Beats from math: every drum, bass line and melody is an equation you can read and tweak.'],
-      ['npcity', 'NPCity: a production line of NPC characters, made on demand in the browser.'],
+      ['citizen-maker', 'Citizen Maker: a production line of NPC characters, made on demand in the browser.'],
       ['adapter-portability', 'Move a LoRA fine-tune onto the next version of its base model without retraining it.'],
       ['RL_Tutorial', 'Reinforcement learning on a MuJoCo cart-pole: reward design, PPO, and reward hacking.'],
       ['ros2_depth_camera_tutorial', 'Stream a RealSense depth camera over HTTP from your own ROS2 nodes.'],
