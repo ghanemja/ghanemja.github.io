@@ -18,3 +18,12 @@ flat ground. three.js via importmap, no build step.
 On touch: left half of the screen walks, right half looks, tap the prompts.
 
 Run locally with any static server: `python3 -m http.server` → http://localhost:8000
+
+## License
+
+The code is [MIT](LICENSE). Third-party pieces keep their own terms:
+
+- `models/human/` is baked from [MakeHuman](https://github.com/makehumancommunity/makehuman)'s base human, whose assets are **CC0 1.0**.
+- `fonts/` (Caveat, Patrick Hand) are under the SIL Open Font License.
+- three.js (loaded from a CDN) is MIT.
+- `artworks/` and `screenshots/` are not covered by the MIT license.

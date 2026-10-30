@@ -45,30 +45,20 @@ function fitLine(c, text, px, font, maxW) {
 const css = (hex) => '#' + new THREE.Color(hex).getHexString();
 
 const _loader = new THREE.TextureLoader();
-// every framed screen drifts gently (a slow Ken Burns pan) so it reads as a
-// living picture, not a poster; frames with a recorded clip play real footage
-const ANIM = [];
 const LIVE = [];                            // per-frame animations: f(t), local room coords
 export function tickInteriors(t) {
   for (const f of LIVE) f(t);
-  for (const a of ANIM) {
-    const tex = a.mat.map;
-    if (!tex) continue;
-    if (tex.isVideoTexture) continue;                  // footage moves by itself
-    const z = 1 - 0.045 * (0.5 + 0.5 * Math.sin(t * 0.21 + a.ph));
-    tex.repeat.set(z, z);
-    tex.offset.set(
-      (1 - z) * (0.5 + 0.28 * Math.sin(t * 0.13 + a.ph * 2)),
-      (1 - z) * (0.5 + 0.28 * Math.cos(t * 0.17 + a.ph)),
-    );
-  }
 }
-function shotMat(url, clip) {
-  const t = _loader.load(url);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+function shotMat(url, clip, aspect = 1.6) {
+  const crop = (tex, iw, ih) => {
+    const ia = iw / ih;
+    if (ia > aspect) { tex.repeat.set(aspect / ia, 1); tex.offset.set((1 - aspect / ia) / 2, 0); }
+    else { tex.repeat.set(1, ia / aspect); tex.offset.set(0, 1 - ia / aspect); }     // keep the top of the page
+  };
+  const t = _loader.load(url, (tx) => crop(tx, tx.image.width, tx.image.height));
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-  const m = paint(0xffffff, { map: t, hatch: 0, unique: true });
-  ANIM.push({ mat: m, ph: ANIM.length * 2.4 });
+  const m = new THREE.MeshBasicMaterial({ map: t, toneMapped: false });
   if (clip) {
     const v = document.createElement('video');
     v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
@@ -76,6 +66,7 @@ function shotMat(url, clip) {
     const swap = () => {
       const vt = new THREE.VideoTexture(v);
       vt.colorSpace = THREE.SRGBColorSpace;
+      crop(vt, v.videoWidth, v.videoHeight);
       m.map = vt; m.needsUpdate = true;
     };
     v.addEventListener('playing', swap, { once: true });
@@ -97,7 +88,8 @@ function framedShot(K, url, w, h, x, y, z, rot, clip) {
   F.box(w + 0.14, 0.07, 0.06, fr, 0, -h / 2 - 0.035, 0);
   F.box(0.07, h, 0.06, fr, -w / 2 - 0.035, 0, 0);
   F.box(0.07, h, 0.06, fr, w / 2 + 0.035, 0, 0);
-  F.flat(w, h, shotMat(url, clip), 0, 0, 0.012);
+  F.box(w + 0.06, h + 0.06, 0.03, paint(0x2a2230, { hatch: 0 }), 0, 0, -0.01, 0.01);
+  F.flat(w, h, shotMat(url, clip, w / h), 0, 0, 0.012);
   K.g.add(grp);
   return grp;
 }
@@ -123,26 +115,37 @@ function plankMat() {
 
 // ── one room: origin at the middle of the OPEN front edge, inside is −z ──
 const W = 8, D = 6, H = 2.7;
-function roomShell(K, wallHex, place) {
+// the app's screen fills the middle of the back wall
+const SCR_W = 3.44, SCR_H = 2.15, SCR_Y = 1.15;
+// the plaque and the counter stand off to the sides, out of its way
+const PLQ_X = -2.9, CTR_X = 2.9;
+function roomShell(K, wallHex, place, theme) {
   const wall = paint(wallHex, { hatch: 0.6 }), trim = paint(0xfffaf0);
-  const floor = K.flat(W, D, plankMat(), 0, 0, -D / 2 + 0.5, [-Math.PI / 2, 0, 0]);
+  const tm = themeMats(theme, place.id);
+  const floor = K.flat(W, D, tm?.floor || plankMat(), 0, 0, -D / 2 + 0.5, [-Math.PI / 2, 0, 0]);
   floor.userData.noInk = true;
   // walls: single-sided planes, invisible from outside so the camera roams free
-  K.flat(W, H, wall, 0, H / 2, -D + 0.5);                                    // back
-  K.flat(D, H, wall, -W / 2, H / 2, -D / 2 + 0.5, [0, Math.PI / 2, 0]);      // west
-  K.flat(D, H, wall, W / 2, H / 2, -D / 2 + 0.5, [0, -Math.PI / 2, 0]);      // east
+  K.flat(W, H, tm?.walls[0] || wall, 0, H / 2, -D + 0.5);                                    // back
+  K.flat(D, H, tm?.walls[1] || wall, -W / 2, H / 2, -D / 2 + 0.5, [0, Math.PI / 2, 0]);      // west
+  K.flat(D, H, tm?.walls[2] || wall, W / 2, H / 2, -D / 2 + 0.5, [0, -Math.PI / 2, 0]);      // east
   // skirting + picture rail, real boxes so they take ink
-  K.box(W, 0.12, 0.05, trim, 0, 0.06, -D + 0.53);
-  for (const s of [-1, 1]) K.box(0.05, 0.12, D, trim, s * (W / 2 - 0.026), 0.06, -D / 2 + 0.5);
-  K.box(W, 0.045, 0.04, trim, 0, 2.08, -D + 0.53);
+  if (!theme?.bare) {
+    K.box(W, 0.12, 0.05, trim, 0, 0.06, -D + 0.53);
+    for (const s of [-1, 1]) K.box(0.05, 0.12, D, trim, s * (W / 2 - 0.026), 0.06, -D / 2 + 0.5);
+    K.box(W, 0.045, 0.04, trim, 0, 2.08, -D + 0.53);
+  }
   // the shop's name over the back wall
-  K.flat(2.6, 0.42, texMat(768, 128, (c, w, h) => {
+  K.flat(2.1, 0.35, texMat(768, 128, (c, w, h) => {
+    // a paper banner behind the lettering, so it reads on any wallpaper
+    c.fillStyle = '#f6efdf'; c.strokeStyle = INKC; c.lineWidth = 5;
+    c.beginPath(); c.roundRect(w * 0.12, 6, w * 0.76, h - 12, 22); c.fill(); c.stroke();
     c.font = `700 ${h * 0.62}px ${SCRIPT}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(place.title, w / 2, h * 0.38);
     c.font = `400 ${h * 0.26}px ${HAND}`; c.fillStyle = '#5a4e5e';
     c.fillText('— ' + place.trade + ' —', w / 2, h * 0.8);
-  }), 0, 2.38, -D + 0.54);
+  }), 0, 2.4, -D + 0.68);
   // a rug
+  if (theme?.rug !== false) {
   const rug = K.flat(2.6, 1.7, texMat(256, 160, (c, w, h) => {
     const base = new THREE.Color(wallHex).lerp(new THREE.Color(0x8a6448), 0.35);
     c.fillStyle = '#' + base.getHexString(); c.fillRect(0, 0, w, h);
@@ -150,6 +153,7 @@ function roomShell(K, wallHex, place) {
     c.strokeStyle = INKC; c.lineWidth = 4; c.strokeRect(3, 3, w - 6, h - 6);
   }), 0, 0.015, -D / 2 + 0.35, [-Math.PI / 2, 0, 0]);
   rug.renderOrder = 1;
+  }
   // the way out: just a mat at the open front (a doorframe only blocks the camera)
   K.flat(0.9, 0.5, texMat(192, 96, (c, w, h) => {
     c.fillStyle = '#b8a07c'; c.fillRect(0, 0, w, h);
@@ -196,7 +200,7 @@ const SETS = {
   charterscope(K) {
     // the decision board: the charter pinned in the middle, today's competitor moves
     // around it, each stamped with its verdict and strung back to the charter
-    K.flat(1.7, 1.1, texMat(512, 330, (c, w, h) => {
+    K.flat(1.6, 1.03, texMat(512, 330, (c, w, h) => {
       c.fillStyle = '#caa87c'; c.fillRect(0, 0, w, h);
       c.strokeStyle = '#8a6448'; c.lineWidth = 10; c.strokeRect(5, 5, w - 10, h - 10);
       const V = { ADOPT: '#3f8f5a', MONITOR: '#c08a2a', REJECT: '#8a8494', PIVOT: '#7a5bb5' };
@@ -217,7 +221,7 @@ const SETS = {
       c.fillText('our charter', cx, cy - 6); c.font = `400 14px ${HAND}`; c.fillStyle = '#5a4e5e';
       c.fillText('goals · anti-goals', cx, cy + 18);
       c.fillStyle = '#e8604c'; c.beginPath(); c.arc(cx, cy - 34, 6, 0, 7); c.fill();
-    }), -2.4, 1.35, -D + 0.56, [0, 0.0, 0]);
+    }), -3.05, 1.8, -D + 0.56, [0, 0.0, 0]);
     // a brass telescope on a tripod, trained on the competition
     const scope = new THREE.Group(); scope.position.set(2.9, 0, -D + 1.3); scope.rotation.y = -0.7;
     const Sk = kit(scope), wood = paint(0x6b4a34), brass = paint(PAL.gold);
@@ -244,7 +248,7 @@ const SETS = {
     ph.box(1.8, 0.4, 0.44, paint(0xc23f36), 0, 0.22, 0);
     K.g.add(ph.g); ink(ph.g, 'fine');
     // the kanban board itself: todo / waiting / done
-    K.flat(1.9, 1.15, texMat(560, 340, (c, w, h) => {
+    K.flat(1.75, 1.06, texMat(560, 340, (c, w, h) => {
       c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h);
       c.strokeStyle = INKC; c.lineWidth = 6; c.strokeRect(3, 3, w - 6, h - 6);
       const cols = [['todo', '#e8604c', 4], ['waiting', '#e4b84f', 2], ['done', '#7fb3a8', 5]];
@@ -259,7 +263,7 @@ const SETS = {
           c.beginPath(); c.moveTo(x + 18, 92 + k * 52); c.lineTo(x + 110, 92 + k * 52); c.stroke();
         }
       });
-    }), 2.3, 1.3, -D + 0.56);
+    }), 3.0, 1.85, -D + 0.56);
     // parcels waiting to go out
     for (const [x, y, z, s] of [[0.4, 0.19, -D + 1.0, 0.38], [0.75, 0.16, -D + 1.15, 0.32], [0.55, 0.5, -D + 1.05, 0.3]])
       K.box(s, s * 0.8, s, paint(0xc8a47c), x, y, z, 0.02, [0, x * 2, 0]);
@@ -290,18 +294,18 @@ const SETS = {
       c.setLineDash([]);
       c.fillStyle = '#e8604c'; c.beginPath(); c.arc(w / 2, h / 2, 26, 0, 7); c.fill();
       c.strokeStyle = INKC; c.lineWidth = 3; c.stroke();
-    }), 2.95, 1.45, -D + 0.56);
+    }), 3.05, 1.85, -D + 0.56);
     // a basket with needles
     K.put(new THREE.CylinderGeometry(0.3, 0.22, 0.3, 12, 1, true), paint(0xc8a47c, { side: THREE.DoubleSide }), 1.1, 0.15, -D + 1.1);
     for (const a of [-0.3, 0.1, 0.5]) K.box(0.025, 0.85, 0.025, paint(0x6b4a34), 1.1 + a * 0.3, 0.5, -D + 1.1, 0.008, [0, 0, a]);
   },
   deckgpt(K) {
     // the silver screen, playing the app
-    K.box(3.3, 2.0, 0.08, paint(0x2a2230, { hatch: 0 }), 0, 1.35, -D + 0.62, 0.03);
-    K.flat(3.0, 1.78, shotMat('screenshots/pptgpt.png'), 0, 1.35, -D + 0.67);
+    K.box(SCR_W + 0.3, SCR_H + 0.2, 0.08, paint(0x2a2230, { hatch: 0 }), 0, SCR_Y, -D + 0.62, 0.03);
+    K.flat(SCR_W, SCR_H, shotMat('screenshots/pptgpt.png', null, SCR_W / SCR_H), 0, SCR_Y, -D + 0.67);
     // red curtains either side
     for (const s of [-1, 1]) {
-      const cur = K.put(new THREE.CylinderGeometry(0.22, 0.26, 2.2, 10), paint(0xb03a30), s * 1.9, 1.25, -D + 0.68);
+      const cur = K.put(new THREE.CylinderGeometry(0.22, 0.26, 2.2, 10), paint(0xb03a30), s * (SCR_W / 2 + 0.3), 1.25, -D + 0.68);
       cur.scale.z = 0.55;
     }
     // two rows of seats
@@ -353,7 +357,7 @@ const SETS = {
       },
     ];
     comps.forEach((draw, i) => {
-      const x = [-2.6, -0.5, 2.6][i], z = -D + (i === 1 ? 1.9 : 1.0);
+      const x = [-2.6, -1.9, 2.6][i], z = -D + (i === 1 ? 3.0 : 1.0);
       const E = kit(new THREE.Group()); E.g.position.set(x, 0, z); E.g.rotation.y = (1 - i) * 0.25;
       const wood = paint(PAL.bark);
       for (const s of [-1, 1]) E.box(0.045, 1.5, 0.045, wood, s * 0.24, 0.75, 0, 0.012, [0, 0, -s * 0.22]);
@@ -387,14 +391,14 @@ const SETS = {
       ['owl', (c, w, h) => { c.fillStyle = '#4a4258'; c.fillRect(0, 0, w, h); c.fillStyle = '#e4b84f'; c.beginPath(); c.arc(w / 2, h / 2, 52, 0, 7); c.fill(); c.strokeStyle = INKC; c.lineWidth = 5; c.stroke(); c.fillStyle = '#111'; c.beginPath(); c.arc(w / 2, h / 2, 30, 0, 7); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.arc(w / 2 - 11, h / 2 - 11, 9, 0, 7); c.fill(); }],
     ];
     eyes.forEach(([name, draw], i) => {
-      const x = [-3.05, -1.95, 3.05][i];
-      K.put(new THREE.TorusGeometry(0.42, 0.05, 10, 28), paint(PAL.gold), x, 1.5, -D + 0.58, [0, 0, 0]);
-      const face = K.flat(0.8, 0.66, texMat(200, 164, draw), x, 1.5, -D + 0.57);
-      face.geometry = new THREE.CircleGeometry(0.4, 28);
+      const x = [-3.45, -2.55, 3.05][i], y = 1.9;
+      K.put(new THREE.TorusGeometry(0.34, 0.045, 10, 28), paint(PAL.gold), x, y, -D + 0.58, [0, 0, 0]);
+      const face = K.flat(0.8, 0.66, texMat(200, 164, draw), x, y, -D + 0.57);
+      face.geometry = new THREE.CircleGeometry(0.32, 28);
       K.flat(0.7, 0.18, texMat(256, 64, (c, w, h) => {
         c.font = `400 ${h * 0.62}px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle';
         c.fillText('the ' + name + "'s", w / 2, h / 2);
-      }), x, 0.95, -D + 0.57);
+      }), x, y - 0.47, -D + 0.57);
     });
     // the field camera on its tripod
     const cam = kit(new THREE.Group()); cam.g.position.set(2.7, 0, -D + 1.6); cam.g.rotation.y = -0.6;
@@ -432,10 +436,10 @@ const SETS = {
     };
     const HPI = Math.PI / 2;
     // back wall, salon-hung around the footage frame
-    hang('a2', 0.9, 2.0, 2.1, -D + 0.56, 0, 0.06);
-    hang('a9', 1.1, 2.65, 1.15, -D + 0.56, 0, -0.04);
-    hang('a11', 0.55, 1.5, 1.05, -D + 0.56, 0, 0.09);
-    hang('a5', 0.85, -1.65, 2.25, -D + 0.56, 0, -0.07);
+    hang('a2', 0.9, 2.65, 2.05, -D + 0.56, 0, 0.06);
+    hang('a9', 1.1, 2.75, 1.05, -D + 0.56, 0, -0.04);
+    hang('a11', 0.55, 3.62, 1.95, -D + 0.56, 0, 0.09);
+    hang('a5', 0.85, -2.75, 2.05, -D + 0.56, 0, -0.07);
     hang('a12', 0.52, -3.55, 2.05, -D + 0.56, 0, 0.05);
     // the side walls got the overflow
     hang('a3', 0.95, -W / 2 + 0.06, 1.6, -4.3, HPI, -0.08);
@@ -836,7 +840,7 @@ const EXTRA = {
     ink(brushG, 'fine');
     LIVE.push((t) => {
       const s = Math.sin(t * 1.4);
-      brushG.position.set(-0.5 + s * 0.28, 1.12 + Math.abs(Math.cos(t * 2.8)) * 0.06, -D + 2.0);
+      brushG.position.set(-1.9 + s * 0.28, 1.12 + Math.abs(Math.cos(t * 2.8)) * 0.06, -D + 3.1);
       brushG.rotation.z = 0.5 + s * 0.3;
       brushG.rotation.x = -0.25;
     });
@@ -976,7 +980,8 @@ const ACCENT = {
   charterscope: 0x3f5872, 'inbox-zero': 0xc23f36, yarnflow: 0x8f7ae8, deckgpt: 0xb03a30,
   splatform: 0xe8604c, 'borrowed-eyes': 0x2f5a52, gallery: 0x6a4a8a, library: 0x8e2f3a,
 };
-function furnish(K, id, wallHex) {
+function furnish(K, id, wallHex, theme) {
+  if (theme?.bare) return;
   const acc = ACCENT[id] ?? 0x8a6448, trim = paint(0xfffaf0);
   const panel = paint(new THREE.Color(wallHex).multiplyScalar(0.84).getHex(), { hatch: 0.5 });
   // wainscot: a darker lower panel and a chair rail round all three walls
@@ -1083,7 +1088,7 @@ const CENTER = {
     K.cols.push({ x0: x - 0.45, x1: x + 0.45, z0: z - 0.45, z1: z + 0.45 });
   },
   'borrowed-eyes'(K) {  // a giant eye under a glass dome, looking around the room
-    const x = 1.6, z = -1.8, wood = paint(0x4a4258);
+    const x = 1.6, z = -1.8, wood = paint(0x7a5a40, { hatch: 0.6 });   // a tree stump
     K.put(new THREE.CylinderGeometry(0.22, 0.28, 0.8, 16), wood, x, 0.4, z);
     K.put(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 20), paint(PAL.gold), x, 0.82, z);
     const eye = new THREE.Group(); eye.position.set(x, 1.05, z); K.g.add(eye);
@@ -1116,9 +1121,670 @@ const CENTER = {
   },
 };
 
+// ─── THEMES: every room gets its own walls and floor, not one shop fitted out eight ways ───
+// wallpaper/floor painters draw one seamless tile (or a whole mural) onto a canvas;
+// `env` builds what makes the room a place — a forest, a cinema, a post office.
+const rng = (s) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
+// draw a scattered element so it wraps across the tile edges seamlessly
+const wrap9 = (w, h, fn) => { for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) fn(ox, oy); };
+function splat(c, x, y, r, col, R) {
+  c.fillStyle = col;
+  c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
+  for (let i = 0; i < 9; i++) {
+    const a = R() * 7, d = r * (0.9 + R() * 1.4), rr = r * (0.08 + R() * 0.28);
+    c.beginPath(); c.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rr, 0, 7); c.fill();
+  }
+}
+function planksDraw(c, w, h, cols, n, seam = 'rgba(40,24,16,0.4)') {
+  const ph = h / n;
+  for (let i = 0; i < n; i++) {
+    c.fillStyle = cols[i % cols.length]; c.fillRect(0, i * ph, w, ph);
+    c.strokeStyle = seam; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(0, i * ph + ph - 1); c.lineTo(w, i * ph + ph - 1); c.stroke();
+    const off = (i % 2) * w / 2 + w / 4;
+    c.beginPath(); c.moveTo(off % w, i * ph); c.lineTo(off % w, i * ph + ph); c.stroke();
+    c.strokeStyle = 'rgba(40,24,16,0.12)'; c.lineWidth = 1;
+    for (let k = 0; k < 3; k++) { const y = i * ph + ph * (0.25 + k * 0.25); c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(w * 0.3, y + 3, w * 0.6, y - 3, w, y); c.stroke(); }
+  }
+}
+function basketweave(c, w, h, cols) {
+  const cell = w / 4;
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+    const vert = (i + j) % 2, x = i * cell, y = j * cell;
+    for (let k = 0; k < 3; k++) {
+      c.fillStyle = cols[(i * 3 + j * 5 + k) % cols.length];
+      if (vert) c.fillRect(x + k * cell / 3, y, cell / 3, cell); else c.fillRect(x, y + k * cell / 3, cell, cell / 3);
+      c.strokeStyle = 'rgba(40,24,16,0.35)'; c.lineWidth = 1.5;
+      if (vert) c.strokeRect(x + k * cell / 3, y, cell / 3, cell); else c.strokeRect(x, y + k * cell / 3, cell, cell / 3);
+    }
+  }
+}
+// the forest painted round the walls: sky, three layers of trees, big leaves in front
+function forestMural(c, w, h, seed) {
+  const R = rng(seed);
+  const sky = c.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, '#fbeec0'); sky.addColorStop(0.45, '#e3efc9'); sky.addColorStop(1, '#b9d6a8');
+  c.fillStyle = sky; c.fillRect(0, 0, w, h);
+  // sun haze
+  const sun = c.createRadialGradient(w * (0.3 + R() * 0.4), h * 0.12, 4, w * 0.5, h * 0.12, w * 0.4);
+  sun.addColorStop(0, 'rgba(255,248,214,0.9)'); sun.addColorStop(1, 'rgba(255,248,214,0)');
+  c.fillStyle = sun; c.fillRect(0, 0, w, h);
+  const layers = [['#a7c9a0', 0.42, 0.09], ['#7eaf7f', 0.55, 0.12], ['#5a8f63', 0.7, 0.15]];
+  layers.forEach(([col, base, rad], L) => {
+    // trunks
+    c.fillStyle = ['#a99c86', '#8a7a62', '#6b5a44'][L];
+    for (let x = R() * 60; x < w; x += 70 + R() * 90) c.fillRect(x, h * (base - 0.05), 6 + L * 5, h);
+    c.fillStyle = col;
+    for (let x = -20; x < w + 40; x += h * rad * (0.7 + R() * 0.6)) {
+      const r = h * rad * (0.7 + R() * 0.7), y = h * base - R() * h * 0.1;
+      c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
+      c.strokeStyle = 'rgba(42,34,48,0.18)'; c.lineWidth = 2;
+      c.beginPath(); c.arc(x, y, r, Math.PI * 1.05, Math.PI * 1.9); c.stroke();
+    }
+    c.fillRect(0, h * base, w, h);
+  });
+  // light shafts
+  c.fillStyle = 'rgba(255,250,220,0.22)';
+  for (let i = 0; i < 4; i++) { const x = R() * w; c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 40, 0); c.lineTo(x + 160, h); c.lineTo(x + 70, h); c.fill(); }
+  // big foreground leaves along the bottom
+  for (let x = -30; x < w + 30; x += 26 + R() * 30) {
+    const len = h * (0.18 + R() * 0.22), a = -Math.PI / 2 + (R() - 0.5) * 1.3;
+    c.save(); c.translate(x, h + 6); c.rotate(a + Math.PI / 2);
+    c.fillStyle = ['#3f7a4c', '#4f8f58', '#2f6a44', '#5e9d5e'][Math.floor(R() * 4)];
+    c.beginPath(); c.ellipse(0, -len / 2, len * 0.22, len / 2, 0, 0, 7); c.fill();
+    c.strokeStyle = 'rgba(230,245,210,0.5)'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -len * 0.95); c.stroke();
+    c.restore();
+  }
+  // flowers dotted in the undergrowth
+  for (let i = 0; i < 40; i++) {
+    const x = R() * w, y = h * (0.72 + R() * 0.25), r = 3 + R() * 4;
+    c.fillStyle = ['#f29bb4', '#f6c453', '#ffffff', '#e8604c', '#b7a3e6'][i % 5];
+    for (let p = 0; p < 5; p++) { c.beginPath(); c.arc(x + Math.cos(p * 1.26) * r, y + Math.sin(p * 1.26) * r, r * 0.7, 0, 7); c.fill(); }
+    c.fillStyle = '#f6d36b'; c.beginPath(); c.arc(x, y, r * 0.5, 0, 7); c.fill();
+  }
+}
+function forestFloor(c, w, h) {
+  const R = rng(7);
+  c.fillStyle = '#86ad62'; c.fillRect(0, 0, w, h);
+  for (let i = 0; i < 70; i++) {
+    c.fillStyle = ['rgba(70,120,60,0.35)', 'rgba(170,200,110,0.35)', 'rgba(110,150,70,0.3)'][i % 3];
+    c.beginPath(); c.ellipse(R() * w, R() * h, 30 + R() * 70, 20 + R() * 40, R() * 3, 0, 7); c.fill();
+  }
+  // grass blades
+  for (let i = 0; i < 2600; i++) {
+    const x = R() * w, y = R() * h, l = 6 + R() * 9;
+    c.strokeStyle = R() < 0.5 ? 'rgba(60,110,50,0.55)' : 'rgba(190,220,130,0.55)'; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(x, y); c.lineTo(x + (R() - 0.5) * 5, y - l); c.stroke();
+  }
+  // a dirt path winding from the door (bottom) to the counter (top)
+  const path = [[0.5, 1.02], [0.44, 0.85], [0.56, 0.68], [0.47, 0.52], [0.5, 0.36]];
+  c.strokeStyle = '#c9ad7f'; c.lineWidth = w * 0.11; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(path[0][0] * w, path[0][1] * h);
+  for (let i = 1; i < path.length; i++) c.lineTo(path[i][0] * w, path[i][1] * h);
+  c.stroke();
+  c.strokeStyle = 'rgba(120,90,50,0.25)'; c.lineWidth = w * 0.11 + 8; c.globalCompositeOperation = 'destination-over'; c.stroke(); c.globalCompositeOperation = 'source-over';
+  // stepping stones along it
+  for (let t = 0.05; t < 0.98; t += 0.08) {
+    const s = t * (path.length - 1), i = Math.floor(s), f = s - i, a = path[i], b = path[Math.min(i + 1, path.length - 1)];
+    const x = (a[0] + (b[0] - a[0]) * f) * w + (R() - 0.5) * 16, y = (a[1] + (b[1] - a[1]) * f) * h;
+    c.fillStyle = '#bdb6a8'; c.beginPath(); c.ellipse(x, y, 22 + R() * 8, 15 + R() * 5, R(), 0, 7); c.fill();
+    c.strokeStyle = 'rgba(42,34,48,0.5)'; c.lineWidth = 2; c.stroke();
+  }
+  // clover, daisies, buttercups
+  for (let i = 0; i < 220; i++) {
+    const x = R() * w, y = R() * h, k = i % 4;
+    if (k === 0) { c.fillStyle = 'rgba(70,130,60,0.8)'; for (let p = 0; p < 3; p++) { c.beginPath(); c.arc(x + Math.cos(p * 2.1) * 3, y + Math.sin(p * 2.1) * 3, 3, 0, 7); c.fill(); } }
+    else { c.fillStyle = ['#ffffff', '#f6c453', '#f29bb4'][k - 1]; for (let p = 0; p < 5; p++) { c.beginPath(); c.arc(x + Math.cos(p * 1.26) * 3, y + Math.sin(p * 1.26) * 3, 2.2, 0, 7); c.fill(); } c.fillStyle = '#e4a83f'; c.beginPath(); c.arc(x, y, 1.6, 0, 7); c.fill(); }
+  }
+}
+
+// one crochet stitch: a plump loop standing up from its base, with the V of its top
+function stitch(c, x, y, ang, len, wid, col) {
+  c.save(); c.translate(x, y); c.rotate(ang);
+  c.fillStyle = col; c.strokeStyle = 'rgba(50,25,40,0.55)'; c.lineWidth = 1.4;
+  c.beginPath(); c.roundRect(-wid / 2, 0, wid, len, wid / 2); c.fill(); c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 1.2;
+  c.beginPath(); c.moveTo(-wid * 0.15, len * 0.2); c.lineTo(-wid * 0.15, len * 0.75); c.stroke();
+  c.strokeStyle = 'rgba(50,25,40,0.45)';
+  c.beginPath(); c.moveTo(-wid * 0.4, len * 0.82); c.lineTo(0, len * 0.95); c.lineTo(wid * 0.4, len * 0.82); c.stroke();
+  c.restore();
+}
+// a granny square: a ring in the middle, then rounds of three-stitch clusters with
+// chain gaps between them, two clusters at each corner, and a single-crochet border
+function grannySquare(c, x0, y0, s, cols) {
+  const cx = x0 + s / 2, cy = y0 + s / 2, L = s * 0.11, Wd = s * 0.045;
+  for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6; stitch(c, cx + Math.cos(a) * s * 0.025, cy + Math.sin(a) * s * 0.025, a - Math.PI / 2, s * 0.06, Wd, cols[0]); }
+  const cluster = (x, y, ang, col) => {
+    for (const d of [-1, 0, 1]) stitch(c, x + Math.cos(ang) * d * Wd * 0.95, y + Math.sin(ang) * d * Wd * 0.95, ang - Math.PI / 2 + d * 0.12, L, Wd, col);
+  };
+  for (let k = 1; k <= 3; k++) {
+    const r = s * (0.02 + k * 0.115), col = cols[k % cols.length];
+    for (let side = 0; side < 4; side++) {
+      const out = side * Math.PI / 2;                              // outward normal of this side
+      const nx = Math.cos(out), ny = Math.sin(out), tx = -ny, ty = nx;
+      // clusters along the side, between the corners
+      for (let q = 0; q < k - 1; q++) {
+        const u = (-1 + (2 * q + 2) / k) * r * 0.82;
+        cluster(cx + nx * r + tx * u, cy + ny * r + ty * u, out + Math.PI / 2, col);
+      }
+      // the corner: two clusters fanned round it
+      const ca = out + Math.PI / 4, cr = r * 1.3;
+      for (const f of [-0.32, 0.32]) cluster(cx + Math.cos(ca + f * 0.6) * cr * 0.92, cy + Math.sin(ca + f * 0.6) * cr * 0.92, ca + f + Math.PI / 2, col);
+    }
+  }
+  // a border round of single crochet, then the seam it's whipped to its neighbours with
+  const b = s * 0.035, n = 26, edge = cols[3] || '#f6eedb';
+  for (let side = 0; side < 4; side++) for (let q = 0; q <= n; q++) {
+    const u = b + (s - 2 * b) * q / n;
+    const [x, y, ang] = [[x0 + u, y0 + b * 0.4, 0], [x0 + s - b * 0.4, y0 + u, Math.PI / 2], [x0 + s - u, y0 + s - b * 0.4, Math.PI], [x0 + b * 0.4, y0 + s - u, -Math.PI / 2]][side];
+    stitch(c, x, y, ang, b * 1.25, s / n * 0.95, edge);
+  }
+  c.strokeStyle = 'rgba(60,40,50,0.6)'; c.lineWidth = 2; c.setLineDash([5, 4]);
+  c.strokeRect(x0 + 1, y0 + 1, s - 2, s - 2); c.setLineDash([]);
+}
+
+const THEMES = {
+  'borrowed-eyes': { mural: forestMural, floor: forestFloor, bare: true, rug: false },
+  charterscope: {
+    tile: [512, 2.0, (c, w, h) => {             // an old sea chart
+      c.fillStyle = '#eadcb4'; c.fillRect(0, 0, w, h);
+      const R = rng(3);
+      for (let i = 0; i < 300; i++) { c.fillStyle = `rgba(150,120,70,${R() * 0.08})`; c.beginPath(); c.arc(R() * w, R() * h, 4 + R() * 20, 0, 7); c.fill(); }
+      c.strokeStyle = 'rgba(80,110,140,0.25)'; c.lineWidth = 1;
+      for (let i = 0; i <= w; i += 64) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i, h); c.stroke(); c.beginPath(); c.moveTo(0, i); c.lineTo(w, i); c.stroke(); }
+      // coastlines
+      c.fillStyle = '#d6c595'; c.strokeStyle = 'rgba(90,70,50,0.7)'; c.lineWidth = 2;
+      for (const [cx, cy, r] of [[90, 380, 70], [400, 120, 55], [330, 430, 35]]) {
+        c.beginPath();
+        for (let a = 0; a <= 6.3; a += 0.3) { const rr = r * (0.7 + R() * 0.5); a === 0 ? c.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr) : c.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+        c.closePath(); c.fill(); c.stroke();
+      }
+      // rhumb lines and a compass rose
+      const ox = 230, oy = 260;
+      c.strokeStyle = 'rgba(160,60,50,0.25)';
+      for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + Math.cos(a) * 400, oy + Math.sin(a) * 400); c.stroke(); }
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4, l = k % 2 ? 26 : 50;
+        c.fillStyle = k % 2 ? '#4a6a8a' : '#2a2230';
+        c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + Math.cos(a - 0.3) * 10, oy + Math.sin(a - 0.3) * 10); c.lineTo(ox + Math.cos(a) * l, oy + Math.sin(a) * l); c.closePath(); c.fill();
+      }
+      c.strokeStyle = '#2a2230'; c.lineWidth = 2; c.beginPath(); c.arc(ox, oy, 34, 0, 7); c.stroke();
+      // a dotted route
+      c.setLineDash([6, 8]); c.strokeStyle = 'rgba(200,80,60,0.6)'; c.lineWidth = 2.5;
+      c.beginPath(); c.moveTo(0, 470); c.bezierCurveTo(150, 330, 300, 380, 512, 200); c.stroke(); c.setLineDash([]);
+    }],
+    floor: (c, w, h) => {
+      planksDraw(c, w, h, ['#6b4a34', '#74513a', '#62432f', '#7a573e'], 24);
+      // a brass compass rose inlaid between the globe and the radar
+      const ox = w / 2, oy = h * 0.6, r = h * 0.2;
+      c.fillStyle = '#e9dcb4'; c.beginPath(); c.arc(ox, oy, r, 0, 7); c.fill();
+      c.strokeStyle = '#c9a24a'; c.lineWidth = 8; c.stroke();
+      c.lineWidth = 2; c.beginPath(); c.arc(ox, oy, r * 0.82, 0, 7); c.stroke();
+      for (let k = 0; k < 16; k++) {
+        const a = k * Math.PI / 8 - Math.PI / 2, l = r * (k % 4 === 0 ? 0.95 : k % 2 ? 0.45 : 0.68);
+        c.fillStyle = k % 2 ? '#3f5872' : (k % 4 ? '#c9a24a' : '#2a2230');
+        c.beginPath(); c.moveTo(ox, oy); c.lineTo(ox + Math.cos(a - 0.2) * r * 0.16, oy + Math.sin(a - 0.2) * r * 0.16); c.lineTo(ox + Math.cos(a) * l, oy + Math.sin(a) * l); c.lineTo(ox + Math.cos(a + 0.2) * r * 0.16, oy + Math.sin(a + 0.2) * r * 0.16); c.closePath(); c.fill();
+      }
+      c.fillStyle = '#2a2230'; c.font = `700 ${r * 0.2}px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText('N', ox, oy - r * 1.08 + r * 0.2);
+    },
+    rug: false,
+  },
+  'inbox-zero': {
+    tile: [256, 0.8, (c, w, h) => {             // envelopes and stamps
+      c.fillStyle = '#f3dfc2'; c.fillRect(0, 0, w, h);
+      const R = rng(11);
+      for (let i = 0; i < 6; i++) {
+        const x = (i % 3) * w / 3 + 20 + R() * 20, y = Math.floor(i / 3) * h / 2 + 30 + R() * 30, rot = (R() - 0.5) * 0.5;
+        wrap9(w, h, (ox, oy) => {
+          c.save(); c.translate(x + ox, y + oy); c.rotate(rot);
+          if (i % 2) {
+            c.fillStyle = '#fbf6ea'; c.fillRect(-26, -16, 52, 32);
+            c.strokeStyle = 'rgba(42,34,48,0.55)'; c.lineWidth = 1.5; c.strokeRect(-26, -16, 52, 32);
+            c.beginPath(); c.moveTo(-26, -16); c.lineTo(0, 3); c.lineTo(26, -16); c.stroke();
+            for (let k = -26; k < 26; k += 8) { c.fillStyle = (k / 8) % 2 ? '#c23f36' : '#3f5aa8'; c.fillRect(k, 13, 4, 3); }
+          } else {
+            c.fillStyle = '#fff'; c.fillRect(-14, -17, 28, 34);
+            c.fillStyle = ['#e8604c', '#7fb3a8', '#e4b84f'][i % 3]; c.fillRect(-10, -13, 20, 22);
+            c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(0, -3, 5, 0, 7); c.fill();
+            c.strokeStyle = 'rgba(42,34,48,0.4)'; c.lineWidth = 1.2; c.beginPath(); c.arc(12, 8, 12, 0, 7); c.stroke();
+          }
+          c.restore();
+        });
+      }
+    }],
+    floor: (c, w, h) => {                      // post-office checker tiles
+      const n = 16;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n * 0.75; j++) {
+        c.fillStyle = (i + j) % 2 ? '#2f2a36' : '#f1ebdf'; c.fillRect(i * w / n, j * w / n, w / n, w / n);
+      }
+      c.strokeStyle = 'rgba(120,110,100,0.4)'; c.lineWidth = 1;
+      for (let i = 0; i <= n; i++) { c.beginPath(); c.moveTo(i * w / n, 0); c.lineTo(i * w / n, h); c.stroke(); c.beginPath(); c.moveTo(0, i * w / n); c.lineTo(w, i * w / n); c.stroke(); }
+    },
+    rug: false,
+  },
+  yarnflow: {
+    tile: [128, 0.36, (c, w, h) => {             // knitted stockinette: rows of little Vs
+      c.fillStyle = '#e9c8c3'; c.fillRect(0, 0, w, h);
+      const sw = w / 8, sh = h / 8;
+      for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
+        const x = i * sw + sw / 2, y = j * sh + sh / 2;
+        const band = j < 2 ? '#d9a9b8' : j === 5 ? '#f3dfa8' : '#f2d9d6';
+        for (const s of [-1, 1]) {
+          c.fillStyle = band; c.beginPath(); c.ellipse(x + s * sw * 0.22, y, sw * 0.24, sh * 0.5, s * -0.5, 0, 7); c.fill();
+          c.strokeStyle = 'rgba(120,70,80,0.35)'; c.lineWidth = 1.2; c.stroke();
+        }
+      }
+    }],
+    floor: (c, w, h) => {                      // a crocheted floor: granny squares, stitch by stitch
+      const pal = [['#e8604c', '#e4b84f', '#7fb3a8', '#f6eedb'], ['#8f7ae8', '#f6eedb', '#dc9e9a', '#e4b84f'], ['#7fb3a8', '#e8604c', '#f3dfa8', '#93abc0'], ['#dc9e9a', '#a8b994', '#8f7ae8', '#f6eedb']];
+      c.fillStyle = '#7a6670'; c.fillRect(0, 0, w, h);          // the shadow showing through the holes
+      const s = w / 2;
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) grannySquare(c, i * s, j * s, s, pal[i * 2 + j]);
+    },
+    floorTile: 1.8, floorPx: 512,
+    rug: false,
+  },
+  deckgpt: {
+    tile: [128, 0.7, (c, w, h) => {              // red velvet curtain folds, floor to ceiling
+      const g = c.createLinearGradient(0, 0, w, 0);
+      g.addColorStop(0, '#5e1621'); g.addColorStop(0.3, '#a8303a'); g.addColorStop(0.55, '#c4434a'); g.addColorStop(0.8, '#8a2230'); g.addColorStop(1, '#5e1621');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      c.fillStyle = 'rgba(255,220,200,0.08)'; c.fillRect(w * 0.42, 0, 6, h);
+    }, 2.7],
+    floor: (c, w, h) => {                      // the cinema carpet
+      c.fillStyle = '#5a1a28'; c.fillRect(0, 0, w, h);
+      const n = 12, s = w / n;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        const x = i * s + s / 2, y = j * s + s / 2;
+        c.strokeStyle = '#c9a24a'; c.lineWidth = 2;
+        c.beginPath(); c.moveTo(x, y - s * 0.42); c.lineTo(x + s * 0.42, y); c.lineTo(x, y + s * 0.42); c.lineTo(x - s * 0.42, y); c.closePath(); c.stroke();
+        c.fillStyle = (i + j) % 2 ? '#2a3a5e' : '#c9a24a';
+        c.beginPath(); c.arc(x, y, s * 0.1, 0, 7); c.fill();
+        c.fillStyle = 'rgba(201,162,74,0.5)';
+        for (const [dx, dy] of [[0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]]) { c.beginPath(); c.arc(x + dx * s, y + dy * s, s * 0.05, 0, 7); c.fill(); }
+      }
+    },
+    rug: false,
+  },
+  splatform: {
+    tile: [512, 2.2, (c, w, h) => {             // a drop cloth that's seen some things
+      c.fillStyle = '#f2e9d6'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(160,140,110,0.12)'; c.lineWidth = 1;
+      for (let i = 0; i < w; i += 4) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i, h); c.stroke(); c.beginPath(); c.moveTo(0, i); c.lineTo(w, i); c.stroke(); }
+      const R = rng(5), cols = ['#e8604c', '#e4b84f', '#7fb3a8', '#8f7ae8', '#5f8cc8', '#dc6a9a', '#2a2230'];
+      for (let i = 0; i < 26; i++) {
+        const x = R() * w, y = R() * h, r = 6 + R() * 26, col = cols[i % cols.length];
+        wrap9(w, h, (ox, oy) => {
+          splat(c, x + ox, y + oy, r, col, rng(i + 40));
+          if (i % 3 === 0) { c.fillStyle = col; c.fillRect(x + ox - r * 0.15, y + oy, r * 0.3, r * 3 + R() * 60); c.beginPath(); c.arc(x + ox, y + oy + r * 3 + 40, r * 0.25, 0, 7); c.fill(); }
+        });
+      }
+    }],
+    floor: (c, w, h) => {                      // concrete studio floor, paint everywhere
+      c.fillStyle = '#cfc6b6'; c.fillRect(0, 0, w, h);
+      const R = rng(9), cols = ['#e8604c', '#e4b84f', '#7fb3a8', '#8f7ae8', '#5f8cc8', '#dc6a9a'];
+      for (let i = 0; i < 160; i++) { c.fillStyle = `rgba(${R() < 0.5 ? '120,110,100' : '230,225,215'},${R() * 0.18})`; c.beginPath(); c.arc(R() * w, R() * h, 6 + R() * 40, 0, 7); c.fill(); }
+      for (let i = 0; i < 36; i++) splat(c, R() * w, R() * h, 8 + R() * 30, cols[i % cols.length], rng(i + 90));
+      // footprints in pink, walking off toward the counter
+      c.fillStyle = 'rgba(220,106,154,0.75)';
+      for (let k = 0; k < 9; k++) { const x = w * 0.42 + (k % 2) * 30 + k * 12, y = h * 0.95 - k * 45; c.beginPath(); c.ellipse(x, y, 9, 15, 0.2, 0, 7); c.fill(); c.beginPath(); c.ellipse(x + 2, y + 22, 7, 8, 0, 0, 7); c.fill(); }
+    },
+    rug: false,
+  },
+  gallery: {
+    tile: [256, 0.75, (c, w, h) => {             // museum damask
+      c.fillStyle = '#c7b9d8'; c.fillRect(0, 0, w, h);
+      const motif = (x, y) => {
+        c.fillStyle = 'rgba(110,80,140,0.28)';
+        c.beginPath(); c.ellipse(x, y, 18, 42, 0, 0, 7); c.fill();
+        for (const s of [-1, 1]) { c.beginPath(); c.ellipse(x + s * 26, y + 10, 10, 26, s * 0.6, 0, 7); c.fill(); c.beginPath(); c.arc(x + s * 14, y - 40, 8, 0, 7); c.fill(); }
+        c.fillStyle = 'rgba(228,184,79,0.35)'; c.beginPath(); c.arc(x, y, 6, 0, 7); c.fill();
+      };
+      wrap9(w, h, (ox, oy) => { motif(w * 0.25 + ox, h * 0.25 + oy); motif(w * 0.75 + ox, h * 0.75 + oy); });
+    }],
+    floor: (c, w, h) => basketweave(c, w, h, ['#b58a5e', '#a77c52', '#c09468', '#9c7048']),
+    floorTile: 1.2,
+  },
+  library: {
+    tile: [256, 0.55, (c, w, h) => {             // deep green with little gold fleurs
+      c.fillStyle = '#4c6a55'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(30,50,36,0.35)'; c.lineWidth = 6;
+      for (let x = 0; x <= w; x += w / 4) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+      const fleur = (x, y) => {
+        c.fillStyle = 'rgba(228,184,79,0.6)';
+        c.beginPath(); c.ellipse(x, y - 8, 4, 10, 0, 0, 7); c.fill();
+        for (const s of [-1, 1]) { c.beginPath(); c.ellipse(x + s * 8, y - 3, 3, 8, s * 0.8, 0, 7); c.fill(); }
+        c.fillRect(x - 7, y + 2, 14, 3);
+      };
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) fleur(i * w / 4 + w / 8, j * h / 4 + h / 8 + (i % 2) * h / 8);
+    }],
+    floor: (c, w, h) => basketweave(c, w, h, ['#6b4a34', '#5e412e', '#77543b', '#664631']),
+    floorTile: 1.0,
+  },
+};
+
+// wall/floor materials for a theme (null = the old plain paint / planks)
+function themeMats(theme, id) {
+  if (!theme) return null;
+  const out = { walls: [null, null, null], floor: null };
+  const lens = [W, D, D];
+  if (theme.mural) {
+    out.walls = lens.map((len, i) => paint(0xffffff, { map: canvasTex(Math.round(384 * len / H), 384, (c, w, h) => theme.mural(c, w, h, 17 + i * 31)), hatch: 0.25, unique: true }));
+  } else if (theme.tile) {
+    const [px, tw, draw, th = tw] = theme.tile;
+    const base = canvasTex(px, Math.round(px * th / tw), draw);
+    out.walls = lens.map((len) => {
+      const t = base.clone(); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(len / tw, H / th); t.needsUpdate = true;
+      return paint(0xffffff, { map: t, hatch: 0.3, unique: true });
+    });
+  }
+  if (theme.floor) {
+    const ft = theme.floorTile;
+    const t = ft ? canvasTex(theme.floorPx || 256, theme.floorPx || 256, theme.floor) : canvasTex(1024, 768, theme.floor);
+    if (ft) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(W / ft, D / ft); }
+    out.floor = paint(0xffffff, { map: t, hatch: 0.3, unique: true });
+  }
+  return out;
+}
+
+// ─── ENVIRONMENTS: what turns a themed room into a place ───
+// a leaf texture shared by every fern, vine and canopy
+let _leafTex = null;
+function leafTex() {
+  if (_leafTex) return _leafTex;
+  return (_leafTex = canvasTex(64, 128, (c, w, h) => {
+    c.fillStyle = '#4f8f58'; c.beginPath(); c.moveTo(w / 2, h - 2); c.bezierCurveTo(-4, h * 0.6, w * 0.2, h * 0.1, w / 2, 2); c.bezierCurveTo(w * 0.8, h * 0.1, w + 4, h * 0.6, w / 2, h - 2); c.fill();
+    c.strokeStyle = '#2a2230'; c.lineWidth = 2.5; c.stroke();
+    c.strokeStyle = 'rgba(220,240,200,0.7)'; c.lineWidth = 2; c.beginPath(); c.moveTo(w / 2, h - 4); c.lineTo(w / 2, 8); c.stroke();
+  }));
+}
+let _frondTex = null;
+function frondTex() {
+  if (_frondTex) return _frondTex;
+  return (_frondTex = canvasTex(64, 256, (c, w, h) => {
+    c.strokeStyle = '#2f6a44'; c.lineWidth = 3; c.beginPath(); c.moveTo(w / 2, h); c.lineTo(w / 2, 4); c.stroke();
+    for (let y = h - 14; y > 8; y -= 11) {
+      const l = (w / 2 - 4) * Math.sin(Math.PI * (1 - y / h) * 0.95 + 0.1);
+      for (const s of [-1, 1]) {
+        c.fillStyle = (y / 11) % 2 ? '#4f8f58' : '#5e9d5e';
+        c.beginPath(); c.ellipse(w / 2 + s * l / 2, y - 3, l / 2, 4, s * -0.35, 0, 7); c.fill();
+      }
+    }
+  }));
+}
+const cutout = (tex, col = 0xffffff) => { const m = paint(col, { map: tex, hatch: 0, side: THREE.DoubleSide, unique: true }); m.alphaTest = 0.5; return m; };
+
+function fern(K, x, z, s = 1, seed = 1) {
+  const R = rng(seed * 97 + 3), m = cutout(frondTex());
+  const g = new THREE.Group(); g.position.set(x, 0, z); K.g.add(g);
+  for (let i = 0; i < 9; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.22 * s, 0.85 * s).translate(0, 0.42 * s, 0), m);
+    p.userData.noInk = true;
+    p.rotation.order = 'YXZ'; p.rotation.y = i * 0.7 + R(); p.rotation.x = 0.5 + R() * 0.6;
+    g.add(p);
+  }
+  return g;
+}
+function bloom(K, x, z, h, col, seed) {          // a tall jungle flower
+  const R = rng(seed);
+  const stem = new THREE.CatmullRomCurve3([new THREE.Vector3(x, 0, z), new THREE.Vector3(x + (R() - 0.5) * 0.15, h * 0.5, z + (R() - 0.5) * 0.15), new THREE.Vector3(x + (R() - 0.5) * 0.2, h, z)]);
+  const sm = new THREE.Mesh(new THREE.TubeGeometry(stem, 8, 0.012, 5), paint(0x3f7a4c)); sm.userData.noInk = true; K.g.add(sm);
+  const top = stem.getPoint(1), pet = paint(col);
+  for (let p = 0; p < 5; p++) {
+    const a = p * 1.256;
+    const m = K.put(new THREE.SphereGeometry(0.055, 8, 6).scale(1, 0.35, 0.6), pet, top.x + Math.cos(a) * 0.05, top.y, top.z + Math.sin(a) * 0.05, [0, -a, 0.25]);
+    m.userData.noInk = true;
+  }
+  K.put(new THREE.SphereGeometry(0.025, 8, 6), paint(0xf6d36b, { hatch: 0 }), top.x, top.y + 0.015, top.z).userData.noInk = true;
+  for (const s of [-1, 1]) {
+    const lp = stem.getPoint(0.35 + s * 0.08);
+    const lf = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.2).translate(0, 0.1, 0), cutout(leafTex()));
+    lf.position.copy(lp); lf.rotation.set(0, R() * 3, s * 0.9); lf.userData.noInk = true; K.g.add(lf);
+  }
+}
+function tree(K, x, z, seed) {                    // a big storybook tree, canopy brushing the ceiling
+  const R = rng(seed), bark = paint(0x7a5a40, { hatch: 0.6 });
+  const trunk = new THREE.CatmullRomCurve3([new THREE.Vector3(x, 0, z), new THREE.Vector3(x + 0.08, 0.9, z), new THREE.Vector3(x - 0.05, 1.7, z + 0.05), new THREE.Vector3(x, 2.2, z)]);
+  K.g.add(new THREE.Mesh(new THREE.TubeGeometry(trunk, 16, 0.2, 10), bark));
+  // flared roots
+  for (let i = 0; i < 5; i++) {
+    const a = i * 1.26 + R();
+    K.put(new THREE.ConeGeometry(0.1, 0.5, 6), bark, x + Math.cos(a) * 0.22, 0.08, z + Math.sin(a) * 0.22, [Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2]);
+  }
+  // branches
+  for (const [a, y] of [[0.6, 1.6], [2.6, 1.85], [4.4, 1.7]]) {
+    const b = new THREE.CatmullRomCurve3([new THREE.Vector3(x, y, z), new THREE.Vector3(x + Math.cos(a) * 0.4, y + 0.25, z + Math.sin(a) * 0.3), new THREE.Vector3(x + Math.cos(a) * 0.75, y + 0.5, z + Math.sin(a) * 0.5)]);
+    K.g.add(new THREE.Mesh(new THREE.TubeGeometry(b, 8, 0.06, 6), bark));
+  }
+  const greens = [0x5e9d5e, 0x4f8f58, 0x6fae66, 0x86a868];
+  for (let i = 0; i < 9; i++) {
+    const a = i * 0.7 + R(), r = 0.3 + R() * 0.55;
+    const p = K.put(new THREE.IcosahedronGeometry(0.38 + R() * 0.2, 1), paint(greens[i % 4], { hatch: 0.5 }), x + Math.cos(a) * r, 2.25 + R() * 0.35, z + Math.sin(a) * r * 0.8);
+    p.scale.y = 0.75;
+  }
+  K.cols.push({ x0: x - 0.32, x1: x + 0.32, z0: z - 0.32, z1: z + 0.32 });
+}
+function bunting(K, pts, n, make) {               // a sagging string with things hung along it
+  const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)));
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.006, 4), paint(0x2a2230, { hatch: 0 }));
+  tube.userData.noInk = true; K.g.add(tube);
+  n = Math.max(3, Math.round(n * curve.getLength() / 7));        // n is per 7 m of string
+  for (let i = 1; i < n; i++) { const t = i / n, p = curve.getPoint(t), tg = curve.getTangent(t); make(p, Math.atan2(-tg.z, tg.x), i); }
+}
+const sag = (a, b, d = 0.25) => [a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - d, (a[2] + b[2]) / 2], b];
+// three strings round the top of the room: along the back wall, then down each side
+const topLoops = (y = 2.45) => [
+  // (the back wall's string stops either side of the screen)
+  sag([-W / 2 + 0.1, y, -D + 0.62], [-SCR_W / 2 - 0.15, y, -D + 0.62], 0.2),
+  sag([SCR_W / 2 + 0.15, y, -D + 0.62], [W / 2 - 0.1, y, -D + 0.62], 0.2),
+  sag([-W / 2 + 0.08, y, -D + 0.7], [-W / 2 + 0.08, y, -0.2], 0.3),
+  sag([W / 2 - 0.08, y, -D + 0.7], [W / 2 - 0.08, y, -0.2], 0.3),
+];
+
+const ENV = {
+  'borrowed-eyes'(K) {
+    // ── a forest paradise: trees, ferns, vines, a pond, fireflies, butterflies ──
+    tree(K, -3.45, -2.35, 5);
+    tree(K, 3.45, -2.0, 9);
+    // a leafy canopy along the top of every wall
+    const greens = [0x5e9d5e, 0x4f8f58, 0x6fae66, 0x86a868, 0x3f7a4c];
+    const canopyAt = (x, z, i) => { const p = K.put(new THREE.IcosahedronGeometry(0.28 + (i % 3) * 0.07, 1), paint(greens[i % 5], { hatch: 0.5 }), x, 2.62 + (i % 2) * 0.08, z); p.scale.y = 0.7; };
+    for (let i = 0, x = -W / 2 + 0.2; x <= W / 2 - 0.2; x += 0.42, i++) canopyAt(x, -D + 0.75, i);
+    for (const s of [-1, 1]) for (let i = 0, z = -D + 1.1; z <= -0.4; z += 0.45, i++) canopyAt(s * (W / 2 - 0.22), z, i + 2);
+    // vines hanging from the canopy, swaying
+    const leafM = cutout(leafTex()), vineM = paint(0x3f6a3c), vines = [];
+    const vr = rng(23);
+    const vineSpots = [];
+    for (let x = -3.6; x <= 3.6; x += 0.45) if (Math.abs(x) > SCR_W / 2 + 0.15) vineSpots.push([x + vr() * 0.2, -D + 0.75]);
+    for (const s of [-1, 1]) for (let z = -4.6; z <= -0.6; z += 0.6) vineSpots.push([s * (W / 2 - 0.25), z + vr() * 0.2]);
+    vineSpots.forEach(([x, z], i) => {
+      const len = 0.5 + vr() * 1.0, g = new THREE.Group(); g.position.set(x, 2.6, z); K.g.add(g);
+      const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.05, -len * 0.5, 0.04), new THREE.Vector3(-0.03, -len, 0.02)]);
+      const v = new THREE.Mesh(new THREE.TubeGeometry(curve, 10, 0.01, 4), vineM); v.userData.noInk = true; g.add(v);
+      for (let k = 1; k <= Math.floor(len * 9); k++) {
+        const p = curve.getPoint(k / Math.floor(len * 9 + 1));
+        const lf = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.13).translate(0, -0.06, 0), leafM);
+        lf.position.copy(p); lf.rotation.set(0, vr() * 6, (k % 2 ? 1 : -1) * 0.8); lf.userData.noInk = true; g.add(lf);
+      }
+      if (i % 4 === 0) {                     // a few vines flower at the tip
+        const f = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), paint([0xf29bb4, 0xe8604c, 0xf6c453][i % 3]));
+        f.position.copy(curve.getPoint(1)); f.userData.noInk = true; g.add(f);
+      }
+      vines.push([g, vr() * 6]);
+    });
+    LIVE.push((t) => { for (const [g, ph] of vines) { g.rotation.z = Math.sin(t * 0.7 + ph) * 0.05; g.rotation.x = Math.cos(t * 0.5 + ph) * 0.04; } });
+    // ferns and flowers in the undergrowth, out of the walkway
+    [[-3.6, -0.3, 1.2], [3.6, -0.3, 1.2], [-3.6, -3.4, 0.9], [3.6, -3.0, 0.8], [-2.4, -4.9, 0.9], [0.9, -5.0, 0.7], [-0.6, -5.0, 0.6], [2.2, -5.1, 0.8], [-3.6, -4.9, 1.0], [3.6, -4.9, 1.1]]
+      .forEach(([x, z, s], i) => fern(K, x, z, s, i + 1));
+    for (const s of [-1, 1]) K.cols.push({ x0: s * 3.6 - 0.45, x1: s * 3.6 + 0.45, z0: -0.75, z1: 0.2 });
+    [[-3.75, -1.4, 0.9, 0xf29bb4], [-3.7, -3.2, 0.7, 0xe8604c], [3.75, -2.8, 0.85, 0xf6c453], [3.7, -1.2, 0.65, 0xb7a3e6], [-1.6, -5.2, 0.75, 0xe8604c], [1.4, -5.2, 0.9, 0xf29bb4], [-3.75, -4.2, 0.95, 0xf6c453], [3.75, -4.3, 0.75, 0xe8604c]]
+      .forEach(([x, z, h, col], i) => bloom(K, x, z, h, col, i * 13 + 5));
+    // mushrooms at the tree roots
+    for (const [x, z, s] of [[-2.95, -2.1, 1], [-3.05, -2.75, 0.7], [3.0, -1.6, 0.9], [2.95, -2.35, 0.6], [-0.2, -1.1, 0.5]]) {
+      K.put(new THREE.CylinderGeometry(0.03 * s, 0.04 * s, 0.12 * s, 8), paint(0xf6eedb), x, 0.06 * s, z);
+      const cap = K.put(new THREE.SphereGeometry(0.08 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), paint(0xd2483e), x, 0.11 * s, z);
+      for (let k = 0; k < 4; k++) K.put(new THREE.SphereGeometry(0.012 * s, 6, 5), paint(0xffffff, { hatch: 0 }), x + Math.cos(k * 1.6) * 0.05 * s, 0.11 * s + 0.055 * s, z + Math.sin(k * 1.6) * 0.05 * s).userData.noInk = true;
+    }
+    // a lily pond the frog hops round
+    const px = -1.6, pz = -2.1;
+    const pond = K.put(new THREE.CircleGeometry(0.62, 32), paint(0xffffff, { hatch: 0, map: canvasTex(128, 128, (c, w, h) => {
+      const g = c.createRadialGradient(w / 2, h / 2, 4, w / 2, h / 2, w / 2);
+      g.addColorStop(0, '#4f8fa0'); g.addColorStop(0.8, '#7fb8c0'); g.addColorStop(1, '#a8d4cf');
+      c.fillStyle = g; c.beginPath(); c.arc(w / 2, h / 2, w / 2, 0, 7); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = 2;
+      for (const [x, y, r] of [[40, 50, 10], [80, 70, 14], [60, 90, 7]]) { c.beginPath(); c.arc(x, y, r, 0.3, 2.6); c.stroke(); }
+    }) }), px, 0.02, pz, [-Math.PI / 2, 0, 0]);
+    pond.userData.noInk = true;
+    for (let i = 0; i < 14; i++) {
+      const a = i * 0.45;
+      K.put(new THREE.SphereGeometry(0.07 + (i % 3) * 0.02, 8, 6).scale(1.3, 0.55, 1), paint(i % 2 ? 0xbdb6a8 : 0xa89f90), px + Math.cos(a) * 0.66, 0.03, pz + Math.sin(a) * 0.66);
+    }
+    const pads = [];
+    for (const [dx, dz, r] of [[-0.2, 0.1, 0.12], [0.18, -0.15, 0.1], [0.05, 0.25, 0.09], [0.25, 0.18, 0.08]]) {
+      const pad = K.put(new THREE.CircleGeometry(r, 16, 0.3, Math.PI * 2 - 0.6), paint(0x6f9a4c, { side: THREE.DoubleSide }), px + dx, 0.03, pz + dz, [-Math.PI / 2, 0, 0]);
+      pad.userData.noInk = true; pads.push([pad, dx * 9]);
+    }
+    const lotus = new THREE.Group(); lotus.position.set(px - 0.2, 0.04, pz + 0.1); K.g.add(lotus);
+    for (let p = 0; p < 7; p++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6).scale(0.5, 1, 0.25).translate(0, 0.05, 0), paint(0xf4b6c8));
+      m.rotation.set(0.5, p * 0.9, 0, 'YXZ'); m.userData.noInk = true; lotus.add(m);
+    }
+    LIVE.push((t) => { for (const [pad, ph] of pads) pad.position.y = 0.03 + Math.sin(t * 1.2 + ph) * 0.004; lotus.rotation.y = t * 0.1; });
+    K.cols.push({ x0: px - 0.6, x1: px + 0.6, z0: pz - 0.6, z1: pz + 0.6 });
+    // sunbeams slanting down through the canopy
+    const beamTex = canvasTex(64, 256, (c, w, h) => {
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,246,200,0.9)'); g.addColorStop(1, 'rgba(255,246,200,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      const s = c.createLinearGradient(0, 0, w, 0); s.addColorStop(0, 'rgba(0,0,0,1)'); s.addColorStop(0.5, 'rgba(0,0,0,0)'); s.addColorStop(1, 'rgba(0,0,0,1)');
+      c.globalCompositeOperation = 'destination-out'; c.fillStyle = s; c.fillRect(0, 0, w, h);
+    });
+    const beams = [];
+    for (const [x, z, w, r] of [[-0.6, -3.6, 0.7, 0.35], [1.2, -2.6, 0.55, 0.3], [2.6, -4.2, 0.6, 0.38], [-2.4, -1.8, 0.5, 0.3]]) {
+      const m = new THREE.MeshBasicMaterial({ map: beamTex, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const b = new THREE.Mesh(new THREE.PlaneGeometry(w, 2.8), m);
+      b.position.set(x, 1.3, z); b.rotation.set(0, 0, r); b.userData.noInk = true; K.g.add(b); beams.push([m, x]);
+    }
+    LIVE.push((t) => { for (const [m, ph] of beams) m.opacity = 0.32 + Math.sin(t * 0.4 + ph) * 0.12; });
+    // fireflies drifting through the undergrowth
+    const glowTex = canvasTex(64, 64, (c, w, h) => {
+      const g = c.createRadialGradient(w / 2, h / 2, 1, w / 2, h / 2, w / 2);
+      g.addColorStop(0, 'rgba(255,255,220,1)'); g.addColorStop(0.25, 'rgba(240,255,140,0.8)'); g.addColorStop(1, 'rgba(200,255,100,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    });
+    const flies = [], fr = rng(31);
+    for (let i = 0; i < 34; i++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      s.scale.setScalar(0.09 + fr() * 0.05); K.g.add(s);
+      flies.push({ s, x: (fr() - 0.5) * 7, z: -0.6 - fr() * 4.6, y: 0.3 + fr() * 1.9, ph: fr() * 6, sp: 0.3 + fr() * 0.5 });
+    }
+    LIVE.push((t) => {
+      for (const f of flies) {
+        f.s.position.set(f.x + Math.sin(t * f.sp + f.ph) * 0.35, f.y + Math.sin(t * f.sp * 1.7 + f.ph) * 0.18, f.z + Math.cos(t * f.sp * 0.8 + f.ph) * 0.3);
+        f.s.material.opacity = 0.35 + 0.65 * Math.max(0, Math.sin(t * 1.9 + f.ph * 3));
+      }
+    });
+    // butterflies flitting about
+    const wingTex = (a, b) => canvasTex(64, 64, (c, w, h) => {
+      c.fillStyle = a; c.beginPath(); c.ellipse(w * 0.5, h * 0.32, w * 0.42, h * 0.28, -0.3, 0, 7); c.fill();
+      c.fillStyle = b; c.beginPath(); c.ellipse(w * 0.4, h * 0.72, w * 0.3, h * 0.22, 0.4, 0, 7); c.fill();
+      c.strokeStyle = '#2a2230'; c.lineWidth = 3; c.stroke();
+      c.fillStyle = '#fff'; c.beginPath(); c.arc(w * 0.6, h * 0.3, 4, 0, 7); c.fill();
+    });
+    [['#5fa8e8', '#2a5aa8'], ['#f6a53b', '#e8604c'], ['#f29bb4', '#b7a3e6']].forEach(([a, b], i) => {
+      const bf = new THREE.Group(); K.g.add(bf);
+      const m = cutout(wingTex(a, b));
+      const ws = [-1, 1].map(s => {
+        const pv = new THREE.Group(); bf.add(pv);
+        const wg = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.12).translate(0.06, 0, 0), m); wg.rotation.x = -Math.PI / 2; wg.userData.noInk = true;
+        pv.add(wg); pv.scale.x = s; return pv;
+      });
+      bf.add(new THREE.Mesh(new THREE.CapsuleGeometry(0.008, 0.06, 2, 6).rotateX(Math.PI / 2), paint(0x2a2230, { hatch: 0 })));
+      LIVE.push((t) => {
+        const a2 = t * (0.35 + i * 0.08) + i * 2;
+        bf.position.set(Math.sin(a2) * (1.6 + i * 0.6), 1.1 + i * 0.25 + Math.sin(t * 1.3 + i) * 0.3, -2.6 + Math.cos(a2 * 1.3) * 1.6);
+        bf.rotation.y = -a2 + Math.PI;
+        const flap = Math.sin(t * 16 + i) * 0.9;
+        ws[0].rotation.z = flap; ws[1].rotation.z = flap;
+      });
+    });
+    // leaves drifting down from the canopy
+    const fall = [], lr = rng(41);
+    for (let i = 0; i < 10; i++) {
+      const lf = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.14), leafM); lf.userData.noInk = true; K.g.add(lf);
+      fall.push({ lf, x: (lr() - 0.5) * 7, z: -0.8 - lr() * 4.4, ph: lr(), sp: 0.05 + lr() * 0.05 });
+    }
+    LIVE.push((t) => {
+      for (const f of fall) {
+        const s = (t * f.sp + f.ph) % 1;
+        f.lf.position.set(f.x + Math.sin(s * 12) * 0.25, 2.5 - s * 2.5, f.z);
+        f.lf.rotation.set(Math.sin(s * 9) * 1.2, s * 6, Math.cos(s * 11) * 0.8);
+      }
+    });
+  },
+  yarnflow(K) {
+    // pom-pom garlands strung round the room
+    const cols = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0xb7a3c6, 0xdc9e9a, 0x8f7ae8];
+    for (const pts of topLoops()) bunting(K, pts, 14, (p, a, i) => {
+      const pm = K.put(new THREE.IcosahedronGeometry(0.06, 1), paint(cols[i % cols.length], { hatch: 0.6 }), p.x, p.y - 0.06, p.z);
+      pm.userData.noInk = i % 2 === 0;
+    });
+  },
+  'inbox-zero'(K) {
+    // envelope bunting: little letters pegged on a line
+    for (const pts of topLoops()) bunting(K, pts, 13, (p, a, i) => {
+      const e = K.flat(0.22, 0.14, texMat(88, 56, (c, w, h) => {
+        c.fillStyle = i % 3 === 1 ? '#f6e7c0' : '#fbf6ea'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3);
+        c.beginPath(); c.moveTo(2, 2); c.lineTo(w / 2, h * 0.55); c.lineTo(w - 2, 2); c.stroke();
+        c.fillStyle = ['#e8604c', '#7fb3a8', '#e4b84f'][i % 3]; c.fillRect(w - 20, 8, 12, 14);
+      }), p.x, p.y - 0.08, p.z, [0, a, (i % 2 ? 0.08 : -0.08)]);
+      e.material.side = THREE.DoubleSide;
+    });
+  },
+  deckgpt(K) {
+    // marquee bulbs chasing round the top of the walls
+    const bulbs = [], on = new THREE.MeshBasicMaterial({ color: 0xfff1b0 }), off = new THREE.MeshBasicMaterial({ color: 0x9a7a40 });
+    const geo = new THREE.SphereGeometry(0.035, 8, 6);
+    const add = (x, y, z) => { const b = new THREE.Mesh(geo, on); b.position.set(x, y, z); b.userData.noInk = true; K.g.add(b); bulbs.push(b); };
+    for (let x = -W / 2 + 0.2; x <= W / 2 - 0.2; x += 0.22) add(x, 2.62, -D + 0.56);
+    for (const s of [-1, 1]) for (let z = -D + 0.75; z <= 0.2; z += 0.22) add(s * (W / 2 - 0.04), 2.62, z);
+    LIVE.push((t) => { const k = Math.floor(t * 6); bulbs.forEach((b, i) => { b.material = (i + k) % 3 === 0 ? off : on; }); });
+    // a gold proscenium band under the bulbs
+    K.box(W - 0.1, 0.14, 0.04, paint(PAL.gold), 0, 2.48, -D + 0.54, 0.01);
+    for (const s of [-1, 1]) K.box(0.04, 0.14, D - 0.1, paint(PAL.gold), s * (W / 2 - 0.03), 2.48, -D / 2 + 0.5, 0.01);
+  },
+  charterscope(K) {
+    // signal flags strung across the room
+    const fl = ['#e8604c', '#e4b84f', '#3f5872', '#f6eedb', '#3f8f5a'];
+    for (const pts of topLoops()) bunting(K, pts, 12, (p, a, i) => {
+      const f = K.flat(0.18, 0.2, texMat(64, 72, (c, w, h) => {
+        c.fillStyle = fl[i % 5]; c.beginPath(); c.moveTo(2, 2); c.lineTo(w - 2, 2); c.lineTo(w / 2, h - 2); c.closePath(); c.fill();
+        c.strokeStyle = INKC; c.lineWidth = 3; c.stroke();
+        if (i % 2) { c.fillStyle = fl[(i + 2) % 5]; c.beginPath(); c.arc(w / 2, h * 0.3, 8, 0, 7); c.fill(); }
+      }), p.x, p.y - 0.1, p.z, [0, a, 0]);
+      f.material.side = THREE.DoubleSide;
+    });
+  },
+  splatform(K) {
+    // paint dripping off the top of every wall
+    const cols = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0x5f8cc8, 0xdc6a9a], R = rng(77);
+    const drip = (x, z, ry, i) => {
+      const len = 0.2 + R() * 0.7, col = paint(cols[i % cols.length], { hatch: 0 });
+      const g = new THREE.Group(); g.position.set(x, H, z); g.rotation.y = ry; K.g.add(g);
+      const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.025, len, 3, 8).translate(0, -len / 2, 0), col); m.userData.noInk = true; g.add(m);
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), col); d.position.y = -len - 0.03; d.userData.noInk = true; g.add(d);
+      const lip = K.box(0.18 + R() * 0.3, 0.06, 0.02, col, x, H - 0.02, z); lip.rotation.y = ry;
+    };
+    for (let x = -3.8, i = 0; x < 3.8; x += 0.3 + R() * 0.3, i++) drip(x, -D + 0.52, 0, i);
+    for (const s of [-1, 1]) for (let z = -5.2, i = 0; z < -0.3; z += 0.35 + R() * 0.3, i++) drip(s * (W / 2 - 0.02), z, Math.PI / 2, i + 3);
+  },
+};
+
 const ROOM_WALL = {
-  charterscope: 0xcfdbe4, 'inbox-zero': 0xf3dfc2, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
-  splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0xcfc3dc, library: 0xe8ddc2,
+  charterscope: 0x8a7358, 'inbox-zero': 0xb8574d, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
+  splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a,
 };
 
 export function buildInteriors(scene) {
@@ -1128,14 +1794,16 @@ export function buildInteriors(scene) {
     const g = new THREE.Group(); g.position.set(ox, 0, oz);
     const K = kit(g);
     K.cols = [];
-    roomShell(K, ROOM_WALL[place.id] ?? 0xe8ddc2, place);
-    furnish(K, place.id, ROOM_WALL[place.id] ?? 0xe8ddc2);
+    const theme = THEMES[place.id];
+    roomShell(K, ROOM_WALL[place.id] ?? 0xe8ddc2, place, theme);
+    furnish(K, place.id, ROOM_WALL[place.id] ?? 0xe8ddc2, theme);
+    ENV[place.id]?.(K);
     CENTER[place.id]?.(K);
     EXTRA[place.id]?.(K);
     if (place.id !== 'deckgpt' && place.id !== 'library' && place.shot)
-      framedShot(K, place.shot, 1.9, 1.19, 0, 1.45, -D + 0.6, null, place.clip);
-    plaque(K, -1.25, -D + 2.1);
-    counter(K, 1.6, -D + 2.3, 0);
+      framedShot(K, place.shot, SCR_W, SCR_H, 0, SCR_Y, -D + 0.6, null, place.clip);
+    plaque(K, PLQ_X, -D + 2.1);
+    counter(K, CTR_X, -D + 2.3, 0);
     SETS[place.id]?.(K);
     // a soft pool of light on the floor
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
@@ -1146,13 +1814,13 @@ export function buildInteriors(scene) {
       spawn: { x: ox, z: oz - 0.9, yaw: Math.PI },     // just inside, facing the room
       bounds: { x0: ox - W / 2 + 0.25, x1: ox + W / 2 - 0.25, z0: oz - D + 0.8, z1: oz + 0.42 },
       colliders: [
-        { x0: ox - 2.0, x1: ox - 0.6, z0: oz - D + 1.75, z1: oz - D + 2.45 },   // plaque
-        { x0: ox + 0.7, x1: ox + 2.5, z0: oz - D + 1.95, z1: oz - D + 2.65 },   // counter
+        { x0: ox + PLQ_X - 0.4, x1: ox + PLQ_X + 0.4, z0: oz - D + 1.75, z1: oz - D + 2.45 },   // plaque
+        { x0: ox + CTR_X - 0.9, x1: ox + CTR_X + 0.9, z0: oz - D + 1.95, z1: oz - D + 2.65 },   // counter
         ...K.cols.map(c => ({ x0: ox + c.x0, x1: ox + c.x1, z0: oz + c.z0, z1: oz + c.z1 })),
       ],
       interact: [
-        { x: ox - 1.25, z: oz - D + 2.55, r: 1.0, label: 'read the plaque', act: { type: 'card', place } },
-        { x: ox + 1.6, z: oz - D + 2.75, r: 1.1, label: `open ${place.title} →`, act: { type: 'visit', url: place.url, place } },
+        { x: ox + PLQ_X, z: oz - D + 2.55, r: 1.0, label: 'read the plaque', act: { type: 'card', place } },
+        { x: ox + CTR_X, z: oz - D + 2.75, r: 1.1, label: `open ${place.title} →`, act: { type: 'visit', url: place.url, place } },
         { x: ox, z: oz + 0.1, r: 1.0, label: 'back to the street', act: { type: 'exit' } },
       ],
     };
