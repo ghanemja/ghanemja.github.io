@@ -57,6 +57,7 @@ function station(dur, rest, delay = 0) {
   let t0 = delay;
   return {
     go() { t0 = NOW; },
+    hold() { t0 = 1e9; },                       // reset and wait for go()
     set(p) { t0 = NOW - p * dur; },
     p() { if (NOW - t0 > dur + rest) t0 = NOW; return Math.min(1, Math.max(0, (NOW - t0) / dur)); },
   };
@@ -1266,9 +1267,9 @@ const CENTER = {
       const st = station(4.5, 6, 1);
       mini(K, x, z + 1.0, 'predict the push', (m) => quiz(m.game, 'Predict the push', [{
         q: 'A bar pushes the can and the bottle at 85% of their height. Which one tips over?',
-        choices: ['the can', 'the bottle', 'both', 'neither'], answer: 1, wait: 2400, pick: () => st.go(),
+        choices: ['the can', 'the bottle', 'both', 'neither'], answer: 1, wait: 2400, show: () => st.hold(), pick: () => st.go(),
         why: 'The short, wide can just slides; the tall, thin bottle is pushed up high and tips. Same push, different behaviour.',
-      }]));
+      }], { onClose: () => st.go() }));
       LIVE.push((t) => {
         const s = st.p(), reset = s >= 1 || s < 0.05;
         const bx = -0.62 + (smooth(0.05, 0.45, s) - smooth(0.62, 0.85, s)) * 0.95;
@@ -1297,9 +1298,9 @@ const CENTER = {
       const st = station(5.5, 6, 3);
       mini(K, x, z + 0.95, 'predict the ramp', (m) => quiz(m.game, 'Predict the ramp', [{
         q: 'The ramp tilts up toward 35°. At what angle does the crate start to slide?',
-        choices: ['5°', 'about 19°', '30°', 'it never slides'], answer: 1, wait: 3000, pick: () => st.go(),
+        choices: ['5°', 'about 19°', '30°', 'it never slides'], answer: 1, wait: 3000, show: () => st.hold(), pick: () => st.go(),
         why: 'Friction holds the crate until about 19°, then it lets go. The ball rolls at once: round things don’t wait.',
-      }]));
+      }], { onClose: () => st.go() }));
       LIVE.push((t) => {
         let s = st.p(); if (s >= 1) s = 0;
         const a = 0.6 * smooth(0.0, 0.55, s) * (1 - smooth(0.8, 0.95, s));
@@ -1326,9 +1327,9 @@ const CENTER = {
       const st = station(3.3, 6, 5);
       mini(K, x + 0.3, z + 0.95, 'predict the drop', (m) => quiz(m.game, 'Predict the drop', [{
         q: 'The box drops from its own height, tilted 25°. How many times does it bounce before it settles?',
-        choices: ['none', 'once', 'twice', 'four times'], answer: 2, wait: 2800, pick: () => st.go(),
+        choices: ['none', 'once', 'twice', 'four times'], answer: 2, wait: 2800, show: () => st.hold(), pick: () => st.go(),
         why: 'Two bounces, each smaller, then it settles. Every object in Behaviors gets this same drop test.',
-      }]));
+      }], { onClose: () => st.go() }));
       LIVE.push((t) => {
         const s = st.p(), T = s * 3.2;          // seconds into the drop
         let y, rot = 0;
@@ -2737,7 +2738,7 @@ function gameMarker(K, placeId, m) {
   m.focus = () => { seen = NOW; };              // standing here: get the badge out of the way
   LIVE.push((t) => {
     const fresh = mat.map === BADGE[0];
-    mat.opacity += ((t - seen < 0.2 ? 0 : 1) - mat.opacity) * 0.15;
+    mat.opacity = t - seen < 0.25 ? 0 : Math.min(1, mat.opacity + 0.05);
     badge.visible = mat.opacity > 0.02;
     badge.position.set(m.x, 1.95 + Math.sin(t * 2.2 + ph) * (fresh ? 0.07 : 0.02), m.z);
     ringMat.opacity = fresh ? 0.45 + 0.3 * Math.sin(t * 3 + ph) : 0.35;
@@ -2750,6 +2751,113 @@ function gameMarker(K, placeId, m) {
     }
     mat.map = BADGE[1]; ringMat.color.set(0x7fb3a8);
   };
+}
+
+// ── toys: little things round the room you can tap from anywhere and they react ──
+// each is one group (outline included), pivoting at its real joint: the top on its tip,
+// the lid on its hinge, the bell from its crossbar
+const TOYS = {
+  ball(col) {
+    const g = new THREE.Group(), body = new THREE.Group(); body.position.y = 0.14; g.add(body);
+    body.add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 22, 16), paint(col)));
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.141, 0.025, 8, 28), paint(0xfffaf0)); band.rotation.x = Math.PI / 2; body.add(band);
+    let y = 0, vy = 0, spin = 0;
+    return { g, label: 'bounce the ball', r: 0.17,
+      poke(sfx) { vy = 2.8; spin = 9; sfx([[520, 0.08], [780, 0.12]]); },
+      tick(dt) {
+        if (vy === 0 && y === 0) return;
+        vy -= 9.8 * dt; y += vy * dt;
+        if (y < 0) { y = 0; vy = Math.abs(vy) > 0.6 ? -vy * 0.55 : 0; }
+        spin *= Math.exp(-1.5 * dt); body.rotation.z -= spin * dt;
+        body.position.y = 0.14 + y;
+        const sq = y < 0.02 && vy !== 0 ? 0.85 : 1; body.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq));
+      } };
+  },
+  top(col) {
+    const g = new THREE.Group(), tip = new THREE.Group(); g.add(tip);            // pivot at the point it spins on
+    const T = kit(tip);
+    T.put(new THREE.ConeGeometry(0.15, 0.2, 20).rotateX(Math.PI).translate(0, 0.1, 0), paint(col));
+    T.put(new THREE.CylinderGeometry(0.15, 0.15, 0.05, 20), paint(0xfffaf0), 0, 0.225, 0);
+    T.put(new THREE.CylinderGeometry(0.02, 0.025, 0.12, 8), paint(PAL.bark), 0, 0.31, 0);
+    let w = 0, a = 0;
+    return { g, label: 'spin the top', r: 0.17,
+      poke(sfx) { w = 32; sfx([[880, 0.05], [988, 0.05], [1175, 0.1]], 'sine'); },
+      tick(dt, t) {
+        w *= Math.exp(-0.35 * dt); if (w < 0.5) w = 0;
+        a += w * dt; tip.rotation.y = a;
+        const lean = w ? Math.min(0.35, 2.2 / w) : 0.32;             // slows → wobbles → rests tilted
+        tip.rotation.x = lean * Math.cos(t * (w ? 5 : 0)); tip.rotation.z = lean * Math.sin(t * (w ? 5 : 0)) * (w ? 1 : 0);
+      } };
+  },
+  jack(col) {
+    const g = new THREE.Group(), K2 = kit(g);
+    K2.box(0.3, 0.3, 0.3, paint(col), 0, 0.15, 0, 0.02);
+    for (const sx of [-1, 1]) K2.box(0.02, 0.2, 0.2, paint(0xfffaf0), sx * 0.151, 0.15, 0, 0.005);
+    const lid = new THREE.Group(); lid.position.set(0, 0.3, -0.15); g.add(lid);   // hinge on the back top edge
+    lid.add(new THREE.Mesh(rb(0.32, 0.03, 0.32, 0.01).translate(0, 0.015, 0.16), paint(0xfffaf0)));
+    const jack = new THREE.Group(); jack.position.y = 0.2; g.add(jack);
+    const pts = []; for (let i = 0; i <= 80; i++) { const a = i / 80 * Math.PI * 10; pts.push(new THREE.Vector3(Math.cos(a) * 0.06, i / 80 * 0.3, Math.sin(a) * 0.06)); }
+    jack.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.008, 5), paint(0xc9ccd6)));
+    const head = new THREE.Group(); head.position.y = 0.36; jack.add(head);
+    head.add(new THREE.Mesh(new THREE.SphereGeometry(0.09, 18, 14), paint(0xf3d3b8)));
+    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), paint(0x2a2230, { hatch: 0 })); e.position.set(sx * 0.03, 0.02, 0.082); e.userData.noInk = true; head.add(e); }
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), paint(0xe8604c)); nose.position.set(0, -0.01, 0.09); head.add(nose);
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.14, 12).translate(0, 0.07, 0), paint(PAL.gold)); hat.position.y = 0.07; head.add(hat);
+    let t0 = -9, at = 0;
+    const set = (k) => { jack.scale.y = Math.max(0.02, k); jack.visible = k > 0.05; head.scale.y = 1 / Math.max(0.3, k); };
+    set(0);
+    return { g, label: 'wind the jack-in-the-box', r: 0.2,
+      poke(sfx) { if (at - t0 > 3.2 || t0 < 0) { t0 = at; sfx([[392, 0.1], [523, 0.1], [659, 0.1], [784, 0.25]], 'square', 0.03); } },
+      tick(dt, t) {
+        at = t; const u = t - t0;
+        if (u > 3.4 || u < 0) { lid.rotation.x = 0; set(0); return; }
+        const open = Math.min(1, u / 0.15) * (u > 2.9 ? Math.max(0, 1 - (u - 2.9) / 0.4) : 1);
+        lid.rotation.x = -1.9 * Math.min(1, open * 1.3);
+        const up = u < 0.15 ? 0 : u > 2.6 ? Math.max(0, 1 - (u - 2.6) / 0.3) : 1 + Math.exp(-4 * (u - 0.15)) * Math.sin((u - 0.15) * 22) * 0.35;
+        set(up); head.rotation.z = Math.sin(u * 9) * 0.25 * Math.exp(-u);
+      } };
+  },
+  bell(col) {
+    const g = new THREE.Group(), K2 = kit(g), wood = paint(0x8a6448);
+    for (const sx of [-1, 1]) K2.box(0.04, 0.5, 0.04, wood, sx * 0.17, 0.25, 0, 0.01);
+    K2.box(0.4, 0.04, 0.05, wood, 0, 0.5, 0, 0.01);
+    K2.box(0.42, 0.04, 0.2, wood, 0, 0.02, 0, 0.01);
+    const swing = new THREE.Group(); swing.position.y = 0.48; g.add(swing);       // hangs from the crossbar
+    const prof = [[0.01, 0], [0.04, -0.01], [0.06, -0.06], [0.075, -0.14], [0.11, -0.2], [0.11, -0.215]].map(([x, y]) => new THREE.Vector2(x, y));
+    swing.add(new THREE.Mesh(new THREE.LatheGeometry(prof, 20), paint(col, { side: THREE.DoubleSide })));
+    const clap = new THREE.Mesh(new THREE.SphereGeometry(0.025, 10, 8), paint(0x2a2230, { hatch: 0 })); clap.position.y = -0.2; swing.add(clap);
+    let amp = 0, ph = 0;
+    return { g, label: 'ring the bell', r: 0.22,
+      poke(sfx) { amp = 0.6; ph = 0; sfx([[1318, 0.6], [1975, 0.5]], 'sine', 0.05); },
+      tick(dt) { if (amp < 0.005) { swing.rotation.z = 0; return; } ph += dt * 9; amp *= Math.exp(-0.9 * dt); swing.rotation.z = amp * Math.sin(ph); clap.position.x = -amp * Math.sin(ph - 0.6) * 0.06; } };
+  },
+};
+const TOY_COLS = [0xe8604c, 0x7fb3a8, 0x8f7ae8, 0x5f8cc8, 0xe4b84f, 0xdc6a9a];
+function scatterToys(K, placeId, idx, lib) {
+  const R = rng(300 + idx * 17);
+  // keep clear of furniture, the things you walk up to, and the way in
+  const keep = [...K.minis.map(m => [m.x, m.z, 1.0]), [LBL_X, -D + 1.3, 1.0], [0, -D + 1.5, 1.5], [0, -0.6, 1.2], [0, 0.1, 1.0]];
+  if (lib) keep.push([-1.25, -D + 2.3, 1.2], [1.6, -D + 2.5, 1.3]);
+  const ok = (x, z) => !K.cols.some(c => x > c.x0 - 0.35 && x < c.x1 + 0.35 && z > c.z0 - 0.35 && z < c.z1 + 0.35)
+    && keep.every(([kx, kz, r]) => Math.hypot(x - kx, z - kz) > r) && placed.every(([px, pz]) => Math.hypot(x - px, z - pz) > 1.3);
+  const placed = [], out = [];
+  const kinds = shuffle(Object.keys(TOYS)), _r = R;
+  for (let tries = 0; tries < 400 && placed.length < kinds.length; tries++) {
+    const x = -W / 2 + 0.55 + _r() * (W - 1.1), z = -D + 1.05 + _r() * (D - 1.6);
+    if (!ok(x, z)) continue;
+    placed.push([x, z]);
+  }
+  placed.forEach(([x, z], i) => {
+    const toy = TOYS[kinds[i]](TOY_COLS[(idx + i) % TOY_COLS.length]);
+    toy.g.position.set(x, 0, z); toy.g.rotation.y = (_r() - 0.5) * 1.2;
+    toy.g.userData.toy = toy; K.g.add(toy.g);
+    K.g.add(blobShadow(toy.r * 1.4).translateX(x).translateZ(z));
+    K.cols.push({ x0: x - toy.r, x1: x + toy.r, z0: z - toy.r, z1: z + toy.r });
+    let last = 0;
+    LIVE.push((t) => { const dt = Math.min(0.05, Math.max(0, t - last)); last = t; toy.tick(dt, t); });
+    out.push(toy);
+  });
+  return out;
 }
 
 const ROOM_WALL = {
@@ -2778,11 +2886,13 @@ export function buildInteriors(scene) {
     SETS[place.id]?.(K);
     MINI[place.id]?.(K);
     for (const m of K.minis) gameMarker(K, place.id, m);
+    scatterToys(K, place.id, i, lib);
     // a soft pool of light on the floor
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
     ink(g, 'mid');
     scene.add(g);
     rooms[place.id] = {
+      group: g,
       origin: { x: ox, z: oz },
       spawn: { x: ox, z: oz - 0.9, yaw: Math.PI },     // just inside, facing the room
       bounds: { x0: ox - W / 2 + 0.25, x1: ox + W / 2 - 0.25, z0: oz - D + 0.8, z1: oz + 0.42 },

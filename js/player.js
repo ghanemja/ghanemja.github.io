@@ -277,7 +277,7 @@ export function createPlayer(scene, camera, start) {
     yaw: start.yaw ?? -Math.PI / 2, pitch: 0.34, dist: 3.4,
     zone: { colliders: [], bounds: null },
     face: start.yaw != null ? start.yaw + Math.PI : Math.PI / 2,
-    joy: null, look: null, frozen: false,
+    joy: null, look: null, frozen: false, goal: null,
   };
 
   // ── input: keyboard ──
@@ -342,8 +342,17 @@ export function createPlayer(scene, camera, start) {
     get pos() { return g.position; },
     get human() { return g.userData.human; },
     setZone(zone) { S.zone = zone; },
-    freeze(f) { S.frozen = f; },
+    freeze(f) { S.frozen = f; if (f) S.goal = null; },
+    // while a game is open: stand back and look down at the thing in front of her
+    gameView(on) {
+      if (on && !S.saved) { S.saved = { dist: S.dist, pitch: S.pitch, yaw: S.yaw }; S.dist = 3.6; S.pitch = 0.85; S.yaw = 0; S.face = Math.PI; }
+      else if (!on && S.saved) { Object.assign(S, S.saved); S.saved = null; }
+    },
+    // walk to a spot by herself (tap-to-walk); done(arrived) when she gets there or gets stuck
+    walkTo(x, z, done) { S.goal = { x, z, done, best: 1e9, stall: 0 }; },
+    get walking() { return !!S.goal; },
     teleport(x, z, yaw) {
+      S.goal = null;
       g.position.set(x, 0, z);
       if (yaw != null) { S.yaw = yaw; S.face = yaw + Math.PI; }
       camSnap = true;
@@ -359,7 +368,33 @@ export function createPlayer(scene, camera, start) {
         mz = (-cy) * f + (-sy) * r;
         if (S.joy) { mx += (-sy) * (-S.joy.dy) + cy * S.joy.dx; mz += (-cy) * (-S.joy.dy) + (-sy) * S.joy.dx; }
       }
-      const len = Math.hypot(mx, mz);
+      let len = Math.hypot(mx, mz);
+      if (len > 0.05) S.goal = null;              // the keys / stick take over
+      else if (S.goal && !S.frozen) {
+        const G = S.goal, P = g.position;
+        if (G.via && Math.hypot(G.via.x - P.x, G.via.z - P.z) < 0.15) { G.via = null; G.best = 1e9; G.stall = 0; }
+        const T = G.via || G, dx = T.x - P.x, dz = T.z - P.z, d = Math.hypot(dx, dz);
+        if (!G.via && d < 0.12) { S.goal = null; G.done?.(true); }
+        else {
+          if (d < G.best - 0.01) { G.best = d; G.stall = 0; } else G.stall += dt;
+          // stuck against something: head for the best corner of whatever is in the way
+          if (G.stall > 0.25 && (G.tries = (G.tries || 0) + 1) <= 4) {
+            const m = R + 0.18;
+            let best = null, bl = 1e9;
+            for (const c of S.zone.colliders) {
+              if (P.x < c.x0 - m - 0.1 || P.x > c.x1 + m + 0.1 || P.z < c.z0 - m - 0.1 || P.z > c.z1 + m + 0.1) continue;
+              for (const [cx, cz] of [[c.x0 - m, c.z0 - m], [c.x1 + m, c.z0 - m], [c.x0 - m, c.z1 + m], [c.x1 + m, c.z1 + m]]) {
+                if (!free(cx, cz) || Math.hypot(cx - P.x, cz - P.z) < 0.1) continue;
+                const l = Math.hypot(cx - P.x, cz - P.z) + Math.hypot(G.x - cx, G.z - cz);
+                if (l < bl) { bl = l; best = { x: cx, z: cz }; }
+              }
+            }
+            if (best) { G.via = best; G.best = 1e9; G.stall = 0; }
+          }
+          if (G.stall > 0.6) { S.goal = null; G.done?.(false); }
+          else { const sp = Math.min(1, d / 0.3 + 0.35); mx = dx / d * sp; mz = dz / d * sp; len = Math.hypot(mx, mz); }
+        }
+      }
       let k = 0;
       if (len > 0.05) {
         mx /= len; mz /= len;
@@ -387,7 +422,7 @@ export function createPlayer(scene, camera, start) {
       // head→camera segment and stop at the first collider footprint (the
       // awnings overhang the fronts, so pad generously)
       const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
-      _t.set(g.position.x, S.zone.lookY ?? 1.02, g.position.z);     // indoors the camera aims higher, at the walls
+      _t.set(g.position.x, S.saved ? 0.7 : S.zone.lookY ?? 1.02, g.position.z - (S.saved ? 0.9 : 0));     // indoors the camera aims higher, at the walls
       _c.set(
         _t.x + Math.sin(S.yaw) * cp * S.dist,
         _t.y + sp * S.dist,
@@ -403,7 +438,7 @@ export function createPlayer(scene, camera, start) {
             if (x > c.x0 - P && x < c.x1 + P && z > c.z0 - P && z < c.z1 + P) { tc = Math.max(0.18, (i - 1) / N); break outer; }
           }
         }
-        if (tc < 1) _c.lerpVectors(_t, _c, tc);
+        if (tc < 1 && !S.saved) _c.lerpVectors(_t, _c, tc);
       }
       if (_c.y < 0.25) _c.y = 0.25;
       if (camSnap) { camera.position.copy(_c); camSnap = false; }

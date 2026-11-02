@@ -73,7 +73,7 @@ Promise.all([fontsReady]).then(() => {
 function buildHud() {
   const coarse = matchMedia('(pointer: coarse)').matches;
   if (coarse) {
-    $('#bar').innerHTML = 'drag <b>left side</b> to walk · drag <b>right</b> to look · tap the yellow prompts';
+    $('#bar').innerHTML = 'tap to walk or play · drag <b>left side</b> to walk · drag <b>right</b> to look';
     $('#hud').classList.add('min');
   }
   $('#hud b').onclick = () => $('#hud').classList.toggle('min');
@@ -208,19 +208,20 @@ const game = (() => {
   };
   const G = {
     get isOpen() { return open; },
+    blip,
     open(title, opts = {}) {
       if (open) G.close();
       open = true; onClose = opts.onClose || null;
       $('#gTitle').textContent = title; $('#gScore').textContent = ''; $('#gText').textContent = '';
       noteEl.textContent = ''; noteEl.className = ''; clear(); stopMeter();
-      el.classList.remove('hide'); $('#say').classList.add('hide');
-      player?.freeze(true); refreshKeys();
+      el.classList.remove('hide'); $('#say').classList.add('hide'); $('#hint').classList.add('hide');
+      player?.freeze(true); player?.gameView(true); refreshKeys();
       return G;
     },
     close() {
       if (!open) return;
       open = false; timers.forEach(clearTimeout); timers = []; stopMeter(); clear();
-      el.classList.add('hide'); player?.freeze(false);
+      el.classList.add('hide'); player?.freeze(false); player?.gameView(false);
       const f = onClose; onClose = null; f?.();
     },
     title(s) { $('#gTitle').textContent = s; },
@@ -353,6 +354,91 @@ addEventListener('keydown', (e) => {
 });
 $('#prompt').onclick = () => activeAct && doAct(activeAct);
 
+// ── tap the world: walk to the floor; tap a thing to walk over and use it ──
+const ray = new THREE.Raycaster(), _ndc = new THREE.Vector2();
+ray.camera = camera;
+function pickAt(cx, cy) {
+  if (!player) return null;
+  _ndc.set((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
+  ray.setFromCamera(_ndc, camera);
+  ray.far = 40;
+  const roots = zone === 'street' ? scene.children.filter(o => !roomGroups.has(o) && o !== player.group) : [rooms[zone].group];
+  const hits = ray.intersectObjects(roots, true).filter(h => h.object.visible && !h.object.userData.isInk && !isPlayer(h.object));
+  const h = hits[0];
+  if (!h) return null;
+  for (let o = h.object; o; o = o.parent) if (o.userData.toy) return { toy: o.userData.toy, point: h.point };
+  const p = h.point;
+  // what it belongs to: the nearest thing you can use, if you tapped an object (not the floor)
+  const list = zone === 'street'
+    ? [...APPS.filter(a => town.doors[a.id]).map(a => ({ x: town.doors[a.id].x, z: town.doors[a.id].z, r: 1.0, label: `enter ${a.title}`, act: { type: 'enter', id: a.id }, reach: 2.6 })),
+       { x: town.doors.library.x, z: town.doors.library.z, r: 1.3, label: 'enter the Public Library', act: { type: 'enter', id: 'library' }, reach: 3.2 }]
+    : rooms[zone].interact.map(it => ({ ...it, reach: it.act.type === 'exit' ? 1.0 : 1.6 }));
+  let it = null, bd = 1e9;
+  if (p.y > 0.04 || h.object.isSprite) {
+    for (const c of list) {
+      // a station's ring sits in front of its thing, so measure to the thing too
+      let d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (c.act.type === 'mini') d = Math.min(d, Math.hypot(p.x - c.x, p.z - (c.z - 0.85)) * 0.9);
+      if (d < c.reach && d < bd) { bd = d; it = c; }
+    }
+  }
+  return { point: p, it };
+}
+const isPlayer = (o) => { for (; o; o = o.parent) if (o === player.group) return true; return false; };
+let roomGroups = new Set();
+const canWalk = () => player && $('#card').classList.contains('hide') && $('#title').classList.contains('hide') && !game.isOpen;
+const cvs = renderer.domElement;
+const tap = { x: 0, y: 0, t: 0, id: -1 };
+cvs.addEventListener('pointerdown', (e) => { tap.x = e.clientX; tap.y = e.clientY; tap.t = performance.now(); tap.id = e.pointerId; });
+cvs.addEventListener('pointerup', (e) => {
+  if (e.pointerId !== tap.id || !canWalk()) return;
+  if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 8 || performance.now() - tap.t > 350) return;   // that was a drag
+  if (!roomGroups.size) roomGroups = new Set(Object.values(rooms).map(r => r.group));
+  const hit = pickAt(e.clientX, e.clientY);
+  if (!hit) return;
+  const { it, point, toy } = hit;
+  if (toy) return toy.poke(game.blip);
+  if (it) {
+    // already standing there? just use it
+    if (Math.hypot(player.pos.x - it.x, player.pos.z - it.z) < it.r) return it.act.type !== 'visit' && doAct(it);
+    marker(it.x, it.z);
+    player.walkTo(it.x, it.z, () => {
+      // (opening another site needs a fresh tap, so that one just waits at its prompt)
+      if (Math.hypot(player.pos.x - it.x, player.pos.z - it.z) < it.r && it.act.type !== 'visit' && canWalk()) doAct(it);
+    });
+  } else {
+    marker(point.x, point.z);
+    player.walkTo(point.x, point.z);
+  }
+});
+// a little chalk ring where you tapped
+const tapRing = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.18, 28).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0xe8604c, transparent: true, opacity: 0, depthWrite: false }));
+tapRing.renderOrder = 5; scene.add(tapRing);
+let tapT = -9;
+function marker(x, z) { tapRing.position.set(x, 0.03, z); tapT = clock.elapsedTime; }
+// on a mouse, things you can use light up the cursor and say what they are
+const hint = document.createElement('div');
+hint.className = 'ui sk hide'; hint.id = 'hint';
+document.body.appendChild(hint);
+let hoverAt = 0;
+cvs.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse' || e.buttons) return;
+  const now = performance.now();
+  if (now - hoverAt < 90) return;
+  hoverAt = now;
+  if (!roomGroups.size && rooms) roomGroups = new Set(Object.values(rooms).map(r => r.group));
+  const hit = canWalk() ? pickAt(e.clientX, e.clientY) : null;
+  const it = hit?.it, toy = hit?.toy;
+  cvs.style.cursor = it || toy ? 'pointer' : '';
+  if (it || toy) {
+    hint.textContent = toy ? toy.label : (it.act.type === 'mini' ? '★ ' : '') + it.label;
+    hint.style.left = e.clientX + 16 + 'px'; hint.style.top = e.clientY + 14 + 'px';
+    hint.classList.remove('hide');
+  } else hint.classList.add('hide');
+});
+cvs.addEventListener('pointerleave', () => hint.classList.add('hide'));
+
 let uiHidden = false;
 function toggleUi() {
   uiHidden = !uiHidden;
@@ -420,6 +506,7 @@ function loop() {
     else pr.classList.add('hide');
     tickWaypoint();
   }
+  { const a = t - tapT; tapRing.material.opacity = a < 0.7 ? 0.8 * (1 - a / 0.7) : 0; tapRing.scale.setScalar(1 + a * 0.8); }
   tickInteriors(t);
   styleTick(t, renderer.domElement.width, renderer.domElement.height);
   renderer.render(scene, camera);
