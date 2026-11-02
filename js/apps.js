@@ -27,6 +27,14 @@ export const APPS = [
     note: 'Studio, Learn stitches, Community, Publish my make.',
   },
   {
+    id: 'hookpath', title: 'Hookpath', trade: 'The Blocking Room',
+    url: 'https://ghanemja.github.io/hookpath/', repo: 'https://github.com/ghanemja/hookpath',
+    shot: 'screenshots/hookpath.png',
+    desc: "Plan a crochet hook's moves in 3D, shot by shot, without opening Blender. Pose the hook over a swatch, keyframe it on a timeline, frame the camera and add callouts.",
+    how: "Drag the hook's arrows to move or roll it, and every change becomes a keyframe. The tip glides along a smooth curve between keys, and planned camera shots glide between the keys that carry one.",
+    note: "Exports the whole take as a JSON plan a renderer can follow. Made for blocking out YarnFlow's stitch tutorials.",
+  },
+  {
     id: 'deckgpt', title: 'DeckGPT', trade: 'Picture Palace',
     url: 'https://pptgpt.netlify.app', repo: 'https://pptgpt.netlify.app',
     shot: 'screenshots/pptgpt.png',

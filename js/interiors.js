@@ -218,6 +218,12 @@ const SHOW = {
     });
     [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(([sx, sy]) => F.put(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 10), paint(0xef8fa8), sx * (w / 2 + 0.05), sy * (h / 2 + 0.05), 0.02, [Math.PI / 2, 0, 0]));
   },
+  hookpath(F, w, h) {                          // an editing monitor, its bottom bar a timeline of keyframes
+    frameBars(F, w, h, 0.1, (len, t, hz) => new THREE.Mesh(rb(hz ? len : t, hz ? t : len, 0.08, 0.02), paint(0x2a2230, { hatch: 0 })));
+    const y = -h / 2 - 0.05;
+    for (let i = 0; i < 9; i++) F.box(0.055, 0.055, 0.02, paint(i === 4 ? 0xf0862a : 0x7ea6ec, { hatch: 0 }), -w / 2 + 0.3 + i * (w - 0.6) / 8, y, 0.05, 0.006, [0, 0, Math.PI / 4]);
+    F.box(0.025, 0.16, 0.02, paint(0xf0862a, { hatch: 0 }), -w / 2 + 0.3 + 4.4 * (w - 0.6) / 8, y, 0.06, 0.005);
+  },
   splatform(F, w, h) {                         // a stretched canvas, paint running off its edges
     frameBars(F, w, h, 0.09, (len, t, hz) => new THREE.Mesh(rb(hz ? len : t, hz ? t : len, 0.12, 0.01), paint(0xf6eedb)));
     const cols = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0x5f8cc8, 0xdc6a9a], R = rng(12);
@@ -418,6 +424,36 @@ const SETS = {
     // a basket with needles
     K.put(new THREE.CylinderGeometry(0.3, 0.22, 0.3, 12, 1, true), paint(0xc8a47c, { side: THREE.DoubleSide }), 1.1, 0.15, -D + 1.1);
     for (const a of [-0.3, 0.1, 0.5]) K.box(0.025, 0.85, 0.025, paint(0x6b4a34), 1.1 + a * 0.3, 0.5, -D + 1.1, 0.008, [0, 0, a]);
+  },
+  hookpath(K) {
+    // a camera on a tripod, framing the hook on its plinth: a planned shot
+    const x = 2.3, z = -2.1, dk = paint(0x2a2230, { hatch: 0 });
+    for (let k = 0; k < 3; k++) {          // legs splayed out at the floor, meeting under the head
+      const a = k / 3 * Math.PI * 2 + 0.4;
+      K.box(0.035, 1.12, 0.035, dk, x + Math.cos(a) * 0.2, 0.54, z + Math.sin(a) * 0.2, 0.01, [-Math.sin(a) * 0.36, 0, Math.cos(a) * 0.36]);
+    }
+    K.box(0.12, 0.08, 0.12, dk, x, 1.1, z, 0.02);
+    const cam = new THREE.Group(); cam.position.set(x, 1.24, z); K.g.add(cam);
+    cam.rotation.y = Math.atan2(-2.2 - x, -2.5 - z);        // the lens (+z) on the hook's plinth
+    const C = kit(cam);
+    C.box(0.22, 0.2, 0.36, paint(0x3f4a5c), 0, 0, 0, 0.03);
+    C.put(new THREE.CylinderGeometry(0.075, 0.085, 0.16, 16), dk, 0, 0, 0.25, [Math.PI / 2, 0, 0]);
+    C.put(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 16), paint(0x7ea6ec, { hatch: 0 }), 0, 0, 0.335, [Math.PI / 2, 0, 0]).userData.noInk = true;
+    for (const s of [-1, 1]) C.put(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 16), dk, 0, 0.2, s * 0.1, [0, 0, Math.PI / 2]);
+    C.put(new THREE.SphereGeometry(0.018, 8, 6), paint(0xe8604c, { emissive: 0xe8604c, hatch: 0 }), 0.06, 0.08, 0.18).userData.noInk = true;
+    K.cols.push({ x0: x - 0.3, x1: x + 0.3, z0: z - 0.3, z1: z + 0.3 });
+    // a clapperboard leaning on the wall: scene, take, and what's being blocked
+    const cx = -3.2, cz = -D + 0.75;
+    K.box(0.5, 0.38, 0.03, dk, cx, 0.21, cz, 0.01, [-0.18, 0.3, 0]);
+    K.flat(0.46, 0.3, texMat(256, 168, (c, w, h) => {
+      c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h);
+      for (let k = -2; k < 10; k++) { c.fillStyle = k % 2 ? '#f6eedb' : '#2a2230'; c.beginPath(); c.moveTo(k * 32, 0); c.lineTo(k * 32 + 32, 0); c.lineTo(k * 32 + 16, 34); c.lineTo(k * 32 - 16, 34); c.fill(); }
+      c.strokeStyle = '#f6eedb'; c.lineWidth = 2; c.strokeRect(6, 40, w - 12, h - 46);
+      c.beginPath(); c.moveTo(6, 98); c.lineTo(w - 6, 98); c.moveTo(w / 2, 98); c.lineTo(w / 2, h - 6); c.stroke();
+      c.fillStyle = '#f6eedb'; c.font = `700 34px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText('single crochet', w / 2, 70);
+      c.font = `400 22px ${HAND}`; c.fillText('SCENE 1', w / 4, 132); c.fillText('TAKE 3', w * 3 / 4, 132);
+    }), cx, 0.21, cz + 0.02, [-0.18, 0.3, 0]);
   },
   deckgpt(K) {
     // the silver screen, playing the app
@@ -1073,7 +1109,7 @@ const EXTRA = {
 
 // ─── FURNISHING: every room reads as a lived-in shop, not a bare box ────────
 const ACCENT = {
-  behaviors: 0x3f5872, qr: 0x2a2230, yarnflow: 0x8f7ae8, deckgpt: 0xb03a30,
+  behaviors: 0x3f5872, qr: 0x2a2230, yarnflow: 0x8f7ae8, hookpath: 0x2f5ea8, deckgpt: 0xb03a30,
   splatform: 0xe8604c, 'borrowed-eyes': 0x2f5a52, gallery: 0x6a4a8a, library: 0x8e2f3a, 'doodle-libs': 0xe8466b,
   zen: 0x55663f,
 };
@@ -1252,6 +1288,58 @@ const CENTER = {
       });
       K.cols.push({ x0: x - 0.45, x1: x + 0.45, z0: z - 0.45, z1: z + 0.45 });
     }
+  },
+  hookpath(K) {         // a hook on a plinth, gliding through its keyframes over a swatch
+    const x = -2.2, z = -2.5, top = 0.72;
+    K.box(0.9, 0.7, 0.7, paint(0x3f4a5c), x, 0.35, z, 0.03);
+    K.box(0.96, 0.04, 0.76, paint(0xf6eedb), x, 0.71, z, 0.01);
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 6; i++) {          // two rows of single crochet, stitch tops up
+      const b = K.put(new THREE.TorusGeometry(0.045, 0.022, 6, 12), paint(r ? 0x4f7fc4 : 0x6b93cf), x - 0.3 + i * 0.12, top + 0.04, z - 0.06 + r * 0.13, [Math.PI / 2, 0, 0]);
+      b.scale.set(1, 0.7, 1);
+    }
+    // the plan: five keys, the curve Hookpath draws through them, dashed
+    const KEYS = [
+      ['Insert hook', 'go into stitch 2, under both top loops', [-0.34, 0.4, 0.12]],
+      ['Poke through', 'the hook comes out the back', [-0.12, 0.12, -0.02]],
+      ['Yarn over', 'roll the throat to catch the yarn', [0.04, 0.1, -0.16]],
+      ['Pull up a loop', 'two loops on your hook', [0.18, 0.26, -0.02]],
+      ['Pull through both', 'a new stitch, on top of stitch 2', [0.34, 0.42, 0.12]],
+    ];
+    const curve = new THREE.CatmullRomCurve3(KEYS.map(k => new THREE.Vector3(x + k[2][0], top + k[2][1], z + k[2][2])), true, 'centripetal');
+    for (let i = 0; i < 60; i += 2) {
+      const p = curve.getPoint(i / 60);
+      K.put(new THREE.SphereGeometry(0.009, 6, 5), paint(0xf0862a, { hatch: 0 }), p.x, p.y, p.z).userData.noInk = true;
+    }
+    const blue = paint(0x2f5ea8, { hatch: 0 }), orange = paint(0xf0862a, { hatch: 0 });
+    const dia = KEYS.map((k, i) => { const p = curve.getPoint(i / KEYS.length); return K.put(new THREE.OctahedronGeometry(0.035), blue, p.x, p.y, p.z); });
+    // the hook: pivot at the tip, shaft up +y, a live loop of orange yarn on it
+    const hook = new THREE.Group(); K.g.add(hook);
+    const steel = paint(0xd5dae2);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.55, 10), steel); shaft.position.y = 0.3; hook.add(shaft);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), steel); tip.position.y = 0.025; hook.add(tip);
+    const barb = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.008, 6, 12, Math.PI * 1.2), steel); barb.position.set(0.016, 0.03, 0); barb.rotation.z = -0.4; hook.add(barb);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.2, 10), paint(0x8f7ae8)); grip.position.y = 0.5; hook.add(grip);
+    const loop = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.01, 6, 14), paint(0xf0862a)); loop.position.y = 0.1; loop.rotation.x = Math.PI / 2; hook.add(loop);
+    const N = KEYS.length;
+    let u = 0, last = 0, hold = -1, from = 0, to = 0, t0 = 0, at = -1;
+    LIVE.push((t) => {
+      const dt = Math.min(0.05, Math.max(0, t - last)); last = t;
+      if (t < hold) { const k = Math.min(1, (t - t0) / 0.7); u = from + (to - from) * k * k * (3 - 2 * k); }
+      else u += dt * 0.08;
+      const v = ((u % 1) + 1) % 1;
+      hook.position.copy(curve.getPoint(v));
+      const a = v * Math.PI * 2;
+      hook.rotation.set(0.2 * Math.sin(a), 0.9 * Math.sin(a * 2), -0.5 + 0.18 * Math.sin(a));
+      const near = Math.round(v * N) % N;
+      dia.forEach((d, i) => { d.material = i === near && Math.abs(v * N - Math.round(v * N)) < 0.15 ? orange : blue; d.rotation.y = t; });
+    });
+    mini(K, x, z + 0.8, 'step to the next keyframe', (m) => {
+      at = (at + 1) % N;
+      from = u; to = Math.floor(u) + at / N; if (to < from) to += 1;
+      t0 = NOW; hold = NOW + 3.2;
+      m.say(`Key ${at + 1} of ${N}, ${KEYS[at][0]}: ${KEYS[at][1]}. Hookpath glides the hook between keys like this.`);
+    });
+    K.cols.push({ x0: x - 0.5, x1: x + 0.5, z0: z - 0.4, z1: z + 0.4 });
   },
   deckgpt(K) {          // a popcorn cart by the door
     const x = -2.9, z = -1.3;
@@ -1711,6 +1799,30 @@ const THEMES = {
       for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) grannySquare(c, i * s, j * s, s, pal[i * 2 + j]);
     },
     floorTile: 1.8, floorPx: 512,
+    rug: false,
+  },
+  hookpath: {
+    wash: [0.2, '#e4eaf2'],
+    tile: [128, 0.5, (c, w, h) => {              // graph paper, like the floor grid of a 3D viewport
+      c.fillStyle = '#eef1f5'; c.fillRect(0, 0, w, h);
+      for (let k = 0; k < w; k += 16) {
+        c.fillStyle = k % 64 === 0 ? 'rgba(79,127,196,0.45)' : 'rgba(79,127,196,0.2)';
+        c.fillRect(k, 0, k % 64 === 0 ? 2 : 1, h); c.fillRect(0, k, w, k % 64 === 0 ? 2 : 1);
+      }
+    }],
+    floor: (c, w, h) => {                      // a sound stage: dark boards, and the actors' tape marks for blocking
+      planksDraw(c, w, h, ['#5d5560', '#655c68', '#585060'], 14, 'rgba(20,14,24,0.5)');
+      const R = rng(41), tape = ['#f0862a', '#e4b84f', '#7fb3a8', '#f6eedb'];
+      const mark = (x, y, a, col) => {
+        c.save(); c.translate(x, y); c.rotate(a); c.fillStyle = col;
+        c.fillRect(-26, -5, 52, 10); c.fillRect(-5, -5, 10, 40);
+        c.restore();
+      };
+      [[0.2, 0.62], [0.33, 0.38], [0.72, 0.3], [0.8, 0.66], [0.55, 0.82], [0.12, 0.88]].forEach(([x, y], i) => mark(x * w, y * h, (R() - 0.5) * 1.2, tape[i % tape.length]));
+      // a dashed walk between two marks, the way a move is chalked out
+      c.setLineDash([18, 14]); c.strokeStyle = 'rgba(246,238,219,0.7)'; c.lineWidth = 5;
+      c.beginPath(); c.moveTo(0.2 * w, 0.62 * h); c.quadraticCurveTo(0.4 * w, 0.95 * h, 0.55 * w, 0.82 * h); c.stroke(); c.setLineDash([]);
+    },
     rug: false,
   },
   deckgpt: {
@@ -2294,7 +2406,7 @@ const MINI = {
 };
 
 const ROOM_WALL = {
-  behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
+  behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, hookpath: 0xd5dde8, deckgpt: 0x4a3a50,
   splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a, 'doodle-libs': 0xfdf6e3,
   zen: 0xe6e3cf,
 };

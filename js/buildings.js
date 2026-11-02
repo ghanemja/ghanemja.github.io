@@ -206,6 +206,30 @@ const DISPLAY = {
     c.strokeStyle = '#8a6448'; c.lineWidth = 5; c.beginPath(); c.moveTo(w * 0.62, h * 0.2); c.lineTo(w * 0.9, h * 0.5); c.moveTo(w * 0.9, h * 0.2); c.lineTo(w * 0.62, h * 0.5); c.stroke();
     lettering(c, 'wool & notions', w * 0.35, h * 0.16, h * 0.12, '#fff4d6');
   },
+  hookpath(c, w, h, r) {
+    // a swatch, a hook's dashed path over it with keyframe diamonds, and the timeline below
+    for (let k = 0; k < 6; k++) {
+      const x = w * (0.14 + k * 0.145), y = h * 0.66;
+      blob(c, x, y, w * 0.07, h * 0.06, k % 2 ? '#4f7fc4' : '#6b93cf');
+      c.strokeStyle = INK; c.lineWidth = 2; c.beginPath(); c.moveTo(x - 6, y - 5); c.lineTo(x, y + 5); c.lineTo(x + 6, y - 5); c.stroke();
+    }
+    const pts = [[0.12, 0.5], [0.3, 0.26], [0.55, 0.22], [0.76, 0.36], [0.86, 0.56]].map(([x, y]) => [x * w, y * h]);
+    c.setLineDash([9, 7]); c.strokeStyle = '#f0862a'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(...pts[0]);
+    for (let k = 1; k < pts.length; k++) { const [x0, y0] = pts[k - 1], [x1, y1] = pts[k]; c.quadraticCurveTo(x0, y1, (x0 + x1) / 2, (y0 + y1) / 2); c.lineTo(x1, y1); }
+    c.stroke(); c.setLineDash([]);
+    const diamond = (x, y, s, fill) => { c.save(); c.translate(x, y); c.rotate(Math.PI / 4); rect(c, -s / 2, -s / 2, s, s, fill, 2); c.restore(); };
+    pts.forEach(([x, y], k) => diamond(x, y, 12, k === 2 ? '#f0862a' : '#2f5ea8'));
+    // the hook, tip down at the last key
+    const [hx, hy] = pts[4];
+    c.strokeStyle = INK; c.lineWidth = 9; c.beginPath(); c.moveTo(hx + 6, hy - 6); c.lineTo(hx + 40, hy - 58); c.stroke();
+    c.strokeStyle = '#d5dae2'; c.lineWidth = 5; c.stroke();
+    c.lineWidth = 4; c.beginPath(); c.arc(hx + 3, hy - 2, 6, -0.4, Math.PI * 1.1); c.strokeStyle = INK; c.stroke();
+    rect(c, w * 0.06, h * 0.8, w * 0.88, h * 0.08, '#f6eedb', 2);
+    for (let k = 0; k < 5; k++) diamond(w * (0.12 + k * 0.19), h * 0.84, 9, k === 2 ? '#f0862a' : '#2f5ea8');
+    c.fillStyle = '#f0862a'; c.fillRect(w * 0.47, h * 0.78, 3, h * 0.12);
+    lettering(c, 'keyframes', w / 2, h * 0.12, h * 0.12, '#fff4d6');
+  },
   grocer(c, w, h, r) {
     for (let k = 0; k < 3; k++) {
       const x = w * (0.05 + k * 0.32), y = h * 0.6;
@@ -490,6 +514,13 @@ function emblem(K, kind) {
     K.put(new THREE.SphereGeometry(0.12, 10, 7), P(PAL.rose), 0, 0, 0);
     for (let k = 0; k < 3; k++) K.put(new THREE.TorusGeometry(0.12, 0.012, 6, 24), P(shade(PAL.rose, 0.8)), 0, 0, 0, [k * 0.9, k * 0.6, 0]);
     for (const sg of [-1, 1]) K.box(0.016, 0.34, 0.016, P(PAL.bark), sg * 0.04, 0.06, 0.1, 0.006, [0, 0, sg * 0.5]);
+  } else if (kind === 'hook') {
+    // a keyframe diamond with a crochet hook through it, tip poking out the bottom, a live loop on the shaft
+    K.box(0.2, 0.2, 0.02, P(0x2f5ea8), 0, 0.04, 0, 0.01, [0, 0, Math.PI / 4]);
+    K.put(new THREE.CylinderGeometry(0.022, 0.022, 0.36, 10), P(0xd5dae2), 0, 0.04, 0);
+    K.put(new THREE.SphereGeometry(0.024, 10, 8), P(0xd5dae2), 0, -0.14, 0);
+    K.put(new THREE.TorusGeometry(0.03, 0.011, 6, 12, Math.PI * 1.2), P(0xd5dae2), 0.028, -0.135, 0, [0, 0, -0.3]);
+    K.put(new THREE.TorusGeometry(0.045, 0.014, 6, 16), P(0xf0862a), 0, 0.0, 0, [Math.PI / 2, 0, 0]);
   } else if (kind === 'apple') {
     K.put(new THREE.SphereGeometry(0.13, 10, 7).scale(1, 0.9, 1), P(0xd8573f), 0, 0, 0);
     K.box(0.015, 0.08, 0.015, P(PAL.bark), 0, 0.13, 0, 0.005);

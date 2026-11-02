@@ -16,6 +16,7 @@ const PAVE = 1.42;               // the pavement depth shopUnit lays down
 const FRONTS = {
   behaviors: { kind: 'lab', w: 2.0, wall: 0xc9d3da, front: 0x3f5872, trim: 0xf6eedb, roof: 'mansard', up: 'bay', blade: 'cube', door: 1, sign: { bg: '#2a2230', fg: '#f2d27a' } },
   yarnflow: { kind: 'yarn', w: 1.74, wall: 0xdc9e9a, front: 0x8f7ae8, trim: 0xfffaf0, roof: 'gable', roofCol: PAL.roofSlate, up: 'arch', blade: 'yarn', door: 1, sign: { bg: '#f6eedb', fg: '#6a55c4' } },
+  hookpath: { kind: 'hookpath', w: 1.72, wall: 0x93abc0, front: 0xd9773a, trim: 0xfffaf0, roof: 'parapet', upN: 2, blade: 'hook', door: 1, sign: { bg: '#2a2230', fg: '#f2a65a' } },
   'borrowed-eyes': { kind: 'frames', w: 1.9, wall: 0x7fb3a8, front: 0x2f5a52, trim: 0xf6eedb, roof: 'parapet', up: 'arch', blade: 'frame', door: -1, sign: { bg: '#2f5a52', fg: '#f6eedb' } },
   deckgpt: { kind: 'cinema', w: 2.3, wall: 0xf1e4c8, front: 0x7fb3a8, trim: 0xfffaf0, special: 'cinema', door: 0, sign: { bg: '#2a2230', fg: '#f2d27a' }, marquee: 'NOW SHOWING ★ DECKGPT', bladeText: 'DECK' },
   splatform: { kind: 'toys', w: 1.9, wall: 0xe1b95c, front: 0xd8573f, trim: 0xfffaf0, roof: 'gable', roofCol: PAL.roofRed, awning: [0xd8573f, 0xf6eedb], blade: 'balloon', door: -1, sign: { bg: '#fff4e0', fg: '#d8573f' } },
@@ -98,7 +99,7 @@ export function buildTown(scene) {
 
   // ── north terraces (z < 0) ──
   let x = terrace(scene, [appSpec('behaviors'), DECO.bakery], -8.2, -1, out);
-  terrace(scene, [appSpec('yarnflow'), DECO.cafe, appSpec('borrowed-eyes')], x + 1.3, -1, out);
+  terrace(scene, [appSpec('yarnflow'), appSpec('hookpath'), DECO.cafe, appSpec('borrowed-eyes')], x + 1.3, -1, out);
   // ── south terraces (z > 0): specs listed west→east, laid mirrored ──
   terrace(scene, [appSpec('deckgpt'), appSpec('splatform')], -8.2, 1, out);
   terrace(scene, [appSpec('qr'), DECO.flowers, appSpec('gallery'), appSpec('doodle-libs'), appSpec('zen')], -2.7, 1, out);
@@ -120,7 +121,7 @@ export function buildTown(scene) {
     const b = bench(); b.position.set(bx, 0, bz); b.rotation.y = ry; scene.add(b);
     out.colliders.push({ x0: bx - 0.65, x1: bx + 0.65, z0: bz - 0.25, z1: bz + 0.25 });
   }
-  for (const [tx, tz, s] of [[-10.3, -2.6, 1.05], [-10.6, 2.8, 0.9], [-5.9, 4.4, 0.8], [4.2, -4.6, 1.0], [9.6, -4.3, 0.85], [9.3, 4.5, 1.0]]) {
+  for (const [tx, tz, s] of [[-10.3, -2.6, 1.05], [-10.6, 2.8, 0.9], [-5.9, 4.4, 0.8], [5.4, -4.6, 1.0], [9.6, -4.3, 0.85], [9.3, 4.5, 1.0]]) {
     const t = tree({ s }); t.position.set(tx, 0, tz); scene.add(t);
     out.colliders.push({ x0: tx - 0.2, x1: tx + 0.2, z0: tz - 0.2, z1: tz + 0.2 });
   }
