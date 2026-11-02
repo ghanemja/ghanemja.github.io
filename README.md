@@ -24,6 +24,6 @@ Run locally with any static server: `python3 -m http.server` → http://localhos
 The code is [MIT](LICENSE). Third-party pieces keep their own terms:
 
 - `models/human/` is baked from [MakeHuman](https://github.com/makehumancommunity/makehuman)'s base human, whose assets are **CC0 1.0**.
-- `fonts/` (Caveat, Patrick Hand) are under the SIL Open Font License.
+- `fonts/` (Caveat, Patrick Hand, and Bricolage Grotesque, Figtree and DM Mono for the plain list) are under the SIL Open Font License.
 - three.js (loaded from a CDN) is MIT.
 - `artworks/` and `screenshots/` are not covered by the MIT license.
