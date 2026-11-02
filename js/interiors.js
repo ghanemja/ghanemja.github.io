@@ -8,6 +8,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { PAL, paint, ink, blobShadow } from './style.js';
 import { APPS, LIBRARY, PLACES } from './apps.js';
 import { bush } from './props.js';
+import { DRESS } from './dress/index.js';
+export { dressReady } from './dress/index.js';
 
 const INKC = '#2a2230';
 const HAND = '"Patrick Hand", "Comic Sans MS", cursive', SCRIPT = '"Caveat", "Patrick Hand", cursive';
@@ -2860,6 +2862,75 @@ function scatterToys(K, placeId, idx, lib) {
   return out;
 }
 
+// ── the dressing kit: what js/dress/<room>.js gets to fill its room with ──
+// Room-local coords: x −4..4 (side walls at ±W/2), z from the back wall (−D+0.5) to the open
+// front (+0.4), floor y=0, walls H tall. The back wall has the app screen in the middle and
+// the label at x=LBL_X. `free(x, z, r)` says whether a floor footprint of radius r is clear of
+// furniture, the game rings and the walkways to them; `block` makes something solid.
+function dressKit(K, place, lib) {
+  const reserved = [];       // [x, z, r] circles and capsules ([x0, z0, x1, z1, r]) the player needs
+  const ring = (x, z, r) => reserved.push([x, z, r]);
+  const lane = (x0, z0, x1, z1, r) => reserved.push([x0, z0, x1, z1, r]);
+  const spawn = [0, -0.9];
+  for (const m of K.minis) { ring(m.x, m.z, 0.85); lane(spawn[0], spawn[1], m.x, m.z, 0.45); }
+  if (lib) { ring(-1.25, -D + 2.55, 1.0); ring(1.6, -D + 2.75, 1.0); lane(0, -0.9, -1.25, -D + 2.55, 0.45); lane(0, -0.9, 1.6, -D + 2.75, 0.45); }
+  else {
+    ring(LBL_X, -D + 1.3, 0.8); lane(0, -0.9, LBL_X, -D + 1.3, 0.45);
+    // the open space in front of the screen
+    reserved.push([-SCR_W / 2 + 0.2, -D + 0.6, SCR_W / 2 - 0.2, -D + 0.6, 0.0]);
+    lane(-1.0, -D + 1.6, 1.0, -D + 1.6, 0.65);
+  }
+  lane(0, 0.4, 0, -D + 1.6, 0.6);               // the way in, straight to the screen
+  const segD = (px, pz, x0, z0, x1, z1) => {
+    const dx = x1 - x0, dz = z1 - z0, L = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((px - x0) * dx + (pz - z0) * dz) / L));
+    return Math.hypot(px - x0 - t * dx, pz - z0 - t * dz);
+  };
+  const free = (x, z, r = 0.2) => {
+    if (x - r < -W / 2 + 0.05 || x + r > W / 2 - 0.05 || z - r < -D + 0.5 || z + r > 0.35) return false;
+    if (K.cols.some(c => x + r > c.x0 && x - r < c.x1 && z + r > c.z0 && z - r < c.z1)) return false;
+    return reserved.every(q => q.length === 3 ? Math.hypot(x - q[0], z - q[1]) > q[2] + r : segD(x, z, q[0], q[1], q[2], q[3]) > q[4] + r);
+  };
+  const block = (x0, x1, z0, z1) => K.cols.push({ x0, x1, z0, z1 });
+  const claim = (x, z, r) => block(x - r, x + r, z - r, z + r);
+  const R = rng(place.id.length * 101 + place.id.charCodeAt(0));
+  // try spots until n things fit; fn(x, z, i) builds one (return false to skip and keep looking)
+  const scatter = (n, r, fn, { tries = 600, solid = true, along } = {}) => {
+    let got = 0;
+    for (let k = 0; k < tries && got < n; k++) {
+      let x, z;
+      if (along === 'walls') {                  // hug the three walls
+        const side = Math.floor(R() * 3);
+        if (side === 0) { x = -W / 2 + 0.6 + R() * (W - 1.2); z = -D + 0.55 + r + R() * 0.25; }
+        else { x = (side === 1 ? -1 : 1) * (W / 2 - 0.08 - r - R() * 0.25); z = -D + 0.8 + R() * (D - 1.4); }
+      } else { x = -W / 2 + 0.3 + R() * (W - 0.6); z = -D + 0.6 + R() * (D - 0.9); }
+      if (!free(x, z, r)) continue;
+      if (fn(x, z, got) === false) continue;
+      if (solid) claim(x, z, r * 0.85); else ring(x, z, r);
+      got++;
+    }
+    return got;
+  };
+  // make anything tappable: tapping it (from anywhere) calls fn(sfx); sfx([[hz, secs], …], wave, vol)
+  const tap = (obj, label, fn) => { obj.userData.toy = { label, poke: fn }; return obj; };
+  // the generic toys, if a room wants one: kind is ball | top | jack | bell
+  const toy = (kind, col, x, z, ry = 0) => {
+    const t = TOYS[kind](col); t.g.position.set(x, 0, z); t.g.rotation.y = ry;
+    t.g.userData.toy = t; K.g.add(t.g); K.g.add(blobShadow(t.r * 1.4).translateX(x).translateZ(z));
+    claim(x, z, t.r);
+    let last = 0; LIVE.push((tt) => { const dt = Math.min(0.05, Math.max(0, tt - last)); last = tt; t.tick(dt, tt); });
+    return t;
+  };
+  // per-frame animation: fn(t, dt) — t in seconds
+  const live = (fn) => { let last = 0; LIVE.push((t) => { const dt = Math.min(0.05, Math.max(0, t - last)); last = t; fn(t, dt); }); };
+  return {
+    THREE, K, g: K.g, put: K.put, box: K.box, flat: K.flat, kit, rb, paint, PAL, canvasTex, texMat, fitLine, rng: R, mkRng: rng,
+    HAND, SCRIPT, INKC, W, D, H, SCR_W, SCR_H, SCR_Y, LBL_X, place, lib,
+    free, block, claim, ring, lane, scatter, tap, toy, live, shadow: blobShadow, now: () => NOW, shuffle, anyOf,
+    fern: (x, z, s, seed) => fern(K, x, z, s, seed), bloom: (x, z, h, col, seed) => bloom(K, x, z, h, col, seed), bunting: (pts, n, make) => bunting(K, pts, n, make),
+  };
+}
+
 const ROOM_WALL = {
   behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, hookpath: 0xd5dde8, deckgpt: 0x4a3a50,
   splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a, 'doodle-libs': 0xfdf6e3,
@@ -2886,7 +2957,13 @@ export function buildInteriors(scene) {
     SETS[place.id]?.(K);
     MINI[place.id]?.(K);
     for (const m of K.minis) gameMarker(K, place.id, m);
-    scatterToys(K, place.id, i, lib);
+    let dressed = false;
+    if (DRESS[place.id]) {
+      const n = K.g.children.length, cols = K.cols.length;
+      try { DRESS[place.id](dressKit(K, place, lib)); dressed = true; }
+      catch (e) { console.warn(`room ${place.id} left plain:`, e); K.g.children.slice(n).forEach(o => K.g.remove(o)); K.cols.length = cols; }
+    }
+    if (!dressed) scatterToys(K, place.id, i, lib);
     // a soft pool of light on the floor
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
     ink(g, 'mid');
