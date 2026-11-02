@@ -146,6 +146,8 @@ function doAct(it) {
       player.setZone({ colliders: rm.colliders, bounds: rm.bounds, lookY: 1.5 });
       player.teleport(rm.spawn.x, rm.spawn.z, 0);
       markVisited(act.id);
+      const n = rm.interact.filter(i => i.act.type === 'mini').length;
+      if (n) setTimeout(() => zone === act.id && !game.isOpen && mini.say(`${n === 1 ? 'A little game' : n + ' little games'} in here: walk onto a glowing ★ ring and press E.`), 700);
       $('#hud').classList.add('hide');
       $('#way').classList.add('hide');
     });
@@ -153,13 +155,15 @@ function doAct(it) {
     const wasLib = zone === 'library';
     fadeDo(() => {
       zone = 'street';
-      mini.see(''); $('#say').classList.add('hide');
+      game.close(); mini.see(''); $('#say').classList.add('hide');
       player.setZone({ colliders: town.colliders, bounds: town.bounds });
       if (wasLib) player.teleport(lastDoor.x - 0.9, 0, Math.PI / 2);
       else player.teleport(lastDoor.x, lastDoor.z - Math.sign(lastDoor.z) * 1.15, -Math.PI / 2);
       if (!uiHidden) $('#hud').classList.remove('hide');
     });
   } else if (act.type === 'mini') {
+    playing = act;
+    act.played?.();
     act.run(mini);
   } else if (act.type === 'card') {
     openCard(act.place);
@@ -168,14 +172,155 @@ function doAct(it) {
   }
 }
 
-// the little things you can do inside a shop: a caption, and (Borrowed Eyes) a way of seeing
+// the little things you can do inside a shop: a caption, a way of seeing (Borrowed Eyes),
+// and a little game panel — buttons you click (or press 1–9), a timing meter, a score
 let sayTimer = 0;
+let playing = null;                       // the station whose game is open
+const game = (() => {
+  const el = $('#game'), btns = $('#gBtns'), meterEl = $('#gMeter'), noteEl = $('#gNote');
+  let open = false, onClose = null, timers = [], primary = null, keys = [], meterRun = null;
+  // tiny paper-and-pencil sound effects
+  let ac = null;
+  const blip = (notes, type = 'triangle', vol = 0.07) => {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      let t = ac.currentTime;
+      for (const [f, d] of notes) {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = type; o.frequency.value = f;
+        g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + d);
+        o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d); t += d * 0.7;
+      }
+    } catch (e) { /* no audio, no matter */ }
+  };
+  const stopMeter = () => { if (meterRun) cancelAnimationFrame(meterRun.raf); meterRun = null; meterEl.hidden = true; };
+  const clear = () => { btns.innerHTML = ''; primary = null; keys = []; };
+  const refreshKeys = () => {
+    const n = keys.length;
+    $('#gKeys').textContent = [n ? `1–${n} to pick` : '', primary ? 'Space for “' + primary.dataset.label + '”' : '', 'Esc to close'].filter(Boolean).join(' · ');
+  };
+  const button = (label, fn, cls) => {
+    const b = document.createElement('button');
+    b.className = 'sk' + (cls ? ' ' + cls : ''); b.dataset.label = label; b.textContent = label;
+    b.onclick = (e) => { e.stopPropagation(); if (!b.disabled) fn(b); };
+    btns.appendChild(b);
+    return b;
+  };
+  const G = {
+    get isOpen() { return open; },
+    open(title, opts = {}) {
+      if (open) G.close();
+      open = true; onClose = opts.onClose || null;
+      $('#gTitle').textContent = title; $('#gScore').textContent = ''; $('#gText').textContent = '';
+      noteEl.textContent = ''; noteEl.className = ''; clear(); stopMeter();
+      el.classList.remove('hide'); $('#say').classList.add('hide');
+      player?.freeze(true); refreshKeys();
+      return G;
+    },
+    close() {
+      if (!open) return;
+      open = false; timers.forEach(clearTimeout); timers = []; stopMeter(); clear();
+      el.classList.add('hide'); player?.freeze(false);
+      const f = onClose; onClose = null; f?.();
+    },
+    title(s) { $('#gTitle').textContent = s; },
+    score(s) { $('#gScore').textContent = s; },
+    text(s) { $('#gText').textContent = s; },
+    note(s, kind = '') {
+      noteEl.textContent = s; noteEl.className = '';
+      void noteEl.offsetWidth; noteEl.className = kind;
+      if (kind === 'good') blip([[660, 0.12], [990, 0.18]]);
+      if (kind === 'bad') blip([[220, 0.16], [165, 0.2]], 'square', 0.035);
+    },
+    good(s) { G.note(s, 'good'); }, bad(s) { G.note(s, 'bad'); },
+    // numbered choices; onPick(i, button). Call again to replace them.
+    choices(labels, onPick) {
+      clear(); stopMeter();
+      labels.forEach((l, i) => {
+        const b = button(l, () => onPick(i, b));
+        b.innerHTML = `<i>${i + 1}</i>`; b.append(l);
+        keys.push(b);
+      });
+      refreshKeys();
+      return keys;
+    },
+    // mark the picked and the right answer, and stop more picks
+    lock(picked, right) {
+      keys.forEach((b, i) => { b.disabled = true; if (i === right) b.classList.add('right'); else if (i === picked) b.classList.add('wrong'); });
+    },
+    // the go-on button (Space / Enter / E). Several calls add several; the first is primary.
+    next(label, fn) {
+      const b = button(label, () => fn(), primary ? '' : 'next');
+      if (!primary) primary = b;
+      refreshKeys();
+      return b;
+    },
+    // a needle sweeps the bar; stop it inside the gold zone. onStop(hit, pos)
+    meter({ zone = [0.4, 0.6], speed = 0.6, label = 'stop!' } = {}, onStop) {
+      clear(); stopMeter();
+      meterEl.hidden = false;
+      const z = meterEl.querySelector('.zone'), nd = meterEl.querySelector('.needle');
+      z.style.left = zone[0] * 100 + '%'; z.style.width = (zone[1] - zone[0]) * 100 + '%';
+      const t0 = performance.now() - Math.random() * 600;
+      const run = { raf: 0, pos: 0 };
+      const at = (now) => { const u = ((now - t0) / 1000) * speed; return 1 - Math.abs((u % 2) - 1); };
+      const step = (now) => {
+        run.pos = at(now);
+        nd.style.left = run.pos * 100 + '%';
+        run.raf = requestAnimationFrame(step);
+      };
+      run.raf = requestAnimationFrame(step);
+      meterRun = run;
+      const b = button(label, () => {
+        if (meterRun !== run) return;
+        cancelAnimationFrame(run.raf); meterRun = null;
+        b.disabled = true; primary = null;
+        // judge where the needle is now (not at the last frame), with a little leeway
+        const pos = at(performance.now()), slack = 0.035;
+        nd.style.left = pos * 100 + '%';
+        onStop(pos >= zone[0] - slack && pos <= zone[1] + slack, pos);
+      }, 'next');
+      primary = b; refreshKeys();
+    },
+    later(ms, fn) { const id = setTimeout(() => { if (open) fn(); }, ms); timers.push(id); },
+    cheer() {
+      blip([[523, 0.1], [659, 0.1], [784, 0.1], [1046, 0.3]]);
+      const r = el.getBoundingClientRect();
+      const cols = ['#e8604c', '#e4b84f', '#7fb3a8', '#8f7ae8', '#5f8cc8'];
+      for (let i = 0; i < 36; i++) {
+        const c = document.createElement('div'); c.className = 'confetti';
+        c.style.left = r.left + Math.random() * r.width + 'px'; c.style.top = r.top + 8 + 'px';
+        c.style.background = cols[i % cols.length];
+        c.style.setProperty('--dx', (Math.random() - 0.5) * 260 + 'px');
+        c.style.setProperty('--dy', -(80 + Math.random() * 220) + 'px');
+        c.style.setProperty('--r', (Math.random() - 0.5) * 900 + 'deg');
+        document.body.appendChild(c); setTimeout(() => c.remove(), 1200);
+      }
+    },
+    // keyboard while the panel is open; true if handled
+    key(e) {
+      if (!open) return false;
+      if (e.code === 'Escape') { G.close(); return true; }
+      const d = /^(Digit|Numpad)([1-9])$/.exec(e.code);
+      if (d) { const b = keys[+d[2] - 1]; if (b && !b.disabled) b.click(); return true; }
+      if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') {
+        e.preventDefault();
+        if (primary && !primary.disabled) primary.click();
+        return true;
+      }
+      return false;
+    },
+  };
+  $('#gX').onclick = () => G.close();
+  return G;
+})();
 const mini = {
   say(text) {
     const el = $('#say'); el.textContent = text; el.classList.remove('hide');
-    clearTimeout(sayTimer); sayTimer = setTimeout(() => el.classList.add('hide'), 4200);
+    clearTimeout(sayTimer); sayTimer = setTimeout(() => el.classList.add('hide'), 5200);
   },
   see(filter) { renderer.domElement.style.filter = filter || ''; },
+  game,
 };
 
 function openCard(p) {
@@ -197,6 +342,7 @@ function closeCard() {
 $('#cardClose').onclick = closeCard;
 
 addEventListener('keydown', (e) => {
+  if (game.key(e)) return;
   if (e.code === 'KeyE' || e.code === 'Enter') {
     if (!$('#card').classList.contains('hide')) return closeCard();
     if (!$('#title').classList.contains('hide')) return start();
@@ -263,10 +409,14 @@ function loop() {
       if (inst) pose(inst, dt, 0.8);
     }
     // the prompt
-    const it = $('#card').classList.contains('hide') && $('#title').classList.contains('hide') ? nearestInteract() : null;
+    const it = $('#card').classList.contains('hide') && $('#title').classList.contains('hide') && !game.isOpen ? nearestInteract() : null;
     activeAct = it;
+    if (game.isOpen) playing?.focus?.(); else if (it?.act.type === 'mini') it.act.focus?.();
     const pr = $('#prompt');
-    if (it) { pr.innerHTML = `<kbd>E</kbd> ${it.label}`; pr.classList.remove('hide'); }
+    if (it) {
+      pr.innerHTML = it.act.type === 'mini' ? '<kbd>E</kbd> <span class="play">★ play</span> · ' : '<kbd>E</kbd> ';
+      pr.append(it.label); pr.classList.remove('hide');
+    }
     else pr.classList.add('hide');
     tickWaypoint();
   }

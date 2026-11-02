@@ -62,7 +62,70 @@ function station(dur, rest, delay = 0) {
   };
 }
 // something to walk up to and press E at (room-local x, z)
-const mini = (K, x, z, label, run, r = 0.8) => K.minis.push({ x, z, r, label, run });
+const mini = (K, x, z, label, run, r = 0.95) => K.minis.push({ x, z, r, label, run });
+const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const anyOf = (a) => a[Math.floor(Math.random() * a.length)];
+
+// ── the little games (g is the game panel from main.js) ──
+// a quiz: rounds of { q, choices, answer, why, pick?(i), wait?, reveal?(ok, i) }.
+// `wait` ms holds the answer back while something plays out in the room.
+function quiz(g, title, rounds, { intro, end, onClose } = {}) {
+  let r = 0, score = 0;
+  g.open(title, { onClose });
+  const one = rounds.length === 1;
+  const tally = () => g.score(one ? '' : `${Math.min(r + 1, rounds.length)} of ${rounds.length} · ★ ${score}`);
+  const ask = () => {
+    const R = rounds[r];
+    g.note(''); tally(); R.show?.(); g.text(R.q);
+    g.choices(R.choices, (i) => {
+      const ok = i === R.answer; if (ok) score++;
+      g.lock(-1, -1); R.pick?.(i);
+      const tell = () => {
+        g.lock(i, R.answer); R.reveal?.(ok, i); tally();
+        if (ok) g.good(`Yes! ${R.why}`); else g.bad(`Not quite. ${R.why}`);
+        if (one) {
+          if (ok) g.cheer();
+          g.next('again ↻', () => { r = 0; score = 0; ask(); });
+          g.next('done', () => g.close());
+        } else g.next(r + 1 < rounds.length ? 'next →' : 'how did I do?', () => { r++; r < rounds.length ? ask() : finish(); });
+      };
+      if (R.wait) { g.note('watch…'); g.later(R.wait, tell); } else tell();
+    });
+  };
+  const finish = () => {
+    g.score(`★ ${score} of ${rounds.length}`); g.note('');
+    g.text(end ? end(score, rounds.length) : `You got ${score} of ${rounds.length}.`);
+    if (score * 2 >= rounds.length) g.cheer();
+    g.choices([], () => {});
+    g.next('play again', () => { r = 0; score = 0; ask(); });
+    g.next('done', () => g.close());
+  };
+  if (intro) { g.text(intro); g.next('start', ask); } else ask();
+}
+// put things in order: items are [name, detail]; step(k) fires as each one is placed
+function order(g, title, intro, items, { start, step, done, onClose } = {}) {
+  g.open(title, { onClose });
+  const run = () => {
+    start?.();
+    let at = 0, miss = 0;
+    const deck = shuffle(items.map((it, i) => ({ it, i })));
+    g.text(intro); g.note(''); g.score(`0 of ${items.length}`);
+    g.choices(deck.map(d => d.it[0]), (k, b) => {
+      if (deck[k].i !== at) {
+        miss++;
+        return g.bad(`Not yet: “${deck[k].it[0]}” comes later. What comes ${at ? 'after “' + items[at - 1][0] + '”' : 'first'}?`);
+      }
+      b.disabled = true; b.classList.add('right');
+      step?.(at); g.good(`${at + 1}. ${items[at][0]}: ${items[at][1]}`);
+      at++; g.score(`${at} of ${items.length}`);
+      if (at === items.length) g.later(1100, () => {
+        g.text(done(miss)); g.note(''); g.cheer();
+        g.next('again ↻', run); g.next('done', () => g.close());
+      });
+    });
+  };
+  run();
+}
 function shotMat(url, clip, aspect = 1.6) {
   const crop = (tex, iw, ih) => {
     const ia = iw / ih;
@@ -1201,7 +1264,11 @@ const CENTER = {
         c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h); c.font = `700 30px ${HAND}`; c.fillStyle = '#f2d27a'; c.textAlign = 'center'; c.fillText('PUSH  ·  85% height', w / 2, 42);
       }), x, 0.11, z + 0.56, [-Math.PI / 2 + 0.6, 0, 0]);
       const st = station(4.5, 6, 1);
-      mini(K, x, z + 1.0, 'push it', (m) => { st.go(); m.say('A bar pushes at 85% of their height: the can slides, the bottle tips. Same push, different behaviour.'); });
+      mini(K, x, z + 1.0, 'predict the push', (m) => quiz(m.game, 'Predict the push', [{
+        q: 'A bar pushes the can and the bottle at 85% of their height. Which one tips over?',
+        choices: ['the can', 'the bottle', 'both', 'neither'], answer: 1, wait: 2400, pick: () => st.go(),
+        why: 'The short, wide can just slides; the tall, thin bottle is pushed up high and tips. Same push, different behaviour.',
+      }]));
       LIVE.push((t) => {
         const s = st.p(), reset = s >= 1 || s < 0.05;
         const bx = -0.62 + (smooth(0.05, 0.45, s) - smooth(0.62, 0.85, s)) * 0.95;
@@ -1228,7 +1295,11 @@ const CENTER = {
       const needle = K.box(0.28, 0.015, 0.01, dark, x + 0.9, 0.32, z + 0.47, 0.004);
       needle.geometry.translate(-0.14, 0, 0);
       const st = station(5.5, 6, 3);
-      mini(K, x, z + 0.95, 'tilt the ramp', (m) => { st.go(); m.say('The floor tilts toward 35°: the ball rolls at once, the crate holds until about 19°, then slides.'); });
+      mini(K, x, z + 0.95, 'predict the ramp', (m) => quiz(m.game, 'Predict the ramp', [{
+        q: 'The ramp tilts up toward 35°. At what angle does the crate start to slide?',
+        choices: ['5°', 'about 19°', '30°', 'it never slides'], answer: 1, wait: 3000, pick: () => st.go(),
+        why: 'Friction holds the crate until about 19°, then it lets go. The ball rolls at once: round things don’t wait.',
+      }]));
       LIVE.push((t) => {
         let s = st.p(); if (s >= 1) s = 0;
         const a = 0.6 * smooth(0.0, 0.55, s) * (1 - smooth(0.8, 0.95, s));
@@ -1253,7 +1324,11 @@ const CENTER = {
       K.box(0.16, 0.12, 0.16, dark, x, 2.0, z, 0.02);
       const box = K.box(0.24, 0.24, 0.24, paint(0x7fb3a8), x, 1.8, z, 0.03);
       const st = station(3.3, 6, 5);
-      mini(K, x + 0.3, z + 0.95, 'drop the box', (m) => { st.go(); m.say('Dropped from its own height, tilted 25°: it bounces twice and settles. Every object got the same.'); });
+      mini(K, x + 0.3, z + 0.95, 'predict the drop', (m) => quiz(m.game, 'Predict the drop', [{
+        q: 'The box drops from its own height, tilted 25°. How many times does it bounce before it settles?',
+        choices: ['none', 'once', 'twice', 'four times'], answer: 2, wait: 2800, pick: () => st.go(),
+        why: 'Two bounces, each smaller, then it settles. Every object in Behaviors gets this same drop test.',
+      }]));
       LIVE.push((t) => {
         const s = st.p(), T = s * 3.2;          // seconds into the drop
         let y, rot = 0;
@@ -1281,9 +1356,19 @@ const CENTER = {
       });
       const NAMES = [['Northwest', 'sway'], ['West', 'float'], ['Southwest', 'hop'], ['Midwest', 'wave'], ['Southeast', 'swing'], ['Mid-Atlantic', 'rush'], ['Northeast', 'twirl']];
       let on = 0, t0 = 0;
-      mini(K, x, z + 0.85, 'wake a region', (m) => {
-        on = (on + 1) % tiles.length; t0 = NOW;
-        m.say(`${NAMES[on][0]}: its companies ${NAMES[on][1]}. On the real map, click a region and it breaks off into its own little world.`);
+      mini(K, x, z + 0.85, 'wake every region', (m) => {
+        const g = m.game.open('Wake every region'), woke = new Set();
+        g.text('Pick a region and its pin pops up on the map table. Wake all seven!');
+        g.score(`0 of ${NAMES.length} awake`);
+        g.choices(NAMES.map(n => n[0]), (i, b) => {
+          on = i; t0 = NOW; b.classList.add('right'); woke.add(i);
+          g.score(`${woke.size} of ${NAMES.length} awake`);
+          const all = woke.size === NAMES.length;
+          g.good(`${NAMES[i][0]}: its companies ${NAMES[i][1]}.` + (all ? ' That’s the whole country! On the real map, click a region and it breaks off into its own little world.' : ''));
+          if (all && !g.cheered) { g.cheered = true; g.cheer(); }
+        });
+        g.cheered = false;
+        g.next('done', () => g.close());
       });
       LIVE.push((t) => {
         if (t - t0 > 2.5) { on = (on + 1) % tiles.length; t0 = t; }
@@ -1328,9 +1413,22 @@ const CENTER = {
       const ink = new THREE.Color(0x2a2230), P = new THREE.Vector3();
       const st = station(8.3, 0, 0);
       mini(K, x - 0.1, z + 0.75, 'scan the model', (m) => {
-        const s = st.p();
-        if (s < 0.2 || s > 0.92) { st.set(0.2); m.say('Tap a company and its model breaks into pixels that land on its QR code: scannable, and it links back.'); }
-        else { st.set(0.7); m.say('…and back into the little shop it was.'); }
+        const g = m.game.open('Scan the model');
+        const go = () => {
+          g.text('Stop the scanner inside the gold zone to read this company’s model.');
+          g.meter({ zone: [0.38, 0.62], speed: 0.6, label: 'scan!' }, (hit) => {
+            if (!hit) { g.bad('Blurry! The scanner slipped off the code.'); return g.next('try again', go); }
+            st.set(0.2); g.cheer();
+            g.good('Beep! The model breaks into pixels that land on its QR code: scannable, and it links back to the company.');
+            g.next('turn it back', () => {
+              st.set(0.7); g.choices([], () => {});
+              g.good('…and back into the little shop it was.');
+              g.next('scan again', go); g.next('done', () => g.close());
+            });
+            g.next('done', () => g.close());
+          });
+        };
+        go();
       });
       LIVE.push((t) => {
         const s = st.p();
@@ -1389,12 +1487,12 @@ const CENTER = {
       const near = Math.round(v * N) % N;
       dia.forEach((d, i) => { d.material = i === near && Math.abs(v * N - Math.round(v * N)) < 0.15 ? orange : blue; d.rotation.y = t; });
     });
-    mini(K, x, z + 0.8, 'step to the next keyframe', (m) => {
-      at = (at + 1) % N;
-      from = u; to = Math.floor(u) + at / N; if (to < from) to += 1;
-      t0 = NOW; hold = NOW + 3.2;
-      m.say(`Key ${at + 1} of ${N}, ${KEYS[at][0]}: ${KEYS[at][1]}. Hookpath glides the hook between keys like this.`);
-    });
+    const goKey = (k) => { at = k; from = u; to = Math.floor(u) + at / N; if (to < from) to += 1; t0 = NOW; hold = NOW + 3.2; };
+    mini(K, x, z + 0.8, 'work a stitch', (m) => order(m.game, 'Work one stitch',
+      'Tap the five moves of a single crochet in order. The hook follows you along its path.', KEYS, {
+        step: goKey,
+        done: (miss) => `${miss ? 'Got there' : 'Perfect, first try'}: one single crochet${miss ? `, with ${miss} wrong turn${miss > 1 ? 's' : ''}` : ''}. Hookpath animates every stitch like this, keyframe by keyframe.`,
+      }));
     K.cols.push({ x0: x - 0.5, x1: x + 0.5, z0: z - 0.4, z1: z + 0.4 });
   },
   deckgpt(K) {          // a popcorn cart by the door
@@ -1456,10 +1554,25 @@ const CENTER = {
     const BODY = ['slim', 'athletic', 'broad', 'curvy', 'round', 'pear-shaped', 'hourglass', 'lanky'];
     const WEAR = ['a mustard raincoat', 'dungarees and a striped tee', 'a wool cardigan', 'a bike courier jacket', 'a sundress and sandals', 'a three-piece suit', 'a paint-splattered smock', 'a puffer and a bobble hat'];
     const DOES = ['walks the dog twice a day', 'reads the paper on the bench', 'always has a coffee', 'rides a bike everywhere', 'is never off the phone', 'sits by the fountain', 'runs every morning'];
-    const pick = (a) => a[Math.floor(Math.random() * a.length)];
     mini(K, x, z + 0.85, 'cut a new citizen', (m) => {
-      m.say(`${pick(FIRST)}, ${pick(AGES)}: ${pick(BODY)}, wearing ${pick(WEAR)}, ${pick(DOES)}. Make your own at the counter →`);
-    }, 0.9);
+      const g = m.game.open('Cut a citizen');
+      const STEPS = [['Pick a build', BODY], ['Now an outfit', WEAR], ['And a habit', DOES]];
+      const got = [];
+      const done = () => {
+        g.score('done!'); g.choices([], () => {});
+        g.text(`Meet ${anyOf(FIRST)}, ${anyOf(AGES)}: ${got[0]}, wearing ${got[1]}, who ${got[2]}.`);
+        g.good('Cut to measure! Citizen Maker makes people like this on demand. Make your own at the counter.');
+        g.cheer();
+        g.next('cut another', () => ask(0)); g.next('done', () => g.close());
+      };
+      const ask = (k) => {
+        g.note(''); g.score(`step ${k + 1} of ${STEPS.length}`); g.text(STEPS[k][0] + ':');
+        const opts = shuffle(STEPS[k][1]).slice(0, 3);
+        g.choices(opts, (i) => { got[k] = opts[i]; k + 1 < STEPS.length ? ask(k + 1) : done(); });
+        g.next('🎲 surprise me', () => { for (let j = k; j < STEPS.length; j++) got[j] = anyOf(STEPS[j][1]); done(); });
+      };
+      ask(0);
+    }, 0.95);
     K.cols.push({ x0: x - 0.9, x1: x + 0.9, z0: z - 0.48, z1: z + 0.48 });
   },
   zen(K) {              // a big desk zen garden on a low table: press E and it rakes a new pattern
@@ -1537,9 +1650,16 @@ const CENTER = {
     });
     const NAMES = { ripples: 'ripples round the stones', waves: 'rolling waves', lines: 'calm straight lines', spiral: 'a slow spiral' };
     mini(K, x, z + TD / 2 + 0.45, 'rake the sand', (m) => {
-      prev = pat; pat = (pat + 1) % PATTERNS.length; t0 = NOW; anim = 0;
-      m.say(`raking ${NAMES[PATTERNS[pat]]}…`);
-    }, 0.9);
+      const g = m.game.open('Rake the sand'), tried = new Set();
+      g.text('Pick a pattern and the little rake draws it round the stones.');
+      g.choices(PATTERNS.map(p => NAMES[p]), (k, b) => {
+        if (anim < 1) return g.note('the rake is still working… slowly does it.');
+        prev = pat; pat = k; t0 = NOW; anim = 0; tried.add(k); b.classList.add('right');
+        g.score(`${tried.size} of ${PATTERNS.length} patterns`);
+        g.good(tried.size === PATTERNS.length ? 'Every pattern raked. Breathe in, breathe out.' : `raking ${NAMES[PATTERNS[k]]}…`);
+      });
+      g.next('done', () => g.close());
+    }, 0.95);
     K.cols.push({ x0: x - TW / 2 - 0.1, x1: x + TW / 2 + 0.1, z0: z - TD / 2 - 0.1, z1: z + TD / 2 + 0.1 });
   },
   gallery(K) {          // a museum bench to sit and look
@@ -2362,10 +2482,28 @@ const MINI = {
     let n = 5;
     const hook = K.put(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 8), paint(0x8f7ae8), x + 0.26, 1.5 - n * 0.075, z + 0.05, [0, 0, 0.9]);
     LIVE.push((t) => { hook.position.y = 1.54 - n * 0.075 + Math.sin(t * 6) * 0.01; hook.rotation.z = 0.9 + Math.sin(t * 6) * 0.15; });
-    mini(K, x, z + 0.75, 'crochet a row', (m) => {
-      if (n >= rows.length) { rows.forEach((r, i) => { r.visible = i < 1; }); n = 1; return m.say('Finished a swatch! Starting a new one with a chain.'); }
-      rows[n].visible = true; n++;
-      m.say(`Row ${n}: ${STITCH[n % STITCH.length]} × 12. YarnFlow plays a pattern like this stitch by stitch, in 3D.`);
+    mini(K, x, z + 0.75, 'crochet a scarf', (m) => {
+      const g = m.game.open('Crochet a scarf'), GOAL = 6;
+      let made = 0, miss = 0;
+      const fresh = () => { rows.forEach((r, i) => { r.visible = i < 1; }); n = 1; made = 0; miss = 0; };
+      if (n + GOAL > rows.length) fresh();
+      const go = () => {
+        const left = GOAL - made, w = 0.28 - made * 0.015, c = 0.3 + Math.random() * 0.4;
+        g.score(`row ${made} of ${GOAL}`);
+        g.text(`Stop the hook in the gold zone to work a neat row. ${left} more row${left === 1 ? '' : 's'} to go.`);
+        g.meter({ zone: [c - w / 2, c + w / 2], speed: 0.45 + made * 0.05, label: 'stitch!' }, (hit) => {
+          if (!hit) { miss++; g.bad('Oops, a dropped stitch. Pull it out and try that row again.'); return g.later(1000, go); }
+          rows[n].visible = true; n++; made++;
+          g.score(`row ${made} of ${GOAL}`);
+          g.good(`Neat! A row of ${STITCH[n % STITCH.length]} × 12.`);
+          if (made < GOAL) return g.later(700, go);
+          g.text(`A whole swatch${miss ? '' : ' without one dropped stitch'}! YarnFlow plays a pattern like this stitch by stitch, in 3D.`);
+          g.cheer();
+          g.next('start a new one', () => { fresh(); g.note(''); go(); });
+          g.next('done', () => g.close());
+        });
+      };
+      go();
     });
     K.cols.push({ x0: x - 0.55, x1: x + 0.55, z0: z - 0.25, z1: z + 0.25 });
   },
@@ -2401,13 +2539,37 @@ const MINI = {
         c.font = `400 28px ${HAND}`; c.fillStyle = '#f6eedb'; c.fillText('12 slides · ready to export', 400, 350); c.textAlign = 'left';
       }),
     ];
-    let i = 0;
-    const NOTE = ['', 'Scope: what you’re sharing and who it’s for.', 'Story: the arc, slide by slide.', 'Visuals: charts and pictures, in your house style.', 'Deck: done — export it and present.'];
-    mini(K, 2.5, -1.4, 'run the projector', (m) => {
-      i = (i + 1) % 5; scr.material = i ? slides[i - 1] : shot;
-      m.say(i ? `Stage ${i} · ${NOTE[i]}` : 'Back to the real DeckGPT. Walk up to the screen to open it.');
-    });
-    mini(K, -2.9, -0.65, 'grab some popcorn', (m) => m.say('Still warm. The show is DeckGPT building a deck: Scope, Story, Visuals, Deck.'), 0.7);
+    const STAGES = [['Scope', 'what you’re sharing and who it’s for'], ['Story', 'the arc, slide by slide'], ['Visuals', 'charts and pictures, in your house style'], ['Deck', 'done: export it and present']];
+    let back = 0;
+    mini(K, 2.5, -1.4, 'run the projector', (m) => order(m.game, 'Build a deck',
+      'DeckGPT builds a deck in four stages. Tap them in order and watch the big screen.', STAGES, {
+        start: () => { clearTimeout(back); scr.material = shot; },
+        step: (k) => { scr.material = slides[k]; },
+        done: (miss) => `Deck done${miss ? '' : ', first try'}! That’s DeckGPT: Scope, Story, Visuals, Deck. Walk up to the screen to try the real one.`,
+        onClose: () => { clearTimeout(back); back = setTimeout(() => { scr.material = shot; }, 6000); },
+      }));
+    mini(K, -2.9, -0.65, 'toss some popcorn', (m) => {
+      const g = m.game.open('Popcorn toss'), N = 5;
+      let k = 0, caught = 0;
+      const go = () => {
+        g.score(`${caught} caught · ${N - k} left`);
+        g.text('Stop the arrow in the gold zone to catch the popcorn in your mouth.');
+        g.meter({ zone: [0.4, 0.62], speed: 0.7, label: 'toss!' }, (hit) => {
+          k++; if (hit) caught++;
+          g.score(`${caught} caught · ${N - k} left`);
+          if (hit) g.good(anyOf(['Gulp! Still warm.', 'Caught it!', 'Crunch.', 'Right in!']));
+          else g.bad(anyOf(['Bonk, off your nose.', 'Over your shoulder.', 'Too short. The floor gets it.']));
+          if (k < N) return g.later(800, go);
+          g.later(700, () => {
+            g.text(`${caught} of ${N}! ${caught >= 4 ? 'A popcorn pro.' : caught >= 2 ? 'Not bad at all.' : 'The floor ate well.'} Now for the show: run the projector by the screen.`);
+            if (caught >= 3) g.cheer();
+            g.next('again', () => { k = 0; caught = 0; g.note(''); go(); });
+            g.next('done', () => g.close());
+          });
+        });
+      };
+      go();
+    }, 0.8);
   },
   splatform(K) {
     // the middle easel: paint the same button in each of Splatform's five media
@@ -2448,7 +2610,14 @@ const MINI = {
     draw();
     const x = -3.1, z = -D + 3.2;
     K.flat(0.72, 0.54, paint(0xffffff, { map: tex, hatch: 0, unique: true }), x, 0.95, z + 0.065, [-0.06, 0, 0]).renderOrder = 2;
-    mini(K, x + 0.2, z + 0.75, 'repaint it', (m) => { i = (i + 1) % MEDIA.length; draw(); m.say(`The same button in ${MEDIA[i][0]}: ${MEDIA[i][1]}. On a real site it's one attribute.`); });
+    mini(K, x + 0.2, z + 0.75, 'name the medium', (m) => quiz(m.game, 'Name the medium',
+      shuffle(MEDIA.map((md, k) => ({
+        q: `“${md[1]}”: which medium paints the button like that?`,
+        choices: MEDIA.map(n => n[0]), answer: k,
+        reveal: () => { i = k; draw(); },
+        why: `That’s ${md[0]}: look at the easel. On a real Splatform site, switching medium is one attribute.`,
+      }))).slice(0, 4),
+      { end: (s, n) => `${s} of ${n}. ${s === n ? 'A real painter’s eye!' : 'Same button, five media: Splatform paints a whole site like this.'}` }));
   },
   'borrowed-eyes'(K) {
     // look through the field camera and the whole room changes to how that animal sees
@@ -2459,11 +2628,15 @@ const MINI = {
       ['an owl', 'brightness(0.55) contrast(1.5) grayscale(0.75) sepia(0.4) hue-rotate(170deg)', 'night eyes: dim light, sharp shapes, little colour'],
       ['a bat', 'grayscale(1) invert(0.9) contrast(1.8)', 'echolocation: the world as edges and echoes'],
     ];
-    let i = 0;
-    mini(K, 2.45, -3.0, 'look through the camera', (m) => {
-      i = (i + 1) % EYES.length; m.see(EYES[i][1]);
-      m.say(i ? `Borrowing ${EYES[i][0]}'s eyes — ${EYES[i][2]}. Press E again for the next animal.` : 'Back to your own eyes.');
-    }, 0.75);
+    const WHO = EYES.slice(1).map(e => e[0]);
+    mini(K, 2.45, -3.0, 'whose eyes are these?', (m) => quiz(m.game, 'Whose eyes are these?',
+      shuffle(EYES.slice(1).map((e, k) => ({
+        q: 'Look at the room through the camera. Whose eyes are you borrowing?',
+        show: () => m.see(e[1]),
+        choices: WHO, answer: k,
+        why: `${e[0][0].toUpperCase() + e[0].slice(1)}: ${e[2]}.`,
+      }))),
+      { end: (s, n) => `${s} of ${n}. Back to your own eyes now. Borrowed Eyes lets you see like dozens of animals.`, onClose: () => m.see('') }), 0.85);
   },
   gallery(K) {
     // the empty frame: examine it for clues
@@ -2473,8 +2646,30 @@ const MINI = {
       'The guard’s log stops at 3:07 a.m.',
       'Only one suspect could have reached that skylight. Walk up to the screen to play and name the thief.',
     ];
-    let i = -1;
-    mini(K, -2.6, -3.75, 'examine the empty frame', (m) => { i = (i + 1) % CLUES.length; m.say(`Clue ${i + 1} of ${CLUES.length}: ${CLUES[i]}`); });
+    const SPOTS = [['the frame’s corner', CLUES[0]], ['the floor', CLUES[1]], ['the guard’s log', CLUES[2] + ' He was asleep at the desk: you can hear him snoring on the tape.']];
+    const SUS = [['the night guard', 'he was asleep at the desk all night, and the tape proves it.'], ['the curator', 'she’s afraid of heights, and wore red all evening.'], ['the window washer', 'blue overalls, a rope, and the only one who goes up on the roof.']];
+    mini(K, -2.6, -3.75, 'solve the empty frame', (m) => {
+      const g = m.game.open('Who took the painting?');
+      const look = () => {
+        const seen = new Set();
+        g.note(''); g.text('The frame is empty. Look in three places for clues.'); g.score('clues 0 of 3');
+        g.choices(SPOTS.map(s => 'look at ' + s[0]), (k, b) => {
+          seen.add(k); b.disabled = true; b.classList.add('right');
+          g.score(`clues ${seen.size} of 3`); g.good(SPOTS[k][1]);
+          if (seen.size === SPOTS.length) g.later(1400, accuse);
+        });
+      };
+      const accuse = () => {
+        g.note(''); g.text('Blue paint, footprints to the skylight, a sleeping guard. Who did it?');
+        g.choices(SUS.map(s => s[0]), (k) => {
+          g.lock(k, 2);
+          if (k === 2) { g.good('Case closed! The window washer came in through the skylight. Walk up to the screen to play the full mystery.'); g.cheer(); }
+          else g.bad(`Not ${SUS[k][0]}: ${SUS[k][1]} It was the window washer: ${SUS[2][1]}`);
+          g.next('again ↻', look); g.next('done', () => g.close());
+        });
+      };
+      look();
+    });
   },
   'doodle-libs'(K) {
     // the Turing test in miniature: real lines from the game, and who wrote them
@@ -2484,8 +2679,13 @@ const MINI = {
       ['“Scuba diving is a sport where people swim under LAVA, using a tank of compressed DOUGH.”', 'A human, a player from the US.'],
       ['“Penguins cannot MOONWALK, but they can swim very well.”', 'The AI. Asked three separate times, it gave the exact same answer every time.'],
     ];
-    let i = -1;
-    mini(K, -1.9, -1.2, 'human or AI? guess', (m) => { i = (i + 1) % LINES.length; m.say(`${LINES[i][0]} Who filled in the blanks? … ${LINES[i][1]}`); });
+    mini(K, -1.9, -1.2, 'human or AI?', (m) => quiz(m.game, 'Human or AI?',
+      shuffle(LINES).map(([line, who]) => ({
+        q: `${line} Who filled in the blanks?`,
+        choices: ['a human', 'the AI'], answer: /^the ai|^that was the ai/i.test(who) ? 1 : 0,
+        why: who,
+      })),
+      { end: (s, n) => `${s} of ${n}. ${s === n ? 'You can tell us apart!' : 'Tricky, right? That’s the whole game.'} Walk up to the screen to play Doodle Libs for real.` }));
   },
   library(K) {
     // pull a book off the shelf: each one is a repository
@@ -2502,9 +2702,55 @@ const MINI = {
     const book = K.box(0.06, 0.3, 0.22, paint(0xe8604c), 0.1, 1.2, -D + 0.85, 0.01);
     let t0 = -9;
     LIVE.push((t) => { const k = Math.max(0, Math.sin(Math.min(1, (t - t0) / 2.4) * Math.PI)); book.position.z = -D + 0.85 + k * 0.3; book.rotation.x = k * 0.25; });
-    mini(K, 0, -4.05, 'pull a book', (m) => { i = (i + 1) % BOOKS.length; t0 = NOW; m.say(`“${BOOKS[i][0]}” — ${BOOKS[i][1]}`); });
+    mini(K, 0, -4.05, 'guess the book', (m) => quiz(m.game, 'Guess the book',
+      shuffle(BOOKS).slice(0, 4).map(([name, blurb]) => {
+        const opts = shuffle([name, ...shuffle(BOOKS.filter(b => b[0] !== name)).slice(0, 2).map(b => b[0])]);
+        return { q: `“${blurb}” Which book on the shelf is that?`, choices: opts, answer: opts.indexOf(name),
+          reveal: () => { t0 = NOW; }, why: `It’s ${name}: the book slides off the shelf for you.` };
+      }),
+      { end: (s, n) => `${s} of ${n}. Every book here is a real repository: the counter opens the whole shelf.` }));
   },
 };
+
+// every game gets a glowing ring to stand on and a bobbing ★ over it (a ✓ once played)
+let PLAYED;
+try { PLAYED = new Set(JSON.parse(localStorage.getItem('street-played') || '[]')); } catch (e) { PLAYED = new Set(); }
+const badgeTex = (done) => canvasTex(128, 128, (c, w, h) => {
+  c.fillStyle = done ? '#b9dcd2' : '#e4b84f'; c.strokeStyle = INKC; c.lineWidth = 7;
+  c.beginPath(); c.arc(w / 2, h / 2 - 6, 46, 0, 7); c.fill(); c.stroke();
+  c.beginPath(); c.moveTo(w / 2 - 12, h / 2 + 34); c.lineTo(w / 2, h - 6); c.lineTo(w / 2 + 12, h / 2 + 34); c.fillStyle = done ? '#b9dcd2' : '#e4b84f'; c.fill(); c.stroke();
+  c.fillStyle = INKC; c.font = `700 ${done ? 62 : 66}px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(done ? '✓' : '★', w / 2, h / 2 - 4);
+});
+let BADGE;
+function gameMarker(K, placeId, m) {
+  BADGE ??= [badgeTex(false), badgeTex(true)];
+  const key = `${placeId}:${m.label}`;
+  const mat = new THREE.SpriteMaterial({ map: BADGE[PLAYED.has(key) ? 1 : 0], depthWrite: false });
+  const badge = new THREE.Sprite(mat); badge.scale.set(0.34, 0.34, 1); badge.renderOrder = 4;
+  K.g.add(badge);
+  const ringMat = new THREE.MeshBasicMaterial({ color: PLAYED.has(key) ? 0x7fb3a8 : 0xe4b84f, transparent: true, opacity: 0.6, depthWrite: false });
+  const ring = K.put(new THREE.RingGeometry(0.26, 0.36, 40).rotateX(-Math.PI / 2), ringMat, m.x, 0.025, m.z);
+  ring.userData.noInk = true; ring.renderOrder = 3;
+  const ph = (m.x * 3.1 + m.z * 1.7) % 6.28;
+  let seen = -9;
+  m.focus = () => { seen = NOW; };              // standing here: get the badge out of the way
+  LIVE.push((t) => {
+    const fresh = mat.map === BADGE[0];
+    mat.opacity += ((t - seen < 0.2 ? 0 : 1) - mat.opacity) * 0.15;
+    badge.visible = mat.opacity > 0.02;
+    badge.position.set(m.x, 1.95 + Math.sin(t * 2.2 + ph) * (fresh ? 0.07 : 0.02), m.z);
+    ringMat.opacity = fresh ? 0.45 + 0.3 * Math.sin(t * 3 + ph) : 0.35;
+    ring.scale.setScalar(fresh ? 1 + 0.06 * Math.sin(t * 3 + ph) : 1);
+  });
+  m.played = () => {
+    if (!PLAYED.has(key)) {
+      PLAYED.add(key);
+      try { localStorage.setItem('street-played', JSON.stringify([...PLAYED])); } catch (e) { /* private window */ }
+    }
+    mat.map = BADGE[1]; ringMat.color.set(0x7fb3a8);
+  };
+}
 
 const ROOM_WALL = {
   behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, hookpath: 0xd5dde8, deckgpt: 0x4a3a50,
@@ -2531,6 +2777,7 @@ export function buildInteriors(scene) {
     else wallLabel(K, place, LBL_X, 1.35, -D + 0.56);
     SETS[place.id]?.(K);
     MINI[place.id]?.(K);
+    for (const m of K.minis) gameMarker(K, place.id, m);
     // a soft pool of light on the floor
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
     ink(g, 'mid');
@@ -2552,7 +2799,7 @@ export function buildInteriors(scene) {
         lib ? { x: ox + 1.6, z: oz - D + 2.75, r: 1.1, label: `open ${place.title} →`, act: { type: 'visit', url: place.url, place } }
             : { x: ox, z: oz - D + 1.5, r: 1.25, label: `open ${place.title} →`, act: { type: 'visit', url: place.url, place } },
         { x: ox, z: oz + 0.1, r: 1.0, label: 'back to the street', act: { type: 'exit' } },
-        ...K.minis.map(m => ({ x: ox + m.x, z: oz + m.z, r: m.r, label: m.label, act: { type: 'mini', run: m.run } })),
+        ...K.minis.map(m => ({ x: ox + m.x, z: oz + m.z, r: m.r, label: m.label, act: { type: 'mini', run: m.run, played: m.played, focus: m.focus } })),
       ],
     };
   });
