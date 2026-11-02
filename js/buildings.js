@@ -371,6 +371,26 @@ const DISPLAY = {
     blob(c, x0 + tw * 0.72, y0 + th * 0.32, 12, 7, '#6f9a3f');
     lettering(c, 'rake · place · breathe', w / 2, h * 0.2, h * 0.11, '#fff4d6');
   },
+  tailor(c, w, h, r) {
+    // a rail of made-to-measure outfits, a tape measure looping under them
+    c.fillStyle = '#6b4a34'; c.fillRect(w * 0.08, h * 0.3, w * 0.84, 5);
+    const outfit = (x, body, kind) => {
+      c.strokeStyle = INK; c.lineWidth = 2.5;
+      c.beginPath(); c.moveTo(x, h * 0.3); c.lineTo(x, h * 0.36); c.stroke();             // hanger hook
+      c.beginPath(); c.moveTo(x - 20, h * 0.42); c.lineTo(x, h * 0.36); c.lineTo(x + 20, h * 0.42); c.stroke();
+      c.beginPath();
+      if (kind === 'dress') { c.moveTo(x - 14, h * 0.41); c.lineTo(x + 14, h * 0.41); c.lineTo(x + 26, h * 0.78); c.lineTo(x - 26, h * 0.78); }
+      else if (kind === 'coat') { c.moveTo(x - 20, h * 0.42); c.lineTo(x + 20, h * 0.42); c.lineTo(x + 22, h * 0.8); c.lineTo(x - 22, h * 0.8); }
+      else { c.moveTo(x - 22, h * 0.43); c.lineTo(x + 22, h * 0.43); c.lineTo(x + 18, h * 0.66); c.lineTo(x - 18, h * 0.66); }
+      c.closePath(); c.fillStyle = body; c.fill(); c.stroke();
+      if (kind === 'coat') { c.beginPath(); c.moveTo(x, h * 0.42); c.lineTo(x, h * 0.8); c.stroke(); for (const y of [0.52, 0.62, 0.72]) blob(c, x + 5, h * y, 2, 2, '#f2d27a', INK, 1); }
+    };
+    outfit(w * 0.24, '#e8604c', 'dress'); outfit(w * 0.5, '#3f5872', 'coat'); outfit(w * 0.76, '#7fb3a8', 'shirt');
+    c.strokeStyle = '#e4b84f'; c.lineWidth = 6; c.beginPath(); c.moveTo(w * 0.06, h * 0.9); c.quadraticCurveTo(w * 0.5, h * 0.72, w * 0.94, h * 0.9); c.stroke();
+    c.strokeStyle = INK; c.lineWidth = 1;
+    for (let k = 0; k < 18; k++) { const t = k / 17, x = w * (0.06 + 0.88 * t), y = h * (0.9 - 0.36 * t * (1 - t)); c.beginPath(); c.moveTo(x, y - 3); c.lineTo(x, y + 2); c.stroke(); }
+    lettering(c, 'made to measure', w / 2, h * 0.16, h * 0.11, '#fff4d6');
+  },
   plain(c, w, h) { c.fillStyle = 'rgba(60,50,60,0.4)'; c.fillRect(0, h * 0.4, w, h * 0.6); },
 };
 const _disp = {};

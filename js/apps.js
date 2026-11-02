@@ -82,6 +82,14 @@ export const APPS = [
     how: 'three.js, with the sand as a live height map: every rake stroke presses real grooves, grains spray off the tines and spill over the frame, and a scoop pours piles. Every sound is synthesized in the browser.',
     note: 'Six sand tools, 27 things to place, and a frog, bunny and snail that wander off on their own.',
   },
+  {
+    id: 'citizens', title: 'Citizen Maker', trade: 'Made-to-Measure Folk',
+    url: 'https://ghanemja.github.io/citizens.html', repo: 'https://github.com/ghanemja/ghanemja.github.io',
+    shot: 'screenshots/citizen-maker.jpg',
+    desc: 'Make your own set of citizens for a game, one at a time or in seeded batches of any age range: body, age, face, hair, clothes, proportions and six drawing styles.',
+    how: 'Built on a parametric human from MakeHuman’s CC0 base mesh, rig and shape targets, then stylized in this town’s gouache-and-ink look.',
+    note: 'Watch them walk, run, sit, ride a bike or read the paper around the plaza, then export the whole roster as a zip or JSON.',
+  },
 ];
 
 // the library at the end of the street — every repo is a book

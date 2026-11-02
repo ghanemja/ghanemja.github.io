@@ -164,6 +164,25 @@ const SHOW = {
     F.box(0.13, 0.13, 0.03, paper, w / 2 + 0.04, -h / 2 - 0.04, 0.06, 0.008);
     F.box(0.06, 0.06, 0.03, ink, w / 2 + 0.04, -h / 2 - 0.04, 0.07, 0.006);
   },
+  citizens(F, w, h) {                          // framed in a tailor's tape measure
+    const ticks = (c, cw, ch) => {
+      c.fillStyle = '#f2c94c'; c.fillRect(0, 0, cw, ch);
+      c.fillStyle = '#2a2230';
+      for (let x = 0; x < cw; x += 8) c.fillRect(x, 0, 2, x % 64 === 0 ? ch * 0.6 : x % 32 === 0 ? ch * 0.42 : ch * 0.25);
+      c.font = `700 ${ch * 0.42}px ${HAND}`;
+      for (let x = 0, n = 1; x < cw; x += 64, n++) c.fillText(String(n), x + 4, ch * 0.9);
+    };
+    frameBars(F, w, h, 0.12, (len, t, hz) => new THREE.Mesh(rb(hz ? len : t, hz ? t : len, 0.04, 0.008),
+      paint(0xffffff, { map: stripeTex(ticks, len, t, hz), hatch: 0.2, unique: true })));
+    // the tape's brass end tab and a pincushion stuck with pins in the corner
+    F.box(0.1, 0.16, 0.05, paint(PAL.gold), w / 2 + 0.06, -h / 2 - 0.12, 0.04, 0.01);
+    F.put(new THREE.SphereGeometry(0.13, 14, 10), paint(0xd8573f), -w / 2 - 0.02, -h / 2 - 0.02, 0.1).scale.y = 0.7;
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      F.put(new THREE.CylinderGeometry(0.004, 0.004, 0.12, 4), paint(0xc9ccd6), -w / 2 - 0.02 + Math.cos(a) * 0.06, -h / 2 + 0.07, 0.1 + Math.sin(a) * 0.06, [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5]);
+      F.put(new THREE.SphereGeometry(0.016, 6, 5), paint([0xe4b84f, 0x7fb3a8, 0x8f7ae8][i % 3], { hatch: 0 }), -w / 2 - 0.02 + Math.cos(a) * 0.09, -h / 2 + 0.12, 0.1 + Math.sin(a) * 0.09).userData.noInk = true;
+    }
+  },
   zen(F, w, h) {                               // a frame of bamboo poles, lashed at the corners
     const cane = paint(0xa9b866), node = paint(0x7d8c42);
     frameBars(F, w, h, 0.11, (len, t, hz) => {
@@ -682,6 +701,43 @@ const SETS = {
     ]), 16, 0.035, 8), paint(0xb03a30));
     K.g.add(rope);
   },
+  citizens(K) {
+    // a clothes rail along the west wall, every outfit a different colour
+    {
+      const x = -3.35, z0 = -4.7, z1 = -2.9, metal = paint(0x6f7d92);
+      for (const z of [z0, z1]) { K.box(0.05, 1.7, 0.05, metal, x, 0.85, z, 0.012); K.box(0.4, 0.04, 0.12, metal, x, 0.02, z, 0.01); }
+      K.put(new THREE.CylinderGeometry(0.022, 0.022, z1 - z0 + 0.1, 8), metal, x, 1.68, (z0 + z1) / 2, [Math.PI / 2, 0, 0]);
+      const cols = [0xe8604c, 0x3f5872, 0xe4b84f, 0x7fb3a8, 0xb7a3c6, 0x8e2f3a, 0xf1e4c8];
+      for (let i = 0; i < 7; i++) {
+        const z = z0 + 0.18 + i * (z1 - z0 - 0.36) / 6, col = paint(cols[i]);
+        K.put(new THREE.TorusGeometry(0.03, 0.006, 5, 10, Math.PI * 1.4), metal, x, 1.71, z, [0, Math.PI / 2, 0]);
+        // garments hang across the rail (wide in x, thin along it), like a real rail
+        K.box(0.36, 0.02, 0.03, paint(0x9a7c5c), x, 1.6, z, 0.006);                                                     // the hanger bar
+        if (i % 3 === 1) K.put(new THREE.ConeGeometry(0.22, 0.75, 4), col, x, 1.2, z, [0, Math.PI / 4, 0]).scale.set(1, 1, 0.28);   // a dress
+        else K.box(0.36, i % 3 ? 0.62 : 0.42, 0.07, col, x, i % 3 ? 1.28 : 1.38, z, 0.03);                                          // a coat / a shirt
+      }
+      K.cols.push({ x0: x - 0.25, x1: x + 0.25, z0: z0 - 0.1, z1: z1 + 0.1 });
+    }
+    // a pegboard of thread spools on the east wall
+    {
+      const x = W / 2 - 0.04, z = -3.0;
+      K.box(0.04, 0.9, 1.3, paint(0xc8a47c), x, 1.45, z, 0.01);
+      const cols = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0x3f5872, 0xdc9e9a, 0xa8b994, 0x2a2230];
+      for (let r = 0; r < 3; r++) for (let k = 0; k < 6; k++) {
+        const sz = z - 0.5 + k * 0.2, sy = 1.15 + r * 0.28;
+        K.put(new THREE.CylinderGeometry(0.004, 0.004, 0.1, 4), paint(0x6f7d92), x - 0.06, sy, sz, [0, 0, Math.PI / 2]);
+        K.put(new THREE.CylinderGeometry(0.045, 0.045, 0.08, 12), paint(cols[(r * 6 + k) % cols.length]), x - 0.08, sy, sz, [0, 0, Math.PI / 2]);
+      }
+    }
+    // a tall fitting mirror leaning by the east wall
+    {
+      const x = 3.35, z = -1.4;
+      K.box(0.08, 1.75, 0.7, paint(PAL.gold), x, 0.9, z, 0.02, [0, 0, 0.06]);
+      const glass = K.box(0.02, 1.58, 0.56, paint(0xcfe0e6, { hatch: 0, emissive: 0x2a3a40 }), x - 0.05, 0.9, z, 0.005, [0, 0, 0.06]);
+      glass.userData.noInk = true;
+      K.cols.push({ x0: x - 0.2, x1: x + 0.2, z0: z - 0.4, z1: z + 0.4 });
+    }
+  },
   zen(K) {
     const stone = paint(0x8f897f, { hatch: 0.6 });
     // a stone lantern, glowing
@@ -1111,7 +1167,7 @@ const EXTRA = {
 const ACCENT = {
   behaviors: 0x3f5872, qr: 0x2a2230, yarnflow: 0x8f7ae8, hookpath: 0x2f5ea8, deckgpt: 0xb03a30,
   splatform: 0xe8604c, 'borrowed-eyes': 0x2f5a52, gallery: 0x6a4a8a, library: 0x8e2f3a, 'doodle-libs': 0xe8466b,
-  zen: 0x55663f,
+  zen: 0x55663f, citizens: 0x8e2f3a,
 };
 function furnish(K, id, wallHex, theme) {
   if (theme?.bare) return;
@@ -1374,6 +1430,37 @@ const CENTER = {
     const dome = K.put(new THREE.SphereGeometry(0.26, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), paint(0xdff0f6, { opacity: 0.28, hatch: 0, side: THREE.DoubleSide }), x, 0.85, z); dome.userData.noInk = true;
     LIVE.push((t) => { eye.rotation.y = 0.9 * Math.sin(t * 0.5) + 0.25 * Math.sin(t * 1.7); eye.rotation.x = 0.25 * Math.sin(t * 0.8); });
     K.cols.push({ x0: x - 0.35, x1: x + 0.35, z0: z - 0.35, z1: z + 0.35 });
+  },
+  citizens(K) {         // the cutting table: press E and a new citizen is cut to measure
+    const x = -1.9, z = -2.4, wood = paint(0x8a6448), top = paint(0xe8dcc0);
+    K.box(1.7, 0.06, 0.85, top, x, 0.84, z, 0.015);
+    for (const [dx, dz] of [[-0.78, -0.36], [0.78, -0.36], [-0.78, 0.36], [0.78, 0.36]]) K.box(0.07, 0.82, 0.07, wood, x + dx, 0.41, z + dz, 0.015);
+    // a bolt of fabric half unrolled across the table, with a chalk line on it
+    K.put(new THREE.CylinderGeometry(0.11, 0.11, 0.7, 16), paint(0x3f5872), x - 0.55, 0.98, z - 0.1, [Math.PI / 2, 0, 0]);
+    K.box(0.95, 0.012, 0.66, paint(0x3f5872, { hatch: 0.4 }), x + 0.05, 0.875, z - 0.1, 0.004);
+    K.flat(0.7, 0.4, texMat(240, 140, (c, w, h) => {
+      c.strokeStyle = '#f6efdf'; c.lineWidth = 3; c.setLineDash([8, 6]);
+      c.beginPath(); c.moveTo(w * 0.2, h * 0.15); c.lineTo(w * 0.35, h * 0.1); c.lineTo(w * 0.65, h * 0.1); c.lineTo(w * 0.8, h * 0.15);
+      c.lineTo(w * 0.72, h * 0.9); c.lineTo(w * 0.28, h * 0.9); c.closePath(); c.stroke();
+    }), x + 0.08, 0.883, z - 0.1, [-Math.PI / 2, 0, 0]);
+    // big shears and spools of thread
+    for (const s of [-1, 1]) K.box(0.36, 0.015, 0.035, paint(0xc9ccd6), x + 0.5, 0.89, z + 0.25, 0.005, [0, s * 0.18, 0]);
+    for (const s of [-1, 1]) K.put(new THREE.TorusGeometry(0.045, 0.012, 6, 14), paint(PAL.accent), x + 0.27, 0.89, z + 0.25 + s * 0.05, [Math.PI / 2, 0, 0]);
+    [[0xe8604c, -0.1], [0xe4b84f, 0.02], [0x7fb3a8, 0.14]].forEach(([col, dx]) => {
+      K.put(new THREE.CylinderGeometry(0.04, 0.04, 0.1, 12), paint(col), x - 0.15 + dx, 0.92, z + 0.28);
+      K.put(new THREE.CylinderGeometry(0.05, 0.05, 0.015, 12), wood, x - 0.15 + dx, 0.87, z + 0.28);
+      K.put(new THREE.CylinderGeometry(0.05, 0.05, 0.015, 12), wood, x - 0.15 + dx, 0.975, z + 0.28);
+    });
+    const FIRST = ['Rosa', 'Otto', 'Pia', 'Rex', 'Vivi', 'Juno', 'Milo', 'Ines', 'Theo', 'Nell', 'Arlo', 'Sunny', 'Wren', 'Bea', 'Kofi', 'Lupe'];
+    const AGES = ['7', '12', '19', '24', '31', '38', '45', '52', '67', '81'];
+    const BODY = ['slim', 'athletic', 'broad', 'curvy', 'round', 'pear-shaped', 'hourglass', 'lanky'];
+    const WEAR = ['a mustard raincoat', 'dungarees and a striped tee', 'a wool cardigan', 'a bike courier jacket', 'a sundress and sandals', 'a three-piece suit', 'a paint-splattered smock', 'a puffer and a bobble hat'];
+    const DOES = ['walks the dog twice a day', 'reads the paper on the bench', 'always has a coffee', 'rides a bike everywhere', 'is never off the phone', 'sits by the fountain', 'runs every morning'];
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    mini(K, x, z + 0.85, 'cut a new citizen', (m) => {
+      m.say(`${pick(FIRST)}, ${pick(AGES)}: ${pick(BODY)}, wearing ${pick(WEAR)}, ${pick(DOES)}. Make your own at the counter →`);
+    }, 0.9);
+    K.cols.push({ x0: x - 0.9, x1: x + 0.9, z0: z - 0.48, z1: z + 0.48 });
   },
   zen(K) {              // a big desk zen garden on a low table: press E and it rakes a new pattern
     const x = -1.9, z = -2.6, TW = 1.9, TD = 1.3, top = 0.5;
@@ -1664,6 +1751,20 @@ function grannySquare(c, x0, y0, s, cols) {
 }
 
 const THEMES = {
+  citizens: {
+    rug: true,
+    wash: [0.1, '#f3e6d0'],
+    tile: [128, 0.5, (c, w, h) => {               // tailor's-shop wallpaper: pinstripes and a running stitch
+      c.fillStyle = '#efe0c6'; c.fillRect(0, 0, w, h);
+      c.fillStyle = 'rgba(142,47,58,0.28)'; c.fillRect(w * 0.25, 0, 3, h); c.fillRect(w * 0.75, 0, 3, h);
+      c.strokeStyle = 'rgba(63,88,114,0.35)'; c.lineWidth = 2; c.setLineDash([6, 6]);
+      c.beginPath(); c.moveTo(w / 2, 0); c.lineTo(w / 2, h); c.stroke(); c.setLineDash([]);
+      c.fillStyle = 'rgba(228,184,79,0.6)';
+      c.beginPath(); c.arc(w * 0.5, h * 0.5, 5, 0, 7); c.fill();      // a little button
+      c.fillStyle = 'rgba(42,34,48,0.45)'; for (const [dx, dy] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) c.fillRect(w * 0.5 + dx - 0.6, h * 0.5 + dy - 0.6, 1.4, 1.4);
+    }],
+    floor: (c, w, h) => planksDraw(c, w, h, ['#a67c55', '#9c744f', '#b0865d', '#94704c'], 12),
+  },
   zen: {
     rug: false,
     wash: [0.12, '#efe9d6'],
@@ -2408,7 +2509,7 @@ const MINI = {
 const ROOM_WALL = {
   behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, hookpath: 0xd5dde8, deckgpt: 0x4a3a50,
   splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a, 'doodle-libs': 0xfdf6e3,
-  zen: 0xe6e3cf,
+  zen: 0xe6e3cf, citizens: 0xead8c0,
 };
 
 export function buildInteriors(scene) {

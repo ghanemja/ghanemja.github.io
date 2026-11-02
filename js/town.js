@@ -22,6 +22,7 @@ const FRONTS = {
   splatform: { kind: 'toys', w: 1.9, wall: 0xe1b95c, front: 0xd8573f, trim: 0xfffaf0, roof: 'gable', roofCol: PAL.roofRed, awning: [0xd8573f, 0xf6eedb], blade: 'balloon', door: -1, sign: { bg: '#fff4e0', fg: '#d8573f' } },
   qr: { kind: 'qr', w: 1.92, wall: 0xf1e4c8, front: 0x2a2230, trim: 0xfffaf0, roof: 'parapet', blade: 'qr', door: 0, sign: { bg: '#f6eedb', fg: '#2a2230' } },
   'doodle-libs': { kind: 'doodle', w: 2.0, wall: 0xf3e6b8, front: 0xe8466b, trim: 0xfffaf0, roof: 'gable', roofCol: PAL.roofSlate, up: 'arch', awning: [0xe8466b, 0xfffaf0], blade: 'pencil', door: 1, sign: { bg: '#fffdf6', fg: '#e8466b' } },
+  citizens: { kind: 'tailor', w: 2.0, wall: 0xe9cfae, front: 0x8e2f3a, trim: 0xf6eedb, roof: 'dutch', awning: [0x8e2f3a, 0xf6eedb], blade: 'scissors', door: -1, flowers: PAL.terracotta, sign: { gold: true, bg: '#8e2f3a' } },
   zen: { kind: 'zen', w: 1.9, wall: 0xcfd3b8, front: 0x55663f, trim: 0xf6eedb, roof: 'gable', roofCol: PAL.roofGreen, blade: 'stones', door: 1, flowers: 0x55663f, sign: { bg: '#f6eedb', fg: '#4a5a3c' } },
   gallery: { kind: 'frames', w: 2.14, wall: 0xb7a3c6, front: 0x2a2230, trim: 0xf6eedb, roof: 'deco', up: 'arch', blade: 'frame', door: 1, sign: { gold: true, bg: '#2a2230' } },
 };
@@ -99,7 +100,7 @@ export function buildTown(scene) {
 
   // ── north terraces (z < 0) ──
   let x = terrace(scene, [appSpec('behaviors'), DECO.bakery], -8.2, -1, out);
-  terrace(scene, [appSpec('yarnflow'), appSpec('hookpath'), DECO.cafe, appSpec('borrowed-eyes')], x + 1.3, -1, out);
+  terrace(scene, [appSpec('yarnflow'), appSpec('hookpath'), DECO.cafe, appSpec('borrowed-eyes'), appSpec('citizens')], x + 1.3, -1, out);
   // ── south terraces (z > 0): specs listed west→east, laid mirrored ──
   terrace(scene, [appSpec('deckgpt'), appSpec('splatform')], -8.2, 1, out);
   terrace(scene, [appSpec('qr'), DECO.flowers, appSpec('gallery'), appSpec('doodle-libs'), appSpec('zen')], -2.7, 1, out);
@@ -112,7 +113,7 @@ export function buildTown(scene) {
   out.doors.library = { x: 7.55, z: 0, face: 0, west: true };
 
   // ── street furniture: lamps at the kerb, benches, trees in the gaps ──
-  for (const [lx, s] of [[-7.4, 1], [-3.6, -1], [0.2, 1], [3.8, -1], [6.9, 1]]) {
+  for (const [lx, s] of [[-7.4, 1], [-3.6, -1], [0.2, 1], [6.5, -1], [6.9, 1]]) {
     const L = lamp(); L.position.set(lx, 0, s * (roadW / 2 + 0.35));
     scene.add(L); out.lamps.push(L);
     out.colliders.push({ x0: lx - 0.14, x1: lx + 0.14, z0: L.position.z - 0.14, z1: L.position.z + 0.14 });
@@ -121,7 +122,7 @@ export function buildTown(scene) {
     const b = bench(); b.position.set(bx, 0, bz); b.rotation.y = ry; scene.add(b);
     out.colliders.push({ x0: bx - 0.65, x1: bx + 0.65, z0: bz - 0.25, z1: bz + 0.25 });
   }
-  for (const [tx, tz, s] of [[-10.3, -2.6, 1.05], [-10.6, 2.8, 0.9], [-5.9, 4.4, 0.8], [5.4, -4.6, 1.0], [9.6, -4.3, 0.85], [9.3, 4.5, 1.0]]) {
+  for (const [tx, tz, s] of [[-10.3, -2.6, 1.05], [-10.6, 2.8, 0.9], [-5.9, 4.4, 0.8], [7.1, -4.7, 1.0], [9.6, -4.3, 0.85], [9.3, 4.5, 1.0]]) {
     const t = tree({ s }); t.position.set(tx, 0, tz); scene.add(t);
     out.colliders.push({ x0: tx - 0.2, x1: tx + 0.2, z0: tz - 0.2, z1: tz + 0.2 });
   }
