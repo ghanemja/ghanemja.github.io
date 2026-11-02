@@ -65,8 +65,8 @@ Promise.all([fontsReady]).then(() => {
   walkers.push({ g: vivi, still: true });
 
   buildHud();
-  $('#loader').classList.add('hide');
-  $('#title').classList.remove('hide');
+  const reveal = () => $('#title').classList.remove('hide');
+  if (window.__loaderDone) window.__loaderDone(reveal); else { $('#loader').classList.add('hide'); reveal(); }
   window.__street = { scene, camera, renderer, town, rooms, player, go: (x, z) => player.teleport(x, z) };
 });
 

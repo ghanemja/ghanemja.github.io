@@ -30,7 +30,15 @@
   kbd { font-family: inherit; font-size: .9em; border: 2px solid var(--ink); border-radius: 6px; padding: 0 7px; background: var(--gold); color: var(--ink); }
 
   /* loading + scene fade */
-  #loader { inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Caveat', cursive; font-size: 34px; background: #f3ead7; z-index: 50; }
+  #loader { inset: 0; background: #f3ead7; z-index: 50; transition: opacity .6s ease; }
+  #loader.gone { display: none; }
+  #loadCv { position: absolute; inset: 0; }
+  #loader .cap { position: absolute; left: 0; right: 0; bottom: max(9vh, 40px); text-align: center; pointer-events: none; }
+  #loader .cap b { display: block; font-family: 'Caveat', cursive; font-size: clamp(30px, 5vw, 50px); line-height: 1; transform: rotate(-1.5deg); }
+  #loader .cap span { display: inline-block; margin-top: 8px; font-size: 18px; color: var(--ink2); }
+  #loader .cap span.done::after { content: none; animation: none; }
+  #loader .cap span::after { content: ''; animation: dots 1.2s steps(4) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
   #fade { inset: 0; background: #f3ead7; opacity: 0; pointer-events: none; transition: opacity .38s ease; z-index: 40; }
   #fade.on { opacity: 1; }
 
@@ -119,7 +127,166 @@
 </head>
 <body>
   <div id="fade" class="ui"></div>
-  <div id="loader" class="ui">drawing the street…</div>
+  <div id="loader" class="ui">
+    <canvas id="loadCv"></canvas>
+    <div class="cap"><b id="loadCap">quick, tidy up! someone's coming over…</b><span id="loadSub">drawing the street</span></div>
+  </div>
+  <script>
+  // ── the loading screen: the townsfolk, doodled, rushing to tidy up before you arrive ──
+  // plain canvas, no libraries, so it shows the moment the page does
+  (() => {
+    const L = document.getElementById('loader'), cv = document.getElementById('loadCv'), c = cv.getContext('2d');
+    const INK = '#2a2230', PAPER = '#fffdf6';
+    let W = 0, H = 0, S = 1, SPAN = 400;
+    const fit = () => { const d = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = W * d; cv.height = H * d; cv.style.width = W + 'px'; cv.style.height = H + 'px'; c.setTransform(d, 0, 0, d, 0, 0); S = Math.min(H / 560, W / 470, 1.45); SPAN = Math.min(420 * S, W * 0.42); };
+    fit(); addEventListener('resize', fit);
+    // grease-pencil boil: every line wobbles a little, re-drawn 8 times a second
+    let seed = 1, boil = 0;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const j = (v) => v + (rnd() - 0.5) * 1.3;
+    const line = (pts, w = 2.6, col = INK) => { c.strokeStyle = col; c.lineWidth = w; c.lineCap = c.lineJoin = 'round'; c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(j(x), j(y)) : c.moveTo(j(x), j(y))); c.stroke(); };
+    const blob = (pts, fill, w = 2.4) => { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(j(x), j(y)) : c.moveTo(j(x), j(y))); c.closePath(); c.fillStyle = fill; c.fill(); c.strokeStyle = INK; c.lineWidth = w; c.lineJoin = 'round'; c.stroke(); };
+    const circ = (x, y, r, fill, w = 2.4) => { c.beginPath(); c.ellipse(j(x), j(y), r, r * (0.96 + rnd() * 0.08), 0, 0, 7); if (fill) { c.fillStyle = fill; c.fill(); } if (w) { c.strokeStyle = INK; c.lineWidth = w; c.stroke(); } };
+    const limb = (x0, y0, a, len, col, w) => { const x1 = x0 + Math.sin(a) * len, y1 = y0 + Math.cos(a) * len; line([[x0, y0], [x1, y1]], w + 5, INK); line([[x0, y0], [x1, y1]], w, col); return [x1, y1]; };
+
+    // the cast, dressed as they are on the street
+    const CAST = {
+      pia:  { skin: '#8a5a3c', top: '#3f8f88', bottom: '#3b4a5e', shoes: '#e9e2d0', hair: '#1d1a1a', hat: 'helmet', hatC: '#e0b445', vest: '#d6e04c', h: 0.95 },
+      otto: { skin: '#e2a58c', top: '#3a4a68', bottom: '#262c3c', shoes: '#1e1a1c', hair: '#9a9490', hat: 'cap', hatC: '#24304a', h: 0.98, wide: 1.2 },
+      rex:  { skin: '#f0c9a8', top: '#6f8a6a', bottom: '#4a3a2c', shoes: '#3a2a20', hair: '#7a4a2a', hat: 'flat', hatC: '#5b4636', apron: '#d8c9a8', beard: true, h: 1.02, wide: 1.08 },
+      vivi: { skin: '#c8956a', top: '#8e2f3a', bottom: '#2a2230', shoes: '#6e2a2e', hair: '#2b1d1a', hat: 'bun', coat: true, glasses: true, h: 1.05 },
+    };
+    // one doodled person, feet at (x, y), facing f (±1), mid-stride at phase p, `run` 0..1
+    function person(k, x, y, f, p, run, carry) {
+      const P = CAST[k], s = 62 * S * P.h, wd = (P.wide || 1) * s * 0.36;
+      const sw = Math.sin(p) * 0.75 * run, bob = Math.abs(Math.cos(p)) * 4 * S * run;
+      const hipY = y - s * 0.95 - bob, shY = y - s * 1.75 - bob, lean = 0.12 * run * f;
+      const hx = x + lean * s * 0.4;
+      // legs and shoes (back leg first)
+      for (const sgn of [-1, 1]) {
+        const [fx, fy] = limb(x + sgn * wd * 0.35, hipY, sgn * sw * f, s * 0.92, P.bottom, 9 * S);
+        circ(fx + f * 5 * S, fy + 1, 6.5 * S, P.shoes, 2);
+      }
+      // the body: coat, uniform, vest or apron over a top
+      const len = P.coat ? 1.2 : 0.95;
+      blob([[hx - wd, shY], [hx + wd, shY], [x + wd * 1.05, shY + s * len], [x - wd * 1.05, shY + s * len]], P.top);
+      if (P.vest) { blob([[hx - wd * 0.7, shY + 4], [hx - wd * 0.15, shY + 4], [x - wd * 0.2, hipY], [x - wd * 0.8, hipY]], P.vest, 2); blob([[hx + wd * 0.15, shY + 4], [hx + wd * 0.7, shY + 4], [x + wd * 0.8, hipY], [x + wd * 0.2, hipY]], P.vest, 2); }
+      if (P.apron) blob([[hx - wd * 0.6, shY + s * 0.15], [hx + wd * 0.6, shY + s * 0.15], [x + wd * 0.75, hipY + s * 0.15], [x - wd * 0.75, hipY + s * 0.15]], P.apron, 2);
+      if (P.coat) for (let i = 0; i < 3; i++) circ(hx + 2, shY + s * (0.25 + i * 0.25), 2.2 * S, '#f3ead7', 1.2);
+      // arms: pumping, or out front holding something
+      const hands = [];
+      for (const sgn of [-1, 1]) {
+        const a = carry ? f * 1.25 + sgn * 0.08 : -sgn * sw * f * 1.1;
+        hands.push(limb(hx + sgn * wd * 0.8, shY + 6, a, s * 0.62, P.top, 8 * S));
+      }
+      hands.forEach(([ax, ay]) => circ(ax, ay, 5 * S, P.skin, 2));
+      // head
+      const hy = shY - s * 0.38, r = s * 0.3;
+      if (P.hat === 'bun') circ(hx - f * r * 0.8, hy - r * 0.55, r * 0.42, P.hair);
+      if (P.hat === 'helmet') { line([[hx - f * r * 0.7, hy], [hx - f * r * 1.5, hy + r * 0.3]], 7 * S, INK); line([[hx - f * r * 0.7, hy], [hx - f * r * 1.5, hy + r * 0.3]], 4 * S, P.hair); }
+      circ(hx, hy, r, P.skin);
+      // hair and hats
+      c.save(); c.beginPath(); c.arc(hx, hy, r, 0, 7); c.clip();
+      c.fillStyle = P.hair; c.fillRect(hx - r, hy - r, r * 2, r * 0.75); c.fillRect(hx - f * r - (f > 0 ? 0 : -r * 0.5), hy - r, r * 0.5, r * 1.3);
+      c.restore(); circ(hx, hy, r, null, 2.4);
+      if (P.hat === 'helmet') blob([[hx - r * 1.1, hy - r * 0.25], [hx - r * 0.9, hy - r * 1.05], [hx + r * 0.9, hy - r * 1.05], [hx + r * 1.1, hy - r * 0.25]], P.hatC);
+      if (P.hat === 'cap') { blob([[hx - r, hy - r * 0.35], [hx - r * 0.8, hy - r * 1.1], [hx + r * 0.8, hy - r * 1.1], [hx + r, hy - r * 0.35]], P.hatC); blob([[hx + f * r * 0.6, hy - r * 0.4], [hx + f * r * 1.55, hy - r * 0.25], [hx + f * r * 0.6, hy - r * 0.2]], P.hatC, 2); }
+      if (P.hat === 'flat') blob([[hx - r * 1.05, hy - r * 0.45], [hx - r * 0.7, hy - r * 0.95], [hx + r * 0.9, hy - r * 0.9], [hx + f * r * 1.3, hy - r * 0.4]], P.hatC);
+      if (P.beard) blob([[hx - r * 0.6, hy + r * 0.3], [hx + r * 0.85 * f, hy + r * 0.25], [hx + r * 0.3 * f, hy + r * 1.0], [hx - r * 0.3 * f, hy + r * 0.95]], P.hair, 2);
+      // a flustered face, looking where they're going
+      const ex = hx + f * r * 0.35;
+      circ(ex - 5 * S, hy - 1, 2.6 * S, INK, 0); circ(ex + 6 * S, hy - 1, 2.6 * S, INK, 0);
+      if (P.glasses) { circ(ex - 5 * S, hy - 1, 6 * S, null, 1.8); circ(ex + 6 * S, hy - 1, 6 * S, null, 1.8); }
+      if (!P.beard) { c.beginPath(); c.ellipse(ex + 1, hy + r * 0.45, 4 * S, (2 + run * 3) * S, 0, 0, 7); c.fillStyle = '#6e2a2e'; c.fill(); }
+      for (let i = 0; i < 2; i++) line([[hx - f * r * (1.1 + i * 0.25), hy - r * (0.9 - i * 0.5)], [hx - f * r * (1.35 + i * 0.25), hy - r * (1.05 - i * 0.5)]], 1.8);   // sweat flicks
+      return { hands, hy, r, hx };
+    }
+    const paper = (x, y, a, w = 26, h = 34) => {
+      c.save(); c.translate(x, y); c.rotate(a);
+      blob([[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].map(([u, v]) => [u * S, v * S]), PAPER, 1.8);
+      for (let i = 0; i < 3; i++) line([[-w * 0.3 * S, (-h * 0.25 + i * 8) * S], [w * 0.3 * S, (-h * 0.25 + i * 8) * S]], 1.2, '#8aa8d8');
+      c.restore();
+    };
+    const flying = [];
+    let last = performance.now(), t0 = last, tidy = 0;
+    function frame(now) {
+      if (L.classList.contains('gone')) return;
+      requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const t = (now - t0) / 1000;
+      if (Math.floor(t * 8) !== boil) boil = Math.floor(t * 8);
+      seed = boil * 7919 + 1;
+      c.fillStyle = '#f3ead7'; c.fillRect(0, 0, W, H);
+      const cx = W / 2, gy = H * 0.66, span = SPAN;
+      // the room: a wall line, a crooked frame, a frantic clock, a door, a rug
+      line([[cx - span * 1.25, gy], [cx + span * 1.25, gy]], 3);
+      for (let i = -5; i <= 5; i++) line([[cx + i * 80 * S, gy + 8], [cx + i * 80 * S - 30 * S, gy + 40 * S]], 1.2, 'rgba(42,34,48,.25)');
+      c.save(); c.translate(cx - span * 0.55, gy - 250 * S); c.rotate(Math.sin(t * 3) * 0.15 + 0.1);
+      blob([[-45 * S, 0], [45 * S, 0], [45 * S, 60 * S], [-45 * S, 60 * S]], '#e4b84f'); blob([[-36 * S, 9 * S], [36 * S, 9 * S], [36 * S, 51 * S], [-36 * S, 51 * S]], '#a8c99a', 1.6);
+      circ(-8 * S, 30 * S, 9 * S, '#f6c453', 1.4); c.restore();
+      const kx = cx + span * 0.12, ky = gy - 270 * S;
+      circ(kx, ky, 26 * S, PAPER); line([[kx, ky], [kx + Math.sin(t * 6) * 18 * S, ky - Math.cos(t * 6) * 18 * S]], 2.4); line([[kx, ky], [kx + Math.sin(t * 0.8) * 12 * S, ky - Math.cos(t * 0.8) * 12 * S]], 3);
+      const dx = cx + span * 1.05;
+      blob([[dx - 50 * S, gy], [dx - 50 * S, gy - 200 * S], [dx + 50 * S, gy - 200 * S], [dx + 50 * S, gy]], '#b07a52');
+      circ(dx - 32 * S, gy - 100 * S, 5 * S, '#e4b84f', 1.6);
+      if ((t % 6) > 4.6) { c.font = `700 ${26 * S}px Caveat, cursive`; c.fillStyle = '#e8604c'; c.textAlign = 'center'; c.fillText('ding dong!', j(dx), j(gy - 215 * S)); }
+      // the rug, with everything swept under it piling up
+      tidy = Math.min(1, tidy + dt * 0.04);
+      const rx = cx + span * 0.42, bump = (6 + 22 * ((t * 0.12) % 1)) * S;
+      blob([[rx - 95 * S, gy + 2], [rx - 60 * S, gy - bump * 0.6], [rx, gy - bump], [rx + 60 * S, gy - bump * 0.6], [rx + 95 * S, gy + 2]], '#dc6a9a');
+      for (let i = -2; i <= 2; i++) line([[rx + i * 34 * S, gy - 2], [rx + i * 30 * S, gy - bump * 0.55]], 1.4, '#f6c453');
+      // Rex sweeps papers at the rug; his broom hinges at his hands
+      const rexX = rx - 120 * S, sweep = Math.sin(t * 5);
+      const R = person('rex', rexX, gy, 1, t * 5, 0.25, false);
+      const [bx, by] = R.hands[1];
+      line([[bx, by], [bx + (40 + sweep * 18) * S, gy - 6]], 5, '#8a6448');
+      blob([[bx + (25 + sweep * 18) * S, gy - 2], [bx + (55 + sweep * 18) * S, gy - 2], [bx + (48 + sweep * 18) * S, gy - 20 * S], [bx + (32 + sweep * 18) * S, gy - 20 * S]], '#e4b84f', 2);
+      for (let i = 0; i < 3; i++) paper(rexX + (70 + ((t * 40 + i * 25) % 70)) * S, gy - 6 * S, 1.4 + i, 22, 10);
+      // Vivi paces, clipboard up, giving orders
+      const vx = cx - span * 0.3 + Math.sin(t * 1.6) * 40 * S, vf = Math.cos(t * 1.6) > 0 ? 1 : -1;
+      const V = person('vivi', vx, gy, vf, t * 6, 0.4, true);
+      blob([[V.hands[0][0] - 2, V.hands[0][1] - 28 * S], [V.hands[0][0] + vf * 22 * S, V.hands[0][1] - 28 * S], [V.hands[0][0] + vf * 22 * S, V.hands[0][1] + 4], [V.hands[0][0] - 2, V.hands[0][1] + 4]], '#c8a47c', 2);
+      const ORDERS = ['faster!', 'hide those!', 'they’re nearly here!', 'straighten that!', 'not under the rug, Rex!'];
+      const say = ORDERS[Math.floor(t / 2.2) % ORDERS.length];
+      c.font = `400 ${20 * S}px "Patrick Hand", cursive`; const tw = c.measureText(say).width;
+      const sbx = vx - tw / 2 - 12 * S, sby = V.hy - V.r - 64 * S;
+      blob([[sbx, sby], [sbx + tw + 24 * S, sby], [sbx + tw + 24 * S, sby + 34 * S], [vx + 10 * S, sby + 34 * S], [vx, sby + 48 * S], [vx - 2 * S, sby + 34 * S], [sbx, sby + 34 * S]], PAPER, 2);
+      c.fillStyle = INK; c.textAlign = 'left'; c.fillText(say, sbx + 12 * S, sby + 24 * S);
+      // Otto lumbers back and forth with a box of files
+      const ou = (t * 0.16 + 0.5) % 1, ob = ou < 0.5 ? ou * 2 : 2 - ou * 2, of = ou < 0.5 ? 1 : -1;
+      const ox = cx - span + ob * span * 1.6;
+      const O = person('otto', ox, gy, of, t * 7, 0.7, true);
+      const [obx, oby] = O.hands[1];
+      for (let i = 0; i < 3; i++) paper(obx + of * (10 + i * 6) * S, oby - (34 + i * 3) * S, (i - 1) * 0.3 + Math.sin(t * 7) * 0.05, 24, 30);
+      blob([[obx - of * 6 * S, oby - 28 * S], [obx + of * 48 * S, oby - 28 * S], [obx + of * 44 * S, oby + 12 * S], [obx - of * 2 * S, oby + 12 * S]], '#c8a47c');
+      c.font = `700 ${14 * S}px "Patrick Hand", cursive`; c.fillStyle = INK; c.textAlign = 'center'; c.fillText('FILES', obx + of * 21 * S, oby - 4 * S);
+      // Pia sprints the whole room with a tottering stack; sheets keep flying off it
+      const pu = (t * 0.3) % 1, pb = pu < 0.5 ? pu * 2 : 2 - pu * 2, pf = pu < 0.5 ? 1 : -1;
+      const px = cx - span * 1.15 + pb * span * 2.1;
+      const Pp = person('pia', px, gy, pf, t * 14, 1, true);
+      const [sx, sy] = Pp.hands[1];
+      for (let i = 0; i < 7; i++) paper(sx + pf * 8 * S + Math.sin(t * 9 + i * 0.7) * i * 1.6 * S, sy - 6 * S - i * 6 * S, Math.sin(t * 9 + i) * 0.06 * i, 30, 8);
+      if (rnd() < 0.5 && flying.length < 18 && (Math.floor(t * 3) !== (frame.lastFly || 0))) { frame.lastFly = Math.floor(t * 3); flying.push({ x: sx, y: sy - 48 * S, vx: -pf * (40 + Math.random() * 80) * S, vy: -(80 + Math.random() * 90) * S, a: 0, va: (Math.random() - 0.5) * 8 }); }
+      for (const f of flying) {
+        f.vy += 140 * S * dt; f.vy = Math.min(f.vy, 55 * S); f.x += (f.vx + Math.sin(t * 4 + f.va) * 60 * S) * dt; f.y += f.vy * dt; f.a += f.va * dt;
+        if (f.y > gy - 6 * S) { f.y = gy - 6 * S; f.vx *= 0.9; f.va = 0; f.a = 1.57; f.land = (f.land || 0) + dt; }
+        paper(f.x, f.y, f.a, 26, 34);
+      }
+      for (let i = flying.length - 1; i >= 0; i--) if (flying[i].land > 2.5) flying.splice(i, 1);
+    }
+    requestAnimationFrame(frame);
+    // main.js calls this when the street is built: a beat of "ok, come in!" and then it lifts
+    const shown = performance.now();
+    window.__loaderDone = (fn) => {
+      const wait = Math.max(0, 2600 - (performance.now() - shown));
+      setTimeout(() => {
+        document.getElementById('loadCap').textContent = 'ok… ok! come on in!';
+        const sub = document.getElementById("loadSub"); sub.textContent = "the street is ready"; sub.style.setProperty("--x", 0); sub.classList.add("done");
+        setTimeout(() => { L.classList.add('hide'); fn && fn(); setTimeout(() => L.classList.add('gone'), 700); }, 900);
+      }, wait);
+    };
+  })();
+  </script>
 
   <div id="title" class="ui fade hide">
     <h1>Janelle's<br><span>Main Street</span></h1>
@@ -177,6 +344,6 @@
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="./js/main.js?cb=79"></script>
+<script type="module" src="./js/main.js?cb=80"></script>
 </body>
 </html>
