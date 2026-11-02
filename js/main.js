@@ -42,6 +42,7 @@ const fontsReady = (document.fonts?.ready ?? Promise.resolve()).catch(() => {});
 Promise.all([fontsReady]).then(() => {
   town = buildTown(scene);
   rooms = buildInteriors(scene);
+  showRoom(null);
   player = createPlayer(scene, camera, { x: -10.5, z: 0.6, yaw: -Math.PI / 2 });
   player.setZone({ colliders: town.colliders, bounds: town.bounds });
   player.freeze(true);                     // until "take a walk"
@@ -66,7 +67,7 @@ Promise.all([fontsReady]).then(() => {
   buildHud();
   $('#loader').classList.add('hide');
   $('#title').classList.remove('hide');
-  window.__street = { scene, camera, town, rooms, player, go: (x, z) => player.teleport(x, z) };
+  window.__street = { scene, camera, renderer, town, rooms, player, go: (x, z) => player.teleport(x, z) };
 });
 
 // ── HUD: the shop directory (click a line to follow it) ──
@@ -130,6 +131,8 @@ function nearestInteract() {
   return best;
 }
 
+// only the room you're in is drawn (they're all built up front, far behind the street)
+function showRoom(id) { for (const [k, r] of Object.entries(rooms)) r.group.visible = k === id; }
 const fadeEl = $('#fade');
 function fadeDo(fn) {
   fadeEl.classList.add('on');
@@ -142,6 +145,7 @@ function doAct(it) {
     lastDoor = { x: it.x, z: it.z };
     fadeDo(() => {
       zone = act.id;
+      showRoom(act.id);
       const rm = rooms[act.id];
       player.setZone({ colliders: rm.colliders, bounds: rm.bounds, lookY: 1.5 });
       player.teleport(rm.spawn.x, rm.spawn.z, 0);
@@ -155,6 +159,7 @@ function doAct(it) {
     const wasLib = zone === 'library';
     fadeDo(() => {
       zone = 'street';
+      showRoom(null);
       game.close(); mini.see(''); $('#say').classList.add('hide');
       player.setZone({ colliders: town.colliders, bounds: town.bounds });
       if (wasLib) player.teleport(lastDoor.x - 0.9, 0, Math.PI / 2);
