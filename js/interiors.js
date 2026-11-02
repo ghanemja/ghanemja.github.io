@@ -188,6 +188,14 @@ const SHOW = {
     // a crochet hook tucked into the bottom corner
     F.put(new THREE.CylinderGeometry(0.018, 0.018, 0.7, 8), paint(0x8f7ae8), w / 2 - 0.35, -h / 2 - 0.02, 0.1, [0, 0, 1.2]);
   },
+  'doodle-libs'(F, w, h) {                     // framed in four pencils, erasers at the corners
+    frameBars(F, w, h, 0.1, (len, t, hz) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(t / 2, t / 2, len, 6), paint(0xf6c445));
+      m.rotation.z = hz ? Math.PI / 2 : 0;
+      return m;
+    });
+    [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(([sx, sy]) => F.put(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 10), paint(0xef8fa8), sx * (w / 2 + 0.05), sy * (h / 2 + 0.05), 0.02, [Math.PI / 2, 0, 0]));
+  },
   splatform(F, w, h) {                         // a stretched canvas, paint running off its edges
     frameBars(F, w, h, 0.09, (len, t, hz) => new THREE.Mesh(rb(hz ? len : t, hz ? t : len, 0.12, 0.01), paint(0xf6eedb)));
     const cols = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0x5f8cc8, 0xdc6a9a], R = rng(12);
@@ -984,7 +992,7 @@ const EXTRA = {
 // ─── FURNISHING: every room reads as a lived-in shop, not a bare box ────────
 const ACCENT = {
   behaviors: 0x3f5872, qr: 0x2a2230, yarnflow: 0x8f7ae8, deckgpt: 0xb03a30,
-  splatform: 0xe8604c, 'borrowed-eyes': 0x2f5a52, gallery: 0x6a4a8a, library: 0x8e2f3a,
+  splatform: 0xe8604c, 'borrowed-eyes': 0x2f5a52, gallery: 0x6a4a8a, library: 0x8e2f3a, 'doodle-libs': 0xe8466b,
 };
 function furnish(K, id, wallHex, theme) {
   if (theme?.bare) return;
@@ -1201,6 +1209,29 @@ const CENTER = {
     K.box(1.4, 0.12, 0.45, paint(0x6a4a8a), x, 0.44, z, 0.05);
     K.box(1.3, 0.3, 0.38, paint(0x2a2230, { hatch: 0 }), x, 0.2, z, 0.03);
     K.cols.push({ x0: x - 0.75, x1: x + 0.75, z0: z - 0.3, z1: z + 0.3 });
+  },
+  'doodle-libs'(K) {    // an easel with a filled-in Mad Lib: human or AI?
+    const x = -1.9, z = -1.9, wood = paint(0x9a7c5c);
+    // an A-frame: the front legs lean back and meet near the top, the third leg props it from behind
+    for (const sx of [-0.42, 0.42]) K.box(0.06, 1.75, 0.06, wood, x + sx, 0.86, z, 0.015, [-0.12, 0, sx * 0.18]);
+    K.box(0.06, 1.7, 0.06, wood, x, 0.8, z - 0.42, 0.015, [0.3, 0, 0]);
+    K.box(1.1, 0.05, 0.14, wood, x, 0.66, z + 0.12, 0.012);
+    K.flat(1.05, 0.8, texMat(420, 320, (c, w, h) => {
+      c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(76,155,232,0.4)'; c.lineWidth = 2;
+      for (let y = 46; y < h; y += 34) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle';
+      fitLine(c, 'A hot air balloon is a type of', 34, HAND, w * 0.9); c.fillText('A hot air balloon is a type of', w / 2, 60);
+      c.fillStyle = '#ffe26a'; c.fillRect(w * 0.27, 96, w * 0.46, 34);
+      c.fillStyle = INKC; c.font = `700 40px ${HAND}`; c.fillText('SANDWICH', w / 2, 112);
+      c.font = `30px ${HAND}`; c.fillText('Who filled in the blank?', w / 2, 178);
+      for (const [bx, label, col] of [[w * 0.27, 'HUMAN', '#2a78d6'], [w * 0.73, 'AI', '#eb6834']]) {
+        c.fillStyle = col; c.beginPath(); c.roundRect(bx - 82, 214, 164, 64, 16); c.fill();
+        c.strokeStyle = INKC; c.lineWidth = 4; c.stroke();
+        c.fillStyle = '#fff'; c.font = `700 34px ${HAND}`; c.fillText(label, bx, 247);
+      }
+    }), x, 1.12, z + 0.14, [-0.12, 0, 0]);
+    K.cols.push({ x0: x - 0.55, x1: x + 0.55, z0: z - 0.5, z1: z + 0.2 });
   },
   library(K) {          // a reading table with a green banker's lamp and a chair
     const x = 2.2, z = -1.5, wood = paint(0x6b4a34);
@@ -1555,6 +1586,27 @@ const THEMES = {
     }],
     floor: (c, w, h) => basketweave(c, w, h, ['#b58a5e', '#a77c52', '#c09468', '#9c7048']),
     floorTile: 1.2,
+  },
+  'doodle-libs': {
+    wash: [0.12, '#fdf6e3'],
+    tile: [256, 0.9, (c, w, h) => {             // notebook paper, doodled in the margins
+      c.fillStyle = '#fdf6e3'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(76,155,232,0.35)'; c.lineWidth = 2;
+      for (let y = 18; y < h; y += 26) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      c.strokeStyle = 'rgba(232,70,107,0.45)'; c.beginPath(); c.moveTo(w * 0.12, 0); c.lineTo(w * 0.12, h); c.stroke();
+      c.strokeStyle = 'rgba(42,34,48,0.55)'; c.lineWidth = 2.5; c.lineCap = 'round';
+      const stick = (x, y, s) => {                // a tiny stick figure, waving
+        c.beginPath(); c.arc(x, y, 6 * s, 0, 7); c.stroke();
+        c.beginPath(); c.moveTo(x, y + 6 * s); c.lineTo(x, y + 24 * s); c.lineTo(x - 7 * s, y + 36 * s); c.moveTo(x, y + 24 * s); c.lineTo(x + 7 * s, y + 36 * s);
+        c.moveTo(x, y + 12 * s); c.lineTo(x - 9 * s, y + 18 * s); c.moveTo(x, y + 12 * s); c.lineTo(x + 9 * s, y + 3 * s); c.stroke();
+      };
+      stick(w * 0.3, h * 0.18, 1); stick(w * 0.78, h * 0.62, 0.9);
+      c.font = `22px ${HAND}`; c.fillStyle = 'rgba(42,34,48,0.5)'; c.textAlign = 'center';
+      c.fillText('(noun)', w * 0.62, h * 0.3); c.fillText('(verb)', w * 0.3, h * 0.82);
+      c.fillStyle = 'rgba(232,70,58,0.55)'; c.fillText('boom!', w * 0.85, h * 0.12);
+    }],
+    floor: (c, w, h) => planksDraw(c, w, h, ['#d9b98a', '#cfae7e', '#e2c497', '#c8a676'], 9),
+    rug: false,
   },
   library: {
     wash: [0.2, '#4c6a55'],
@@ -2022,6 +2074,17 @@ const MINI = {
     let i = -1;
     mini(K, -2.6, -3.75, 'examine the empty frame', (m) => { i = (i + 1) % CLUES.length; m.say(`Clue ${i + 1} of ${CLUES.length}: ${CLUES[i]}`); });
   },
+  'doodle-libs'(K) {
+    // the Turing test in miniature: real lines from the game, and who wrote them
+    const LINES = [
+      ['“A hot air balloon is a type of SANDWICH. It is lifted by EXPLODING the air inside the BREAD.”', 'A human did! A player from India, and the judges gave it their top score.'],
+      ['“In golf, a golfer LICKS a number of BURRITOS.”', 'That was the AI. It really cannot stop talking about food.'],
+      ['“A zombie is a mythical OVERRIPE person who has returned to IDAHO.”', 'A human. Only a person would send zombies to Idaho.'],
+      ['“Most ducks are SARCASTIC birds.”', 'The AI again. Its favourite words: sticky, soggy, haunted.'],
+    ];
+    let i = -1;
+    mini(K, -1.9, -1.2, 'human or AI? guess', (m) => { i = (i + 1) % LINES.length; m.say(`${LINES[i][0]} Who filled in the blanks? … ${LINES[i][1]}`); });
+  },
   library(K) {
     // pull a book off the shelf: each one is a repository
     const BOOKS = [
@@ -2043,7 +2106,7 @@ const MINI = {
 
 const ROOM_WALL = {
   behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
-  splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a,
+  splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a, 'doodle-libs': 0xfdf6e3,
 };
 
 export function buildInteriors(scene) {

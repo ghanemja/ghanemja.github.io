@@ -58,6 +58,14 @@ export const APPS = [
     how: 'three.js with a gouache-and-ink look: cel shading, paper grain, boiling grease-pencil outlines. This very town borrows its engine.',
     note: 'The stolen paintings are Janelle’s real ones. This street is drawn with the same pen.',
   },
+  {
+    id: 'doodle-libs', title: 'Doodle Libs', trade: 'Fill-in-the-Blank Co.',
+    url: 'https://ghanemja.github.io/madlibs/', repo: 'https://github.com/ghanemja/madlibs',
+    shot: 'screenshots/doodle-libs.jpg', clip: 'clips/doodle-libs.mp4',
+    desc: 'Mad Libs that draw themselves. Type a word into the blank and a stick-figure cartoon acts it out on the spot: say the tree “explodes” and it does.',
+    how: 'No AI, no server: a dictionary of about 1,900 words maps nouns to doodles, verbs to animations and adjectives to lasting changes. It handles tenses, plurals and typos too.',
+    note: 'Also a Mad Libs Turing test: real answers from a published humor study versus AI. Watch the cartoon, then guess who filled in the blanks.',
+  },
 ];
 
 // the library at the end of the street — every repo is a book

@@ -309,6 +309,24 @@ const DISPLAY = {
     for (let s = 0; s < 3; s++) for (let x = 8; x < w - 20; x += 22) rect(c, x, h * (0.2 + s * 0.26), 18, h * 0.2, ['#e8604c', '#93abc0', '#e4b84f', '#b7a3c6'][Math.floor(r() * 4)], 2);
     lettering(c, 'new releases', w / 2, h * 0.1, h * 0.1, '#f2d27a');
   },
+  doodle(c, w, h, r) {
+    // a sheet of notebook paper: a stick figure, a tree going KA-BOOM, and a blank to fill
+    c.fillStyle = '#fffdf6'; c.fillRect(w * 0.06, h * 0.1, w * 0.88, h * 0.8);
+    c.strokeStyle = 'rgba(76,155,232,0.45)'; c.lineWidth = 2;
+    for (let y = h * 0.24; y < h * 0.88; y += h * 0.1) { c.beginPath(); c.moveTo(w * 0.06, y); c.lineTo(w * 0.94, y); c.stroke(); }
+    c.strokeStyle = 'rgba(232,70,107,0.6)'; c.beginPath(); c.moveTo(w * 0.16, h * 0.1); c.lineTo(w * 0.16, h * 0.9); c.stroke();
+    c.strokeStyle = INK; c.lineWidth = 4; c.lineCap = 'round';
+    const sx = w * 0.3, sy = h * 0.42;                                      // the stick figure, arms up
+    blob(c, sx, sy, 11, 11, '#fffdf6', INK, 3);
+    c.beginPath(); c.moveTo(sx, sy + 11); c.lineTo(sx, sy + 46); c.moveTo(sx, sy + 46); c.lineTo(sx - 12, sy + 72); c.moveTo(sx, sy + 46); c.lineTo(sx + 12, sy + 72);
+    c.moveTo(sx, sy + 20); c.lineTo(sx - 18, sy + 2); c.moveTo(sx, sy + 20); c.lineTo(sx + 18, sy + 2); c.stroke();
+    const bx = w * 0.68, by = h * 0.46;                                     // KA-BOOM burst
+    c.beginPath();
+    for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, rr = k % 2 ? 26 : 46; c.lineTo(bx + Math.cos(a) * rr * 1.5, by + Math.sin(a) * rr * 0.8); }
+    c.closePath(); c.fillStyle = '#f6d743'; c.fill(); c.lineWidth = 3; c.stroke();
+    lettering(c, 'BOOM!', bx, by + 2, h * 0.12, '#e8463b', HAND);
+    lettering(c, 'a type of ____', w / 2, h * 0.8, h * 0.1, INK, HAND);
+  },
   plain(c, w, h) { c.fillStyle = 'rgba(60,50,60,0.4)'; c.fillRect(0, h * 0.4, w, h * 0.6); },
 };
 const _disp = {};
@@ -484,6 +502,13 @@ function emblem(K, kind) {
     K.put(new THREE.SphereGeometry(0.13, 10, 7).scale(1, 1.15, 1), P(PAL.accent), 0, 0.04, 0);
     K.box(0.09, 0.07, 0.09, P(PAL.bark), 0, -0.2, 0, 0.015);
     for (const sx of [-0.035, 0.035]) K.box(0.008, 0.12, 0.008, DARK(), sx, -0.12, 0, 0.003);
+  } else if (kind === 'pencil') {
+    // a yellow pencil, sharpened, with a pink eraser
+    K.put(new THREE.CylinderGeometry(0.045, 0.045, 0.3, 6), P(0xf6c445), 0, 0.02, 0, [0, 0, 0.5]);
+    K.put(new THREE.ConeGeometry(0.045, 0.1, 6), P(0xe8c9a0), 0.098, -0.163, 0, [0, 0, 0.5 + Math.PI]);
+    K.put(new THREE.ConeGeometry(0.016, 0.035, 6), DARK(), 0.122, -0.205, 0, [0, 0, 0.5 + Math.PI]);
+    K.put(new THREE.CylinderGeometry(0.047, 0.047, 0.04, 8), P(0xc9ccd6), -0.08, 0.15, 0, [0, 0, 0.5]);
+    K.put(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 8), P(0xef8fa8), -0.1, 0.19, 0, [0, 0, 0.5]);
   } else if (kind === 'scissors') {
     for (const sg of [-1, 1]) {
       K.box(0.03, 0.26, 0.012, P(0xc9ccd6), 0, 0.03, 0, 0.006, [0, 0, sg * 0.32]);
