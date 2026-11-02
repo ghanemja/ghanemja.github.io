@@ -327,6 +327,26 @@ const DISPLAY = {
     lettering(c, 'BOOM!', bx, by + 2, h * 0.12, '#e8463b', HAND);
     lettering(c, 'a type of ____', w / 2, h * 0.8, h * 0.1, INK, HAND);
   },
+  zen(c, w, h, r) {
+    // a desk zen garden in the window: a wooden tray of raked sand, stones and a little plant
+    const x0 = w * 0.1, y0 = h * 0.4, tw = w * 0.8, th = h * 0.48;
+    rect(c, x0, y0, tw, th, '#c8a070', 4);
+    c.fillStyle = '#e3cb98'; c.fillRect(x0 + 9, y0 + 9, tw - 18, th - 18);
+    c.save(); c.beginPath(); c.rect(x0 + 9, y0 + 9, tw - 18, th - 18); c.clip();
+    c.strokeStyle = 'rgba(150,115,60,0.7)'; c.lineWidth = 2;
+    const sx = x0 + tw * 0.32, sy = y0 + th * 0.52;
+    for (let k = 1; k <= 4; k++) { c.beginPath(); c.ellipse(sx, sy, 10 + k * 9, 6 + k * 5.5, 0, 0, 7); c.stroke(); }
+    for (let k = 0; k < 6; k++) {
+      c.beginPath();
+      for (let x = x0 + tw * 0.58; x < x0 + tw; x += 4) { const y = y0 + 16 + k * 9 + Math.sin(x / 9) * 3; x === x0 + tw * 0.58 ? c.moveTo(x, y) : c.lineTo(x, y); }
+      c.stroke();
+    }
+    c.restore();
+    blob(c, sx, sy - 2, 11, 7, '#3a3c40');
+    blob(c, x0 + tw * 0.8, y0 + th * 0.7, 9, 6, '#e7b9c0');
+    blob(c, x0 + tw * 0.72, y0 + th * 0.32, 12, 7, '#6f9a3f');
+    lettering(c, 'rake · place · breathe', w / 2, h * 0.2, h * 0.11, '#fff4d6');
+  },
   plain(c, w, h) { c.fillStyle = 'rgba(60,50,60,0.4)'; c.fillRect(0, h * 0.4, w, h * 0.6); },
 };
 const _disp = {};
@@ -509,6 +529,11 @@ function emblem(K, kind) {
     K.put(new THREE.ConeGeometry(0.016, 0.035, 6), DARK(), 0.122, -0.205, 0, [0, 0, 0.5 + Math.PI]);
     K.put(new THREE.CylinderGeometry(0.047, 0.047, 0.04, 8), P(0xc9ccd6), -0.08, 0.15, 0, [0, 0, 0.5]);
     K.put(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 8), P(0xef8fa8), -0.1, 0.19, 0, [0, 0, 0.5]);
+  } else if (kind === 'stones') {
+    // a balanced cairn of three river stones
+    K.put(new THREE.SphereGeometry(0.15, 14, 10).scale(1, 0.42, 0.8), P(0x8d877d), 0, -0.14, 0);
+    K.put(new THREE.SphereGeometry(0.11, 14, 10).scale(1, 0.45, 0.8), P(0x5c5955), 0.01, -0.04, 0);
+    K.put(new THREE.SphereGeometry(0.075, 12, 9).scale(1, 0.5, 0.8), P(0xc9c2b6), -0.005, 0.04, 0);
   } else if (kind === 'scissors') {
     for (const sg of [-1, 1]) {
       K.box(0.03, 0.26, 0.012, P(0xc9ccd6), 0, 0.03, 0, 0.006, [0, 0, sg * 0.32]);

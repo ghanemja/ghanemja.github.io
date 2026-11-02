@@ -164,6 +164,28 @@ const SHOW = {
     F.box(0.13, 0.13, 0.03, paper, w / 2 + 0.04, -h / 2 - 0.04, 0.06, 0.008);
     F.box(0.06, 0.06, 0.03, ink, w / 2 + 0.04, -h / 2 - 0.04, 0.07, 0.006);
   },
+  zen(F, w, h) {                               // a frame of bamboo poles, lashed at the corners
+    const cane = paint(0xa9b866), node = paint(0x7d8c42);
+    frameBars(F, w, h, 0.11, (len, t, hz) => {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.45, t * 0.45, len + 0.18, 12), cane);
+      if (hz) pole.rotation.z = Math.PI / 2;
+      g.add(pole);
+      const n = Math.max(2, Math.round(len / 0.45));
+      for (let i = 1; i < n; i++) {
+        const u = -len / 2 + i * len / n;
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(t * 0.5, t * 0.5, 0.025, 12), node);
+        ring.position[hz ? 'x' : 'y'] = u;
+        if (hz) ring.rotation.z = Math.PI / 2;
+        g.add(ring);
+      }
+      return g;
+    });
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      const tie = F.put(new THREE.TorusGeometry(0.075, 0.02, 6, 14), paint(0xc8a47c), sx * (w / 2 + 0.055), sy * (h / 2 + 0.055), 0.03, [0, 0, Math.PI / 4]);
+      tie.userData.noInk = true;
+    }
+  },
   default(F, w, h) {
     frameBars(F, w, h, 0.1, (len, t, hz) => new THREE.Mesh(rb(hz ? len : t, hz ? t : len, 0.08, 0.02), paint(PAL.gold)));
   },
@@ -624,6 +646,66 @@ const SETS = {
     ]), 16, 0.035, 8), paint(0xb03a30));
     K.g.add(rope);
   },
+  zen(K) {
+    const stone = paint(0x8f897f, { hatch: 0.6 });
+    // a stone lantern, glowing
+    {
+      const x = 3.1, z = -2.3;
+      K.put(new THREE.CylinderGeometry(0.26, 0.3, 0.12, 6), stone, x, 0.06, z);
+      K.put(new THREE.CylinderGeometry(0.08, 0.09, 0.55, 6), stone, x, 0.39, z);
+      K.put(new THREE.CylinderGeometry(0.22, 0.17, 0.08, 6), stone, x, 0.7, z);
+      K.box(0.3, 0.26, 0.3, stone, x, 0.87, z, 0.02);
+      for (const r of [0, 1]) K.box(r ? 0.31 : 0.14, 0.13, r ? 0.14 : 0.31, paint(0xfff1c8, { emissive: 0xffc46a, hatch: 0 }), x, 0.87, z, 0.01).userData.noInk = true;
+      K.put(new THREE.ConeGeometry(0.4, 0.22, 6), stone, x, 1.11, z);
+      K.put(new THREE.SphereGeometry(0.06, 10, 8), stone, x, 1.26, z);
+      K.cols.push({ x0: x - 0.35, x1: x + 0.35, z0: z - 0.35, z1: z + 0.35 });
+    }
+    // bamboo in a big pot in the back corner
+    {
+      const x = -3.4, z = -4.7, cane = paint(0x9cb35c), node = paint(0x6f8a3a), leaf = paint(0x6a9a42);
+      K.put(new THREE.CylinderGeometry(0.3, 0.24, 0.42, 16), paint(0x3a3d44), x, 0.21, z);
+      [[-0.1, 0.02, 2.2], [0.08, -0.07, 1.9], [0.0, 0.12, 1.6]].forEach(([dx, dz, h], i) => {
+        K.put(new THREE.CylinderGeometry(0.035, 0.035, h, 8), cane, x + dx, 0.4 + h / 2, z + dz);
+        for (let y = 0.7; y < h; y += 0.35) K.put(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 8), node, x + dx, 0.4 + y, z + dz);
+        for (let k = 0; k < 4; k++) {
+          const lf = K.put(new THREE.SphereGeometry(0.16, 8, 5), leaf, x + dx + Math.cos(k * 1.7 + i) * 0.16, 0.4 + h - 0.1 - k * 0.22, z + dz + Math.sin(k * 1.7 + i) * 0.16, [0, k * 1.7 + i, 0.5]);
+          lf.scale.set(1, 0.12, 0.3);
+        }
+      });
+      K.cols.push({ x0: x - 0.35, x1: x + 0.35, z0: z - 0.35, z1: z + 0.35 });
+    }
+    // floor cushions by the sand table
+    for (const [x, z, col] of [[-2.55, -1.45, 0x55663f], [-1.25, -1.45, 0xb98a5e]]) {
+      K.box(0.55, 0.1, 0.55, paint(col), x, 0.05, z, 0.04);
+      K.put(new THREE.SphereGeometry(0.03, 8, 6), paint(0xf6eedb), x, 0.11, z);
+    }
+    // a hanging scroll with a brushed ensō, on the west wall
+    K.box(0.62, 0.04, 0.05, paint(0x6b4a34), -W / 2 + 0.05, 2.12, -3.0, 0.01, [0, Math.PI / 2, 0]);
+    K.flat(0.5, 1.1, texMat(200, 440, (c, w, h) => {
+      c.fillStyle = '#f4ecd8'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#7a8a5a'; c.fillRect(0, 0, w, 26); c.fillRect(0, h - 26, w, 26);
+      c.strokeStyle = '#2a2230'; c.lineWidth = 16; c.lineCap = 'round';
+      c.beginPath(); c.arc(w / 2, h * 0.42, 62, -1.2, 4.6); c.stroke();
+      c.fillStyle = '#c0392b'; c.fillRect(w / 2 + 46, h * 0.7, 18, 18);
+    }), -W / 2 + 0.03, 1.5, -3.0, [0, Math.PI / 2, 0]);
+    K.box(0.6, 0.04, 0.05, paint(0x6b4a34), -W / 2 + 0.05, 0.93, -3.0, 0.01, [0, Math.PI / 2, 0]);
+    // a wind chime turning slowly in the breeze from the door
+    const chime = new THREE.Group(); chime.position.set(3.1, 2.3, -2.3);   // above the lantern K.g.add(chime);
+    const ck = kit(chime);
+    ck.put(new THREE.CylinderGeometry(0.004, 0.004, 0.45, 4), paint(0x2a2230, { hatch: 0 }), 0, 0.22, 0);
+    ck.put(new THREE.CylinderGeometry(0.13, 0.13, 0.03, 16), paint(0x6b4a34), 0, 0, 0);
+    const tubes = [];
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * Math.PI * 2, len = 0.3 + i * 0.05;
+      const tb = new THREE.Group(); tb.position.set(Math.cos(a) * 0.09, -0.02, Math.sin(a) * 0.09); chime.add(tb);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, len, 8), paint(0xc9ccd6));
+      m.position.y = -0.06 - len / 2; tb.add(m); tubes.push(tb);
+    }
+    LIVE.push((t) => {
+      chime.rotation.y = t * 0.3;
+      tubes.forEach((tb, i) => { tb.rotation.x = Math.sin(t * 1.3 + i) * 0.08; tb.rotation.z = Math.cos(t * 1.1 + i * 2) * 0.08; });
+    });
+  },
   library(K) {
     // the stacks: every repo is a book
     const wood = paint(0x8a6448);
@@ -993,6 +1075,7 @@ const EXTRA = {
 const ACCENT = {
   behaviors: 0x3f5872, qr: 0x2a2230, yarnflow: 0x8f7ae8, deckgpt: 0xb03a30,
   splatform: 0xe8604c, 'borrowed-eyes': 0x2f5a52, gallery: 0x6a4a8a, library: 0x8e2f3a, 'doodle-libs': 0xe8466b,
+  zen: 0x55663f,
 };
 function furnish(K, id, wallHex, theme) {
   if (theme?.bare) return;
@@ -1204,6 +1287,86 @@ const CENTER = {
     LIVE.push((t) => { eye.rotation.y = 0.9 * Math.sin(t * 0.5) + 0.25 * Math.sin(t * 1.7); eye.rotation.x = 0.25 * Math.sin(t * 0.8); });
     K.cols.push({ x0: x - 0.35, x1: x + 0.35, z0: z - 0.35, z1: z + 0.35 });
   },
+  zen(K) {              // a big desk zen garden on a low table: press E and it rakes a new pattern
+    const x = -1.9, z = -2.6, TW = 1.9, TD = 1.3, top = 0.5;
+    const wood = paint(0x7a5a40), rim = paint(0xd2ad78);
+    K.box(TW + 0.1, 0.42, TD + 0.1, wood, x, 0.21, z, 0.03);
+    for (const s of [-1, 1]) {
+      K.box(TW, 0.1, 0.07, rim, x, top + 0.02, z + s * (TD / 2 - 0.035), 0.015);
+      K.box(0.07, 0.1, TD, rim, x + s * (TW / 2 - 0.035), top + 0.02, z, 0.015);
+    }
+    // stones and a plant sit in fixed spots; the patterns flow around them
+    const STONES = [[0.3, 0.42, 0.11], [0.74, 0.7, 0.07], [0.82, 0.25, 0.06]];
+    const PATTERNS = ['ripples', 'waves', 'lines', 'spiral'];
+    let pat = 0, prev = 0, anim = 1;
+    const cw = 512, ch = Math.round(512 * TD / TW);
+    const tex = canvasTex(cw, ch, () => {});
+    const R = rng(21), grains = Array.from({ length: 2600 }, () => [R() * cw, R() * ch, R()]);
+    const draw = (kind, c) => {
+      c.strokeStyle = 'rgba(140,105,55,0.55)'; c.lineWidth = 3;
+      if (kind === 'ripples') {
+        c.beginPath(); for (let y = 10; y < ch; y += 13) { c.moveTo(0, y); c.lineTo(cw, y); } c.stroke();
+        for (const [u, v, r] of STONES) {
+          const px = u * cw, py = v * ch;
+          c.fillStyle = '#e3cb98'; c.beginPath(); c.arc(px, py, r * cw + 50, 0, 7); c.fill();
+          for (let k = 0; k < 4; k++) { c.beginPath(); c.arc(px, py, r * cw * 0.6 + 12 + k * 12, 0, 7); c.stroke(); }
+        }
+      } else if (kind === 'waves') {
+        for (let y = -10; y < ch + 10; y += 12) { c.beginPath(); for (let px = 0; px <= cw; px += 6) { const py = y + Math.sin(px / 38) * 10; px ? c.lineTo(px, py) : c.moveTo(px, py); } c.stroke(); }
+      } else if (kind === 'lines') {
+        c.beginPath(); for (let px = 8; px < cw; px += 12) { c.moveTo(px, 0); c.lineTo(px, ch); } c.stroke();
+      } else {
+        const [u, v] = STONES[0]; const px0 = u * cw, py0 = v * ch;
+        c.beginPath(); for (let a = 0; a < 40; a += 0.08) { const r = 26 + a * 5.2; const px = px0 + Math.cos(a) * r, py = py0 + Math.sin(a) * r * 0.8; a ? c.lineTo(px, py) : c.moveTo(px, py); } c.stroke();
+      }
+    };
+    const paintSand = () => {
+      const c = tex.image.getContext('2d');
+      c.fillStyle = '#e3cb98'; c.fillRect(0, 0, cw, ch);
+      for (const [gx, gy, k] of grains) { c.fillStyle = k < 0.5 ? 'rgba(150,115,60,0.35)' : 'rgba(255,248,230,0.6)'; c.fillRect(gx, gy, 2, 2); }
+      // the old pattern on the right, the new one raked in from the left
+      const edge = anim * cw;
+      c.save(); c.beginPath(); c.rect(edge, 0, cw - edge, ch); c.clip(); draw(PATTERNS[prev], c); c.restore();
+      c.save(); c.beginPath(); c.rect(0, 0, edge, ch); c.clip(); draw(PATTERNS[pat], c); c.restore();
+      tex.needsUpdate = true;
+    };
+    paintSand();
+    const sand = K.flat(TW - 0.14, TD - 0.14, paint(0xffffff, { map: tex, hatch: 0, unique: true }), x, top, z, [-Math.PI / 2, 0, 0]);
+    sand.renderOrder = 1;
+    for (const [u, v, r] of STONES) {
+      const st = K.put(new THREE.DodecahedronGeometry(r * (TW - 0.14), 1), paint(r > 0.1 ? 0x3a3c40 : 0x9a948a), x - (TW - 0.14) / 2 + u * (TW - 0.14), top + 0.03, z - (TD - 0.14) / 2 + v * (TD - 0.14));
+      st.scale.y = 0.5;
+    }
+    const plant = new THREE.Group(); plant.position.set(x + 0.55, top, z - 0.3); K.g.add(plant);
+    for (let i = 0; i < 9; i++) {
+      const a = i / 9 * Math.PI * 2, l = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.2, 5), paint(0x86ab80));
+      l.position.set(Math.cos(a) * 0.05, 0.07, Math.sin(a) * 0.05); l.rotation.set(Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9); plant.add(l);
+    }
+    // the little rake that does the work
+    const rake = new THREE.Group(); K.g.add(rake);
+    const rk = kit(rake), rw = paint(0xc9a26b);
+    rk.box(0.06, 0.04, 0.34, rw, 0, 0.04, 0, 0.01);
+    for (let i = 0; i < 5; i++) rk.box(0.012, 0.05, 0.012, paint(0x8a6448), 0, 0.0, -0.14 + i * 0.07, 0.004);
+    rk.put(new THREE.CylinderGeometry(0.014, 0.014, 0.9, 8), rw, -0.3, 0.37, 0, [0, 0, 0.88]);
+    const rest = () => rake.position.set(x + TW / 2 + 0.1, top + 0.02, z + TD / 2 - 0.12);
+    rest(); rake.rotation.y = 0.3;
+    let t0 = -10;
+    LIVE.push((t) => {
+      if (anim >= 1) return;
+      anim = Math.min(1, (t - t0) / 2.2);
+      const u = anim, sweep = Math.sin(u * Math.PI * 7) * 0.32;
+      rake.position.set(x - TW / 2 + 0.12 + u * (TW - 0.24), top + 0.02, z + sweep * (TD / 2 - 0.2));
+      rake.rotation.y = Math.PI;
+      paintSand();
+      if (anim >= 1) { rest(); rake.rotation.y = 0.3; }
+    });
+    const NAMES = { ripples: 'ripples round the stones', waves: 'rolling waves', lines: 'calm straight lines', spiral: 'a slow spiral' };
+    mini(K, x, z + TD / 2 + 0.45, 'rake the sand', (m) => {
+      prev = pat; pat = (pat + 1) % PATTERNS.length; t0 = NOW; anim = 0;
+      m.say(`raking ${NAMES[PATTERNS[pat]]}…`);
+    }, 0.9);
+    K.cols.push({ x0: x - TW / 2 - 0.1, x1: x + TW / 2 + 0.1, z0: z - TD / 2 - 0.1, z1: z + TD / 2 + 0.1 });
+  },
   gallery(K) {          // a museum bench to sit and look
     const x = -1.2, z = -1.6;
     K.box(1.4, 0.12, 0.45, paint(0x6a4a8a), x, 0.44, z, 0.05);
@@ -1413,6 +1576,32 @@ function grannySquare(c, x0, y0, s, cols) {
 }
 
 const THEMES = {
+  zen: {
+    rug: false,
+    wash: [0.12, '#efe9d6'],
+    tile: [256, 1.1, (c, w, h) => {               // shoji screens: rice paper in a wooden lattice
+      c.fillStyle = '#f3eedc'; c.fillRect(0, 0, w, h);
+      for (let i = 0; i < 260; i++) { c.fillStyle = `rgba(190,170,130,${0.04 + Math.random() * 0.05})`; c.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1); }
+      c.strokeStyle = '#a07d55'; c.lineWidth = 5;
+      for (let i = 0; i <= 4; i++) { const x = i * w / 4; c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+      for (let j = 0; j <= 6; j++) { const y = j * h / 6; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      c.lineWidth = 10; c.strokeRect(0, 0, w, h);
+    }],
+    floorTile: 2,
+    floorPx: 256,
+    floor: (c, w, h) => {                           // two tatami mats with dark cloth borders
+      for (const [x, y, mw, mh, rot] of [[0, 0, w / 2, h, 0], [w / 2, 0, w / 2, h, 1]]) {
+        c.fillStyle = '#c9c48a'; c.fillRect(x, y, mw, mh);
+        c.strokeStyle = 'rgba(120,115,60,0.35)'; c.lineWidth = 1;
+        for (let k = 0; k < (rot ? mh : mw); k += 3) {
+          c.beginPath();
+          if (rot) { c.moveTo(x, y + k); c.lineTo(x + mw, y + k); } else { c.moveTo(x + k, y); c.lineTo(x + k, y + mh); }
+          c.stroke();
+        }
+        c.strokeStyle = '#3a3d2e'; c.lineWidth = 8; c.strokeRect(x + 4, y + 4, mw - 8, mh - 8);
+      }
+    },
+  },
   behaviors: {
     wash: [0.15, '#e6edf0'],
     tile: [256, 1.0, (c, w, h) => {             // engineering graph paper
@@ -2107,6 +2296,7 @@ const MINI = {
 const ROOM_WALL = {
   behaviors: 0x5c6f80, qr: 0x6f8a84, yarnflow: 0xf2d9d6, deckgpt: 0x4a3a50,
   splatform: 0xf6eedb, 'borrowed-eyes': 0xdbe8dd, gallery: 0x8a6a9a, library: 0x8a6a4a, 'doodle-libs': 0xfdf6e3,
+  zen: 0xe6e3cf,
 };
 
 export function buildInteriors(scene) {

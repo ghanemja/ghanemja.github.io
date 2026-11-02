@@ -66,6 +66,14 @@ export const APPS = [
     how: 'No AI, no server: a dictionary of about 1,900 words maps nouns to doodles, verbs to animations and adjectives to lasting changes. It handles tenses, plurals and typos too.',
     note: 'Also a Mad Libs Turing test: real answers from a published humor study versus AI. Watch the cartoon, then guess who filled in the blanks.',
   },
+  {
+    id: 'zen', title: 'Zen Garden', trade: 'Sand & Stone',
+    url: 'https://ghanemja.github.io/zen-garden/', repo: 'https://github.com/ghanemja/zen-garden',
+    shot: 'screenshots/zen-garden.jpg',
+    desc: 'A little 3D desk zen garden. Drag in stones, plants, lanterns and tiny animals, then rake the sand while wind chimes play.',
+    how: 'three.js, with the sand as a live height map: every rake stroke presses real grooves, grains spray off the tines and spill over the frame, and a scoop pours piles. Every sound is synthesized in the browser.',
+    note: 'Six sand tools, 27 things to place, and a frog, bunny and snail that wander off on their own.',
+  },
 ];
 
 // the library at the end of the street — every repo is a book

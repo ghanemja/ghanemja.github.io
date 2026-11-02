@@ -21,6 +21,7 @@ const FRONTS = {
   splatform: { kind: 'toys', w: 1.9, wall: 0xe1b95c, front: 0xd8573f, trim: 0xfffaf0, roof: 'gable', roofCol: PAL.roofRed, awning: [0xd8573f, 0xf6eedb], blade: 'balloon', door: -1, sign: { bg: '#fff4e0', fg: '#d8573f' } },
   qr: { kind: 'qr', w: 1.92, wall: 0xf1e4c8, front: 0x2a2230, trim: 0xfffaf0, roof: 'parapet', blade: 'qr', door: 0, sign: { bg: '#f6eedb', fg: '#2a2230' } },
   'doodle-libs': { kind: 'doodle', w: 2.0, wall: 0xf3e6b8, front: 0xe8466b, trim: 0xfffaf0, roof: 'gable', roofCol: PAL.roofSlate, up: 'arch', awning: [0xe8466b, 0xfffaf0], blade: 'pencil', door: 1, sign: { bg: '#fffdf6', fg: '#e8466b' } },
+  zen: { kind: 'zen', w: 1.9, wall: 0xcfd3b8, front: 0x55663f, trim: 0xf6eedb, roof: 'gable', roofCol: PAL.roofGreen, blade: 'stones', door: 1, flowers: 0x55663f, sign: { bg: '#f6eedb', fg: '#4a5a3c' } },
   gallery: { kind: 'frames', w: 2.14, wall: 0xb7a3c6, front: 0x2a2230, trim: 0xf6eedb, roof: 'deco', up: 'arch', blade: 'frame', door: 1, sign: { gold: true, bg: '#2a2230' } },
 };
 // purely decorative neighbours, between the real shops
@@ -100,7 +101,7 @@ export function buildTown(scene) {
   terrace(scene, [appSpec('yarnflow'), DECO.cafe, appSpec('borrowed-eyes')], x + 1.3, -1, out);
   // ── south terraces (z > 0): specs listed west→east, laid mirrored ──
   terrace(scene, [appSpec('deckgpt'), appSpec('splatform')], -8.2, 1, out);
-  terrace(scene, [appSpec('qr'), DECO.flowers, appSpec('gallery'), appSpec('doodle-libs')], -2.7, 1, out);
+  terrace(scene, [appSpec('qr'), DECO.flowers, appSpec('gallery'), appSpec('doodle-libs'), appSpec('zen')], -2.7, 1, out);
 
   // ── the library closes the street at the east end, facing west ──
   const lib = library({ w: 3.5, pave: [0.4, 0.4] });
