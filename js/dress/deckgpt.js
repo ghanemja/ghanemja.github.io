@@ -99,18 +99,19 @@ export default function dress(kit) {
     const pipeM = paint(PAL.gold, { emissive: 0x000000, unique: true }), mouthM = dark, pipes = [];
     for (let i = 0; i < 13; i++) {
       const px = x - 0.6 + i * 0.1, h = 0.55 + (1 - Math.abs(i - 6) / 6) * 0.75 + (i % 2) * 0.06, r = 0.04 - Math.abs(i - 6) * 0.002;
-      pipes.push(new THREE.CylinderGeometry(r, r, h, 10).translate(px - x, 1.0 + 0.1 + h / 2, 0).toNonIndexed());
-      pipes.push(new THREE.ConeGeometry(r, 0.1, 10).rotateX(Math.PI).translate(px - x, 1.05, 0).toNonIndexed());
+      pipes.push(new THREE.CylinderGeometry(r, r, h, 10).translate(px - x, 0.1 + h / 2, 0).toNonIndexed());
+      pipes.push(new THREE.ConeGeometry(r, 0.1, 10).rotateX(Math.PI).translate(px - x, 0.05, 0).toNonIndexed());
       S.box(r * 1.1, 0.05, 0.01, mouthM, px, 1.2, BW + 0.09 + r, 0.003);
     }
-    const pm = put(mergeGeometries(pipes), pipeM, x, 0, BW + 0.09);
+    const pm = put(mergeGeometries(pipes), pipeM, x, 1.0, BW + 0.09);
     const organ = new THREE.Group(); organ.position.set(x, 0, z); g.add(organ);
     organ.add(put(new THREE.BoxGeometry(1.1, 1.05, 0.6), new THREE.MeshBasicMaterial({ visible: false }), 0, 0.52, 0.02));   // the tap target
     organ.children[0].userData.noInk = true;
     let t0 = -9;
     live((t) => {
       const s = since(t0), on = s < 2.4;
-      const e = on ? 0.55 * Math.max(0, Math.sin(s / 2.4 * Math.PI)) * (0.8 + 0.2 * Math.sin(s * 30)) : 0.06 + 0.04 * Math.sin(t * 1.5);
+      const e = on ? 0.9 * Math.max(0, Math.sin(Math.min(1, s / 0.3) * Math.PI / 2)) * (1 - s / 2.4) * (0.8 + 0.2 * Math.sin(s * 30)) : 0.06 + 0.04 * Math.sin(t * 1.5);
+      pm.scale.y = 1 + (on ? 0.05 * Math.abs(Math.sin(s * 9)) * (1 - s / 2.4) : 0);
       pipeM.emissive.setRGB(e, e * 0.75, e * 0.3); pipeM.emissiveIntensity = 1;
       keys.forEach((k, i) => { k.position.y = 0.705 - (on && Math.floor(s * 3) % 3 === i ? 0.012 : 0); });
     });
@@ -382,7 +383,7 @@ export default function dress(kit) {
     warn('aframe', x, z, 0.22); claim(x, z, 0.22);
     const af = new THREE.Group(); af.position.set(x, 0, z); af.rotation.y = -0.6; g.add(af);
     const AK = sub(af);
-    for (const s of [-1, 1]) AK.box(0.5, 0.9, 0.03, dark, 0, 0.44, s * 0.13, 0.01, [s * 0.15, 0, 0]);
+    for (const s of [-1, 1]) AK.box(0.5, 0.9, 0.03, walnut, 0, 0.44, s * 0.13, 0.01, [-s * 0.15, 0, 0]);
     AK.box(0.52, 0.05, 0.15, gold, 0, 0.9, 0, 0.015);
     const faces = ['NOW SHOWING|your deck|in four stages', 'TONIGHT|Scope · Story|Visuals · Deck'].map(txt => opaque(160, 240, (c, w, h) => {
       c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h);
@@ -393,10 +394,10 @@ export default function dress(kit) {
       c.fillStyle = '#f6eedb'; c.font = `400 18px ${HAND}`; c.fillText(d, w / 2, 170);
       c.fillStyle = '#e8604c'; c.beginPath(); c.arc(w / 2, 205, 8, 0, 7); c.fill();
     }));
-    const card = new THREE.Group(); card.position.set(0, 0.82, 0.1); card.rotation.x = 0.15; af.add(card);   // hinged at the top
+    const card = new THREE.Group(); card.position.set(0, 0.82, 0.095); card.rotation.x = -0.15; af.add(card);   // hinged at the top
     const cm = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.62).translate(0, -0.33, 0.006), faces[0]); cm.userData.noInk = true; card.add(cm);
     let t0 = -9, n = 0;
-    live(() => { const s = since(t0); card.rotation.x = 0.15 - (s < 0.5 ? Math.sin(s / 0.5 * Math.PI) * 1.6 : 0); });
+    live(() => { const s = since(t0); card.rotation.x = -0.15 - (s < 0.5 ? Math.sin(s / 0.5 * Math.PI) * 1.6 : 0); });
     tap(af, 'flip the sign', (sfx) => { t0 = now(); setTimeout(() => { n ^= 1; cm.material = faces[n]; }, 250); sfx([[500, 0.05], [650, 0.08]], 'sine', 0.4); });
     g.add(shadow(0.32).translateX(x).translateZ(z));
   }

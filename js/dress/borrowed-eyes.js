@@ -36,7 +36,7 @@ export default function dress(K) {
     if (rot) m.rotation.set(rot[0] || 0, rot[1] || 0, rot[2] || 0);
     parent.add(m); return m;
   };
-  const solid = (x, z, r) => { if (!free(x, z, r)) console.error('[borrowed-eyes] crowded spot', x, z, r); claim(x, z, r); };
+  const solid = (x, z, r) => { if (!free(x, z, r)) console.warn('[borrowed-eyes] crowded spot', x, z, r); claim(x, z, r); };
   const smooth = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
   const glowTex = canvasTex(64, 64, (c, w, h) => {
     const g = c.createRadialGradient(w / 2, h / 2, 1, w / 2, h / 2, w / 2);
@@ -49,7 +49,7 @@ export default function dress(K) {
   };
 
   const wood = paint(0x9a7a56), woodDk = paint(0x6e5238), metal = paint(0x8a93a0), dark = paint(0x2a2230, { hatch: 0 });
-  const canvasCol = paint(0xc9b88a), brass = paint(PAL.gold), moss = paint(0x6f9a4c, { hatch: 0.5 });
+  const canvasCol = paint(0xc9b88a), brass = paint(PAL.gold), moss = paint(0x9cc864, { hatch: 0.4 });
 
   // ── 1. the naturalist's camp table, back-left, under the field-notes board ──
   const TX = -2.55, TZ = -3.95, TOP = 0.745;
@@ -415,7 +415,7 @@ export default function dress(K) {
   // ── 10. a fairy ring of glow-caps by the path: tap and they bounce in turn, puffing spores ──
   {
     const mx = 1.05, mz = -0.32, n = 7;
-    if (!free(mx, mz, 0.28)) console.error('[borrowed-eyes] crowded spot', mx, mz);
+    if (!free(mx, mz, 0.28)) console.warn('[borrowed-eyes] crowded spot', mx, mz);
     const stemM = paint(0xf6eedb), capM = paint(0x9fe8d8, { emissive: 0x5fe0c8, hatch: 0, unique: true });
     const ms = [];
     for (let i = 0; i < n; i++) {
