@@ -334,7 +334,7 @@ const DISPLAY = {
     lettering(c, 'new releases', w / 2, h * 0.1, h * 0.1, '#f2d27a');
   },
   doodle(c, w, h, r) {
-    // a sheet of notebook paper: a stick figure, a tree going KA-BOOM, and a blank to fill
+    // a sheet of notebook paper: a stick figure, a BOING! burst, and a blank to fill
     c.fillStyle = '#fffdf6'; c.fillRect(w * 0.06, h * 0.1, w * 0.88, h * 0.8);
     c.strokeStyle = 'rgba(76,155,232,0.45)'; c.lineWidth = 2;
     for (let y = h * 0.24; y < h * 0.88; y += h * 0.1) { c.beginPath(); c.moveTo(w * 0.06, y); c.lineTo(w * 0.94, y); c.stroke(); }
@@ -344,11 +344,11 @@ const DISPLAY = {
     blob(c, sx, sy, 11, 11, '#fffdf6', INK, 3);
     c.beginPath(); c.moveTo(sx, sy + 11); c.lineTo(sx, sy + 46); c.moveTo(sx, sy + 46); c.lineTo(sx - 12, sy + 72); c.moveTo(sx, sy + 46); c.lineTo(sx + 12, sy + 72);
     c.moveTo(sx, sy + 20); c.lineTo(sx - 18, sy + 2); c.moveTo(sx, sy + 20); c.lineTo(sx + 18, sy + 2); c.stroke();
-    const bx = w * 0.68, by = h * 0.46;                                     // KA-BOOM burst
+    const bx = w * 0.68, by = h * 0.46;                                     // BOING! burst
     c.beginPath();
     for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, rr = k % 2 ? 26 : 46; c.lineTo(bx + Math.cos(a) * rr * 1.5, by + Math.sin(a) * rr * 0.8); }
     c.closePath(); c.fillStyle = '#f6d743'; c.fill(); c.lineWidth = 3; c.stroke();
-    lettering(c, 'BOOM!', bx, by + 2, h * 0.12, '#e8463b', HAND);
+    lettering(c, 'BOING!', bx, by + 2, h * 0.11, '#e8463b', HAND);
     lettering(c, 'a type of ____', w / 2, h * 0.8, h * 0.1, INK, HAND);
   },
   zen(c, w, h, r) {

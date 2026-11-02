@@ -1559,10 +1559,10 @@ const CENTER = {
       c.strokeStyle = 'rgba(76,155,232,0.4)'; c.lineWidth = 2;
       for (let y = 46; y < h; y += 34) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
       c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle';
-      fitLine(c, 'A hot air balloon is a type of', 34, HAND, w * 0.9); c.fillText('A hot air balloon is a type of', w / 2, 60);
+      fitLine(c, 'Baseball is played on a', 34, HAND, w * 0.9); c.fillText('Baseball is played on a', w / 2, 60);
       c.fillStyle = '#ffe26a'; c.fillRect(w * 0.27, 96, w * 0.46, 34);
-      c.fillStyle = INKC; c.font = `700 40px ${HAND}`; c.fillText('SANDWICH', w / 2, 112);
-      c.font = `30px ${HAND}`; c.fillText('Who filled in the blank?', w / 2, 178);
+      c.fillStyle = INKC; c.font = `700 40px ${HAND}`; c.fillText('MAGNETIC', w / 2, 112);
+      c.font = `30px ${HAND}`; c.fillText('field.  Who filled in the blank?', w / 2, 178);
       for (const [bx, label, col] of [[w * 0.27, 'HUMAN', '#2a78d6'], [w * 0.73, 'AI', '#eb6834']]) {
         c.fillStyle = col; c.beginPath(); c.roundRect(bx - 82, 214, 164, 64, 16); c.fill();
         c.strokeStyle = INKC; c.lineWidth = 4; c.stroke();
@@ -2479,10 +2479,10 @@ const MINI = {
   'doodle-libs'(K) {
     // the Turing test in miniature: real lines from the game, and who wrote them
     const LINES = [
-      ['“A hot air balloon is a type of SANDWICH. It is lifted by EXPLODING the air inside the BREAD.”', 'A human did! A player from India, and the judges gave it their top score.'],
-      ['“In golf, a golfer LICKS a number of BURRITOS.”', 'That was the AI. It really cannot stop talking about food.'],
-      ['“A zombie is a mythical OVERRIPE person who has returned to IDAHO.”', 'A human. Only a person would send zombies to Idaho.'],
-      ['“Most ducks are SARCASTIC birds.”', 'The AI again. Its favourite words: sticky, soggy, haunted.'],
+      ['“A game of baseball is played by two teams on a MAGNETIC field. Each team has nine MAGNETS.”', 'A human! A player from India, and the judges loved it.'],
+      ['“In golf, a golfer TICKLES a number of PICKLES and swings a BANANA at the ball.”', 'That was the AI, Claude Sonnet 5.5. It really likes pickles.'],
+      ['“Scuba diving is a sport where people swim under LAVA, using a tank of compressed DOUGH.”', 'A human, a player from the US.'],
+      ['“Penguins cannot MOONWALK, but they can swim very well.”', 'The AI. Asked three separate times, it gave the exact same answer every time.'],
     ];
     let i = -1;
     mini(K, -1.9, -1.2, 'human or AI? guess', (m) => { i = (i + 1) % LINES.length; m.say(`${LINES[i][0]} Who filled in the blanks? … ${LINES[i][1]}`); });
