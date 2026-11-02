@@ -41,7 +41,6 @@ function bag(THREE, rb) {
 export default function dress(kit) {
   const { THREE, g, put, paint, tap, live, free, claim, rb, canvasTex, HAND, SCRIPT, INKC, D, PAL, kit: sub, now, shadow } = kit;
   const S = bag(THREE, rb), L = bag(THREE, rb);
-  const warn = (what, x, z, r) => { if (!free(x, z, r)) (window.__dressWarn ??= []).push(`splatform: ${what} at ${x},${z}`); };
   const COLS = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0x5f8cc8, 0xdc6a9a];
   const CSS = ['#e8604c', '#e4b84f', '#7fb3a8', '#8f7ae8', '#5f8cc8', '#dc6a9a'];
   const wood = paint(0x8a6448), bark = paint(PAL.bark), tin = paint(0xc9ccd6), dark = paint(0x2a2230, { hatch: 0 }), cream = paint(0xfdf8ec);
@@ -62,7 +61,6 @@ export default function dress(kit) {
   // ══ RIGHT: the spin-art bench (tap: squirt paint) ══
   {
     const x = 3.5, z = -1.75;
-    warn('bench a', x - 0.05, z + 0.3, 0.3); warn('bench b', x - 0.05, z - 0.3, 0.3);
     claim(x, z + 0.3, 0.35); claim(x, z - 0.3, 0.35);
     S.box(0.62, 0.06, 1.1, benchWood, x, 0.8, z, 0.02);
     for (const [dx, dz] of [[-0.26, -0.5], [0.26, -0.5], [-0.26, 0.5], [0.26, 0.5]]) S.box(0.06, 0.77, 0.06, bark, x + dx, 0.385, z + dz, 0.015);
@@ -216,7 +214,7 @@ export default function dress(kit) {
   // ══ RIGHT FRONT: the giant Splatform paint can (tap: pop the lid) ══
   {
     const x = 3.42, z = -0.5;
-    warn('bigcan', x, z, 0.3); claim(x, z, 0.3);
+    claim(x, z, 0.3);
     const lab = opaque(512, 128, (c, w, h) => {
       c.fillStyle = '#fdf8ec'; c.fillRect(0, 0, w, h);
       for (let i = 0; i < 9; i++) blob(c, 20 + i * 60, 18 + (i % 2) * 90, 12, CSS[i % 6], i);
@@ -251,7 +249,7 @@ export default function dress(kit) {
   // ══ RIGHT BACK: a rack of canvases drying ══
   {
     const x = 3.7, z = -4.55;
-    warn('rack', x, z, 0.2); claim(x, z, 0.2);
+    claim(x, z, 0.2);
     S.box(0.36, 0.04, 0.6, bark, x, 0.02, z, 0.01);
     for (const dz of [-0.28, 0.28]) S.box(0.36, 0.5, 0.03, bark, x, 0.27, z + dz, 0.01);
     for (let i = 0; i < 4; i++) {
@@ -285,7 +283,7 @@ export default function dress(kit) {
   // ══ LEFT FRONT: a bucket of brushes and canvases leaning on the wall ══
   {
     const x = -3.5, z = -0.45;
-    warn('bucket', x, z, 0.2); claim(x, z, 0.2);
+    claim(x, z, 0.2);
     S.put(new THREE.CylinderGeometry(0.17, 0.14, 0.32, 16, 1, true), paint(0xe4b84f, { side: THREE.DoubleSide }), x, 0.16, z);
     S.put(new THREE.CylinderGeometry(0.14, 0.14, 0.02, 16), paint(0x9a7a30), x, 0.01, z);
     S.put(new THREE.CylinderGeometry(0.15, 0.15, 0.02, 14), paint(0x7fb3a8), x, 0.27, z);
@@ -299,7 +297,6 @@ export default function dress(kit) {
     g.add(shadow(0.26).translateX(x).translateZ(z));
     // leaning canvases
     const cz = -1.35;
-    warn('canvases', -3.78, cz, 0.12);
     [[0.75, 0.6, 0xfdf8ec, 0], [0.6, 0.5, 0xe8d8c0, 0.12], [0.45, 0.35, 0xfdf8ec, 0.22]].forEach(([w, h, col, off], i) => {
       const art = opaque(128, 100, (c, cw, ch) => { c.fillStyle = '#' + new THREE.Color(col).getHexString(); c.fillRect(0, 0, cw, ch); for (let k = 0; k < 4; k++) blob(c, 20 + k * 30, 30 + (k % 2) * 35, 14, CSS[(k + i * 2) % 6], k + i); });
       const cg = new THREE.Group(); cg.position.set(LW + 0.05 + off * 0.5, 0, cz + (i - 1) * 0.12); cg.rotation.set(0, Math.PI / 2, 0); g.add(cg);
@@ -315,7 +312,7 @@ export default function dress(kit) {
   // ══ LEFT BACK: the taboret on its casters (tap: open a drawer) ══
   {
     const x = -3.55, z = -4.0, ry = Math.PI / 2;
-    warn('taboret', x, z, 0.3); claim(x, z, 0.3);
+    claim(x, z, 0.3);
     const T = S.at(x, 0, z, ry), red = paint(0xe8604c);
     T.box(0.56, 0.7, 0.44, red, 0, 0.42, 0, 0.03);
     T.box(0.6, 0.04, 0.48, benchWood, 0, 0.79, 0, 0.015);
@@ -401,6 +398,239 @@ export default function dress(kit) {
     });
     S.box(0.84, 0.4, 0.03, wood, -3.25, 1.92, BW + 0.03, 0.01);
     plane(0.78, 0.34, sg, -3.25, 1.92, BW + 0.05);
+  }
+
+
+  // ══ FLOOR CLUTTER, off the walkways ══
+  // find a clear spot near (x, z): the exact one if it's free, else the nearest nudge that is
+  const spot = (x, z, r) => {
+    if (free(x, z, r)) return [x, z];
+    for (let d = 0.05; d <= 0.4; d += 0.05) for (let k = 0; k < 8; k++) {
+      const a = k / 8 * Math.PI * 2, nx = x + Math.cos(a) * d, nz = z + Math.sin(a) * d;
+      if (free(nx, nz, r)) return [nx, nz];
+    }
+    return null;
+  };
+  // drop cloths, walked over in paint
+  const cloth = (w, h, x, z, rz, seed) => {
+    const m = opaque(256, Math.round(256 * h / w), (c, cw, ch) => {
+      c.fillStyle = '#ece3cf'; c.fillRect(0, 0, cw, ch);
+      c.strokeStyle = 'rgba(150,130,100,0.25)'; c.lineWidth = 3;
+      for (let k = 0; k < 6; k++) { c.beginPath(); c.moveTo(0, (k + 0.5) * ch / 6 + Math.sin(k + seed) * 6); c.quadraticCurveTo(cw / 2, (k + 0.5) * ch / 6 + 14, cw, (k + 0.5) * ch / 6 - 4); c.stroke(); }
+      for (let i = 0; i < 12; i++) blob(c, ((i * 67 + seed * 31) % cw), ((i * 43 + seed * 17) % ch), 6 + (i % 4) * 4, CSS[(i + seed) % 6], i + seed);
+      c.fillStyle = 'rgba(220,106,154,0.8)';                 // footprints wandering across it
+      for (let k = 0; k < 7; k++) { const fx = cw * 0.12 + k * cw * 0.12, fy = ch * 0.5 + Math.sin(k * 0.9 + seed) * ch * 0.18 + (k % 2 ? 12 : -12); c.beginPath(); c.ellipse(fx, fy, 10, 6, 0.1, 0, 7); c.fill(); c.beginPath(); c.ellipse(fx - 13, fy, 5, 5, 0, 0, 7); c.fill(); }
+    });
+    const p = plane(w, h, m, x, 0.011, z, [-Math.PI / 2, 0, rz]); p.renderOrder = 1;
+  };
+  cloth(1.7, 1.2, -2.45, -3.85, 0.12, 2);
+  cloth(1.3, 1.5, 2.45, -1.75, -0.1, 5);
+  cloth(0.9, 0.7, -1.9, -0.55, 0.3, 8);
+
+  // ── a big easel with a giant button half-painted on it (tap: add a stroke) ──
+  {
+    const at = spot(-2.35, -3.95, 0.36);
+    if (at) {
+      const [x, z] = at; claim(x, z, 0.36);
+      const eg = new THREE.Group(); eg.position.set(x, 0, z); eg.rotation.y = 0.3; g.add(eg);
+      const E = sub(eg);
+      for (const s of [-1, 1]) E.box(0.06, 2.0, 0.06, bark, s * 0.36, 0.98, 0.05, 0.015, [-0.06, 0, -s * 0.15]);
+      E.box(0.06, 1.95, 0.06, bark, 0, 0.93, -0.36, 0.015, [-0.36, 0, 0]);
+      E.box(0.92, 0.06, 0.14, bark, 0, 0.62, 0.11, 0.015);                                  // the ledge
+      E.box(0.86, 0.05, 0.06, bark, 0, 1.69, 0.1, 0.015);                                    // the top clamp
+      E.box(1.24, 0.98, 0.05, cream, 0, 1.17, 0.14, 0.01, [-0.06, 0, 0]);
+      const cv = document.createElement('canvas'); cv.width = 320; cv.height = 256;
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+      let stage = 2;
+      const draw = () => {
+        const c = cv.getContext('2d'), w = cv.width, h = cv.height;
+        c.fillStyle = '#fdf8ec'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = 'rgba(60,55,65,0.55)'; c.lineWidth = 2; c.setLineDash([6, 5]);
+        c.beginPath(); c.roundRect(w * 0.1, h * 0.3, w * 0.8, h * 0.4, 50); c.stroke(); c.setLineDash([]);
+        const f = Math.min(1, stage / 5);
+        c.save(); c.beginPath(); c.roundRect(w * 0.1, h * 0.3, w * 0.8, h * 0.4, 50); c.clip();
+        for (let k = 0; k < 40 * f; k++) { c.strokeStyle = k % 3 ? '#e8604c' : '#f08a6a'; c.lineWidth = 16; c.lineCap = 'round'; const x0 = w * 0.08 + (k * 9) % (w * 0.8 * f + 1); c.beginPath(); c.moveTo(x0, h * 0.28); c.quadraticCurveTo(x0 + 10, h / 2, x0 - 4, h * 0.72); c.stroke(); }
+        c.restore();
+        if (stage >= 5) { c.fillStyle = '#fff'; c.font = `700 64px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('button', w / 2, h / 2 + 4); }
+        c.fillStyle = '#8a7e8e'; c.font = `400 20px ${HAND}`; c.textAlign = 'center'; c.fillText(stage >= 5 ? 'acrylic · done!' : `acrylic · coat ${stage} of 5`, w / 2, h * 0.9);
+        tex.needsUpdate = true;
+      };
+      draw();
+      const face = E.put(new THREE.PlaneGeometry(1.18, 0.92), paint(0xffffff, { map: tex, hatch: 0, unique: true }), 0, 1.17, 0.167, [-0.06, 0, 0]); face.userData.noInk = true;
+      // brushes and a rag on the ledge
+      for (let i = 0; i < 3; i++) E.put(new THREE.CylinderGeometry(0.01, 0.012, 0.32, 6).rotateZ(Math.PI / 2), paint(COLS[i * 2]), -0.2 + i * 0.05, 0.665, 0.18 + i * 0.008);
+      E.put(new THREE.SphereGeometry(0.07, 8, 6).scale(1.3, 0.5, 1), paint(0xdc6a9a), 0.3, 0.67, 0.17);
+      let t0 = -9;
+      live(() => { const s = since(t0); eg.rotation.z = s < 0.8 ? Math.sin(s * 18) * 0.02 * (1 - s / 0.8) : 0; });
+      tap(eg, 'paint another coat', (sfx) => { t0 = now(); stage = stage >= 5 ? 1 : stage + 1; draw(); sfx(stage >= 5 ? [[523, 0.1], [659, 0.1], [784, 0.1], [1047, 0.3]] : [[300, 0.05], [340, 0.08]], stage >= 5 ? 'triangle' : 'sine', 0.4); });
+      g.add(shadow(0.5).translateX(x).translateZ(z));
+    }
+  }
+
+  // ── an oversized brush standing in a bucket, back-left corner ──
+  {
+    const at = spot(-3.3, -4.9, 0.22);
+    if (at) {
+      const [x, z] = at; claim(x, z, 0.22);
+      S.put(new THREE.CylinderGeometry(0.22, 0.18, 0.38, 18, 1, true), paint(0x5f8cc8, { side: THREE.DoubleSide }), x, 0.19, z);
+      S.put(new THREE.CylinderGeometry(0.18, 0.18, 0.02, 16), paint(0x3f6aa0), x, 0.01, z);
+      S.put(new THREE.CylinderGeometry(0.205, 0.205, 0.02, 16), paint(0x7fb3a8), x, 0.33, z);
+      S.put(new THREE.TorusGeometry(0.22, 0.015, 6, 20).rotateX(Math.PI / 2), tin, x, 0.38, z);
+      const B = S.at(x, 0.1, z, 0.4, 0, 0.18);           // leaning a little against the rim
+      B.put(new THREE.CylinderGeometry(0.04, 0.05, 1.25, 10).translate(0, 0.62, 0), paint(0xc23f36));
+      B.put(new THREE.CylinderGeometry(0.075, 0.06, 0.2, 12).translate(0, 1.32, 0), tin);
+      B.put(new THREE.CylinderGeometry(0.06, 0.08, 0.22, 12).translate(0, 1.53, 0), paint(0xe8d0a0));
+      B.put(new THREE.ConeGeometry(0.06, 0.12, 12).translate(0, 1.7, 0), paint(0xe4b84f));
+    }
+  }
+
+  // ── a crate of rolled canvases ──
+  {
+    const at = spot(-3.35, -3.38, 0.22);
+    if (at) {
+      const [x, z] = at; claim(x, z, 0.22);
+      const C = S.at(x, 0, z, 0.3), slat = paint(0xc8a47c);
+      for (const y of [0.06, 0.2, 0.34]) for (const s of [-1, 1]) { C.box(0.42, 0.08, 0.025, slat, 0, y, s * 0.19, 0.008); C.box(0.025, 0.08, 0.4, slat, s * 0.2, y, 0, 0.008); }
+      for (const [dx, dz] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) C.box(0.04, 0.42, 0.04, bark, dx, 0.21, dz, 0.008);
+      [[-0.08, -0.07, 0xfdf8ec, 0.15], [0.07, -0.08, 0xe8d8c0, -0.12], [-0.06, 0.08, 0xfdf8ec, -0.08], [0.08, 0.07, 0xf3dfa8, 0.18], [0, 0, 0xfdf8ec, 0.02]].forEach(([dx, dz, col, lean], i) => {
+        const len = 0.7 + (i % 3) * 0.1;
+        C.put(new THREE.CylinderGeometry(0.045, 0.045, len, 12).translate(0, len / 2, 0), paint(col), dx, 0.03, dz, [lean, 0, -lean * 0.8]);
+        C.put(new THREE.TorusGeometry(0.046, 0.008, 4, 12).rotateX(Math.PI / 2).translate(0, len * 0.6, 0), paint(COLS[i]), dx, 0.03, dz, [lean, 0, -lean * 0.8]);
+      });
+    }
+  }
+
+  // ── a giant squishy paint-blob beanbag (tap: flop on it) ──
+  {
+    const at = spot(-1.55, -2.95, 0.34);
+    if (at) {
+      const [x, z] = at; claim(x, z, 0.32);
+      const geo = new THREE.SphereGeometry(0.36, 28, 18), pos = geo.attributes.position, v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const n = 1 + 0.08 * Math.sin(v.x * 14 + v.z * 9) + 0.06 * Math.sin(v.z * 17 - v.y * 6);
+        v.multiplyScalar(n); v.y = v.y < 0 ? v.y * 0.25 : v.y * 0.75;
+        pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      geo.computeVertexNormals(); geo.translate(0, 0.09, 0);
+      const bb = new THREE.Group(); bb.position.set(x, 0, z); g.add(bb);
+      const BK = sub(bb), pink = paint(0xdc6a9a, { hatch: 0.5 });
+      BK.put(geo, pink);
+      for (let k = 0; k < 5; k++) { const a = k * 1.25 + 0.3; BK.put(new THREE.SphereGeometry(0.06 + (k % 2) * 0.03, 10, 6).scale(1, 0.3, 1), pink, Math.cos(a) * 0.42, 0.015, Math.sin(a) * 0.42); }
+      BK.put(new THREE.SphereGeometry(0.05, 10, 8), paint(0xffffff, { hatch: 0 }), -0.1, 0.33, 0.14).userData.noInk = true;   // a glossy highlight
+      let t0 = -9;
+      live((t) => {
+        const s = since(t0), k = s < 1.6 ? Math.cos(s * 10) * Math.exp(-s * 2.4) : 0.03 * Math.sin(t * 1.6);
+        bb.scale.set(1 + k * 0.25, 1 - k * 0.4, 1 + k * 0.25);
+      });
+      tap(bb, 'flop on the paint blob', (sfx) => { t0 = now(); sfx([[140, 0.1], [110, 0.18], [90, 0.2]], 'sine', 0.6); });
+      g.add(shadow(0.5).translateX(x).translateZ(z));
+    }
+  }
+
+  // ── a stool with a palette on it ──
+  {
+    const at = spot(-1.75, -3.7, 0.2);
+    if (at) {
+      const [x, z] = at; claim(x, z, 0.2);
+      S.put(new THREE.CylinderGeometry(0.19, 0.19, 0.05, 18), benchWood, x, 0.55, z);
+      for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2 + 0.4; S.put(new THREE.CylinderGeometry(0.02, 0.025, 0.56, 6), bark, x + Math.cos(a) * 0.12, 0.27, z + Math.sin(a) * 0.12, [Math.sin(a) * 0.12, 0, -Math.cos(a) * 0.12]); }
+      S.put(new THREE.TorusGeometry(0.13, 0.012, 4, 16).rotateX(Math.PI / 2), bark, x, 0.22, z);
+      S.put(new THREE.CylinderGeometry(0.17, 0.17, 0.018, 20), paint(0xe2c79a), x, 0.585, z, null, [1.15, 1, 0.85]);
+      [[-0.09, -0.05], [-0.01, -0.1], [0.08, -0.06], [0.1, 0.04], [-0.06, 0.07]].forEach(([dx, dz], i) => S.put(new THREE.SphereGeometry(0.03, 8, 6), paint(COLS[i]), x + dx, 0.598, z + dz, null, [1, 0.4, 1]));
+    }
+  }
+
+  // ── RIGHT MIDDLE: a stepladder with a can on top (tap: kick the ladder) ──
+  {
+    const at = spot(2.5, -2.05, 0.34);
+    if (at) {
+      const [x, z] = at; claim(x, z, 0.34);
+      const lad = new THREE.Group(); lad.position.set(x, 0, z - 0.34); lad.rotation.y = -0.3; g.add(lad);   // pivots on its back feet
+      const inner = new THREE.Group(); inner.position.z = 0.09; lad.add(inner);
+      const LK = sub(inner), alu = paint(0xb8bcc6);
+      for (const s of [-1, 1]) {
+        LK.box(0.05, 1.32, 0.04, alu, s * 0.22, 0.64, 0.24, 0.01, [-0.17, 0, 0]);       // front rails
+        LK.box(0.04, 1.3, 0.035, alu, s * 0.2, 0.63, 0.02, 0.01, [0.17, 0, 0]);        // back legs
+      }
+      for (let k = 0; k < 4; k++) { const y = 0.28 + k * 0.28; LK.box(0.44, 0.03, 0.1, alu, 0, y, 0.24 - (y - 0.64) * Math.tan(0.17), 0.008); }
+      LK.box(0.46, 0.05, 0.3, paint(0xe8604c), 0, 1.3, 0.13, 0.015);                 // the top
+      const can = new THREE.Group(); can.position.set(0.05, 1.325, 0.13); inner.add(can);   // wobbles on its base
+      const CK = sub(can);
+      CK.put(new THREE.CylinderGeometry(0.1, 0.1, 0.18, 14).translate(0, 0.09, 0), tin);
+      CK.put(new THREE.CylinderGeometry(0.095, 0.095, 0.01, 14).translate(0, 0.18, 0), paint(0x7fb3a8));
+      CK.put(new THREE.CapsuleGeometry(0.012, 0.08, 3, 6).translate(0.098, 0.13, 0), paint(0x7fb3a8)).userData.noInk = true;
+      CK.put(new THREE.TorusGeometry(0.1, 0.006, 4, 14, Math.PI), dark, 0, 0.18, 0);
+      let t0 = -9;
+      live(() => {
+        const s = since(t0), k = s < 2 ? Math.sin(s * 11) * Math.exp(-s * 2) : 0;
+        lad.rotation.x = -Math.abs(k) * 0.06;
+        can.rotation.z = k * 0.3; can.rotation.x = Math.sin(s * 8) * Math.exp(-s * 2) * (s < 2 ? 0.15 : 0);
+      });
+      tap(lad, 'kick the stepladder', (sfx) => { t0 = now(); sfx([[180, 0.04], [1200, 0.03], [900, 0.05], [1100, 0.03], [800, 0.08]], 'square', 0.2); });
+      g.add(shadow(0.45).translateX(x).translateZ(z));
+    }
+  }
+
+  // ── a stack of paint cans ──
+  {
+    const at = spot(2.35, -1.2, 0.28);
+    if (at) {
+      const [x, z] = at; claim(x, z, 0.28);
+      const P = S.at(x, 0, z, 0.4);
+      [[-0.13, 0, 0], [0.13, 0, 0], [0, 0, -0.2], [-0.065, 1, -0.07], [0.065, 1, -0.07], [0, 2, -0.035]].forEach(([dx, row, dz], i) => {
+        const y = 0.1 + row * 0.205;
+        P.put(new THREE.CylinderGeometry(0.11, 0.11, 0.2, 14), tin, dx * (row ? 1 : 1), y, dz);
+        P.put(new THREE.CylinderGeometry(0.104, 0.104, 0.012, 14), paint(COLS[(i + 2) % 6]), dx, y + 0.104, dz);
+        P.put(new THREE.CylinderGeometry(0.112, 0.112, 0.08, 14, 1, true), paint(COLS[(i + 2) % 6]), dx, y, dz);
+      });
+    }
+  }
+
+  // ── a paint-roller tray by the door (tap: roll a stripe) ──
+  {
+    const at = spot(1.45, -0.4, 0.22);
+    if (at) {
+      const [x, z] = at; claim(x, z, 0.2);
+      S.box(0.3, 0.04, 0.4, paint(0x93abc0), x, 0.03, z, 0.01, [0.12, 0, 0]);
+      const well = plane(0.24, 0.16, paint(0x8f7ae8, { hatch: 0, unique: true }), x, 0.06, z + 0.1, [-Math.PI / 2 + 0.12, 0, 0]);
+      const stripes = [], N = 4;
+      for (let k = 0; k < N; k++) {
+        const m = plane(1, 0.15, paint(COLS[k], { hatch: 0, unique: true }), x + 0.25, 0.013 + k * 0.0005, z + 0.25 - k * 0.17, [-Math.PI / 2, 0, 0]);
+        m.material.transparent = true; m.material.opacity = 0.9; m.renderOrder = 2; m.visible = false; stripes.push(m);
+      }
+      const roll = new THREE.Group(); g.add(roll);             // the roller's axle
+      const RK = sub(roll);
+      RK.put(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 12).rotateX(Math.PI / 2), paint(0x8f7ae8, { unique: true }));
+      RK.put(new THREE.CylinderGeometry(0.008, 0.008, 0.2, 6).rotateX(Math.PI / 2), tin);
+      const handle = new THREE.Group(); roll.add(handle);      // the handle doesn't spin with the roller
+      const HK = sub(handle);
+      HK.put(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 6).translate(0, 0.03, -0.1), tin);                     // the yoke, up from the axle's end
+      HK.put(new THREE.CylinderGeometry(0.008, 0.008, 0.25, 6).rotateZ(0.9).translate(-0.098, 0.138, -0.1), tin);
+      HK.put(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 8).rotateZ(0.9).translate(-0.25, 0.258, -0.1), paint(0xe4b84f));
+      const rollM = roll.children[0].material;
+      let t0 = -9, n = 0, lane = 0;
+      const home = () => [x - 0.02, z + 0.08];
+      live(() => {
+        const s = since(t0), [hx, hz] = home();
+        const lz = z + 0.25 - lane * 0.17;
+        let px = hx, pz = hz;
+        if (s < 2.6) {
+          const u = s < 0.3 ? s / 0.3 : s < 1.6 ? 1 + (s - 0.3) / 1.3 : 2 + (s - 1.6) / 1.0;   // to the lane, along it, back home
+          if (u < 1) { px = hx + (x + 0.25 - hx) * u; pz = hz + (lz - hz) * u; }
+          else if (u < 2) { px = x + 0.25 + (u - 1); pz = lz; stripes[lane].visible = true; stripes[lane].scale.x = Math.max(0.01, u - 1); stripes[lane].position.x = x + 0.25 + (u - 1) / 2; }
+          else { const v = u - 2; px = x + 1.25 + (hx - x - 1.25) * v; pz = lz + (hz - lz) * v; }
+        }
+        roll.position.set(px, 0.045, pz);
+        roll.children[0].rotation.z = roll.children[1].rotation.z = -(px - hx) / 0.045;
+      });
+      tap(roll, 'roll a stripe', (sfx) => {
+        if (since(t0) < 2.6) return;
+        lane = n % N; n++; rollM.color.set(COLS[lane]); well.material.color.set(COLS[lane]);
+        stripes[lane].material.color.set(COLS[lane]); stripes[lane].scale.x = 0.01; t0 = now();
+        sfx([[220, 0.3], [247, 0.3], [262, 0.4]], 'sine', 0.3);
+      });
+    }
   }
 
   S.flush(g); L.flush(g, true);
