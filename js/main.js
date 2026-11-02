@@ -64,6 +64,18 @@ Promise.all([fontsReady, dressReady]).then(() => {
   scene.add(vivi);
   walkers.push({ g: vivi, still: true });
 
+  // shoppers in Citizen Maker, at the spots its dressing left for them (standing ones only:
+  // the town's folk have no sitting pose, and a standing rig on a sofa reads wrong)
+  const shopRoom = rooms.citizens?.group, spots = shopRoom?.userData.shoppers || [];
+  const SHOPPERS = [LOOKS.pia, LOOKS.rex];
+  spots.filter(sp => sp[3] !== 'sit').slice(0, SHOPPERS.length).forEach(([x, z, yaw], i) => {
+    const g = person(SHOPPERS[i]);
+    g.position.set(x, 0, z);
+    g.userData.turn.rotation.y = yaw;
+    shopRoom.add(g);
+    walkers.push({ g, still: true });
+  });
+
   buildHud();
   const reveal = () => $('#title').classList.remove('hide');
   if (window.__loaderDone) window.__loaderDone(reveal); else { $('#loader').classList.add('hide'); reveal(); }

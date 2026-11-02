@@ -393,5 +393,23 @@ export default function dress(kit) {
     poster(0.5, 0.2, 200, (c, w, h) => { c.fillStyle = '#f6eedb'; c.fillRect(0, 0, w, h); font(c, 34, SCRIPT); c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('quiet on set', w / 2, h / 2 + 2); }, x, 1.9, BACK + 0.012, 'back', { board: 0x2a2230, thick: 0.012 });
   }
 
+  // ════════ 13. a road case by the hook rack, and a dolly track laid along the front ════════
+  {
+    const x = 3.55, z = -2.78;
+    SB(0.5, 0.42, 0.62, M.dark, x, 0.23, z, 0.03);
+    for (const y of [0.03, 0.43]) SB(0.52, 0.03, 0.64, M.alu, x, y, z, 0.008);
+    for (const dz of [-0.31, 0.31]) SB(0.52, 0.42, 0.025, M.alu, x, 0.23, z + dz, 0.006);
+    SB(0.08, 0.03, 0.2, M.alu, x - 0.26, 0.3, z, 0.008);
+    const st = kit.flat(0.22, 0.14, texMat(128, 80, (c, w, h) => { c.fillStyle = '#f0862a'; c.beginPath(); c.roundRect(2, 2, w - 4, h - 4, 14); c.fill(); font(c, 30); c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('FRAGILE', w / 2, h / 2 + 2); }), x - 0.252, 0.2, z + 0.1, [0, -PI / 2, 0]);
+    st.renderOrder = 2;
+    SB(0.3, 0.12, 0.24, M.blueL, x, 0.5, z - 0.12, 0.02, [0, 0.2, 0]);
+    claim(x, z, 0.32);
+  }
+  {
+    const za = 0.12, x0 = -2.95, x1 = -0.95;
+    for (const dz of [-0.13, 0.13]) rod([x0, 0.035, za + dz], [x1, 0.035, za + dz], 0.016, M.alu, 8);
+    for (let k = 0; k <= 8; k++) SB(0.06, 0.02, 0.38, M.wood, x0 + 0.05 + k * (x1 - x0 - 0.1) / 8, 0.01, za, 0.004);
+  }
+
   bake();
 }

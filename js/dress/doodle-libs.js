@@ -573,5 +573,276 @@ export default function dress(K) {
     c.strokeStyle = 'rgba(246,196,69,0.8)'; c.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - HPI, r = i % 2 ? 18 : 42; c.lineTo(690 + Math.cos(a) * r, 240 + Math.sin(a) * r); } c.closePath(); c.stroke();
   }, 800, 300, G, 0.9, 0.018, -2.55, [-HPI, 0, 0.08]);
 
+  // ═══ second pass: more of the doodle world, edge to edge ═══
+  const merge1 = (parts) => {                                // [geo, x, y, z] pieces → one geometry
+    const list = parts.map(([geo, x, y, z]) => { const g = geo.index ? geo.toNonIndexed() : geo; g.translate(x, y, z); return g; });
+    return mergeGeometries(list);
+  };
+  // ── 14. a bean bag by the front-left: tap to flop into it ──
+  {
+    const bx = -1.3, bz = -0.12;
+    solid(bx, bz, 0.34);
+    const geo = new THREE.SphereGeometry(0.32, 24, 16), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i); let y = p.getY(i);
+      y = y < 0 ? y * 0.25 : y * 0.72 - 0.07 * Math.exp(-(x * x + z * z) / 0.02);
+      p.setXYZ(i, x * (1 + 0.06 * Math.sin(z * 18)), y + 0.08, z);
+    }
+    geo.computeVertexNormals();
+    const BBg = grp(bx, 0, bz);                                // squashes about its bottom
+    mesh(geo, paint(0xffffff, { hatch: 0.4, map: canvasTex(256, 128, (c, w, h) => {
+      c.fillStyle = '#8f7ae8'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(255,255,255,0.75)'; c.lineWidth = 4;
+      for (let i = 0; i < 16; i++) { c.beginPath(); c.arc((i * 53) % w, (i * 37) % h, 8 + (i % 3) * 4, 0, 7); c.stroke(); }
+      c.fillStyle = '#ffe24a'; for (let i = 0; i < 12; i++) { c.beginPath(); c.arc((i * 71 + 20) % w, (i * 29 + 10) % h, 4, 0, 7); c.fill(); }
+    }) }), BBg);
+    let tBag = -99;
+    tap(BBg, 'flop on the bean bag', (sfx) => { tBag = now(); sfx([[300, 0.08], [220, 0.12], [160, 0.2]], 'triangle', 0.07); });
+    live((t) => {
+      const k = t - tBag, e = k >= 0 && k < 1.6 ? Math.exp(-k * 3.5) * Math.cos(k * 14) : 0;
+      BBg.scale.set(1 + e * 0.14, 1 - e * 0.28, 1 + e * 0.14);
+    });
+  }
+
+  // ── 15. a giant crayon box on the west side: tap and the crayons pop up in turn ──
+  {
+    const cx = -3.2, cz = -1.55;
+    solid(cx, cz, 0.34);
+    const CB = grp(cx, 0, cz); CB.rotation.y = 0.55;
+    const boxM = paint(0xffffff, { hatch: 0.4, map: canvasTex(128, 128, (c, w, h) => {
+      c.fillStyle = '#f6c445'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#3fae5a'; c.beginPath(); c.moveTo(0, h * 0.55); c.quadraticCurveTo(w / 2, h * 0.35, w, h * 0.55); c.lineTo(w, h); c.lineTo(0, h); c.fill();
+    }) });
+    mesh(rb(0.52, 0.5, 0.3, 0.02), boxM, CB, 0, 0.25, 0);
+    decal(0.4, 0.2, (c, w, h) => {
+      c.fillStyle = '#3fae5a'; c.beginPath(); c.roundRect(6, 6, w - 12, h - 12, 20); c.fill(); inkLine(c, 4); c.stroke();
+      c.fillStyle = '#ffe24a'; c.font = `700 44px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('CRAYONS', w / 2, h * 0.42);
+      c.fillStyle = '#fff'; c.font = `400 20px ${HAND}`; c.fillText('64 colours · giant size', w / 2, h * 0.78);
+    }, 200, 100, CB, 0, 0.3, 0.152);
+    const cols = [0xe8463a, 0xf6a53b, 0xffe24a, 0x3fae5a, 0x2a78d6, 0x8f7ae8, 0xe8466b, 0x8a5a3a];
+    const crayons = cols.map((col, i) => {
+      const g = grp(-0.19 + (i % 4) * 0.125 + (i >= 4 ? 0.06 : 0), 0.16, i < 4 ? -0.06 : 0.06, CB);   // slides up out of its slot
+      mesh(merge1([[new THREE.CylinderGeometry(0.04, 0.04, 0.4, 10), 0, 0.2, 0], [new THREE.CylinderGeometry(0.012, 0.04, 0.09, 10), 0, 0.445, 0]]), paint(col), g);
+      g.position.y = 0.16 + (i % 3) * 0.03;
+      return [g, g.position.y];
+    });
+    let tCray = -99;
+    tap(CB, 'pop up the crayons', (sfx) => { tCray = now(); sfx(cols.map((_, i) => [523 * Math.pow(2, i / 7), 0.1]), 'sine', 0.06); });
+    live((t) => {
+      const k = t - tCray;
+      crayons.forEach(([g, y0], i) => {
+        const kk = k - i * 0.09, b = kk >= 0 && kk < 0.9 ? Math.sin(Math.min(1, kk / 0.9) * Math.PI) : 0;
+        g.position.y = y0 + b * 0.22 + Math.sin(t * 0.8 + i) * 0.004;
+        g.rotation.y = b * 2;
+      });
+    });
+  }
+
+  // ── 16. a doodled stage, front-right: tap for Captain Wiggles' big number ──
+  {
+    const sx = 1.9, sz = -0.35;
+    solid(sx, sz, 0.52);
+    const red = paint(0xd8302a), plank = paint(0xc9a06a);
+    B.add(plank, rb(1.0, 0.14, 0.55, 0.02), sx, 0.07, sz);
+    for (const s of [-1, 1]) B.add(red, rb(0.06, 0.8, 0.06, 0.015), sx + s * 0.48, 0.54, sz + 0.22);
+    B.add(red, rb(1.04, 0.14, 0.07, 0.02), sx, 0.97, sz + 0.22);
+    B.add(paint(0xf6c445), rb(1.06, 0.03, 0.08, 0.01), sx, 0.89, sz + 0.23);
+    decal(0.94, 0.78, (c, w, h) => {
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#bfe6ff'); g.addColorStop(1, '#eaf6ff'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#8fd06a'; c.beginPath(); c.moveTo(0, h * 0.72); c.quadraticCurveTo(w * 0.5, h * 0.62, w, h * 0.72); c.lineTo(w, h); c.lineTo(0, h); c.fill();
+      inkLine(c, 4); c.fillStyle = '#fff'; c.beginPath(); c.ellipse(w * 0.25, h * 0.2, 40, 16, 0, 0, 7); c.fill(); c.stroke();
+      c.fillStyle = '#ffe24a'; c.beginPath(); c.arc(w * 0.8, h * 0.17, 24, 0, 7); c.fill(); c.stroke();
+    }, 200, 166, G, sx, 0.53, sz - 0.24);
+    B.add(plank, rb(0.96, 0.8, 0.02, 0.005), sx, 0.53, sz - 0.26);
+    const cap = grp(sx - 0.05, 0.14, sz - 0.02);                // wiggles about his feet
+    const wig = cutout(0.29, 0.53, 120, 220, (c, w, h) => {
+      inkLine(c, 6);
+      c.beginPath(); c.arc(w / 2, h * 0.2, 20, 0, 7); c.fillStyle = '#fff'; c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(w / 2, h * 0.29); c.lineTo(w / 2, h * 0.62); c.moveTo(w / 2, h * 0.62); c.lineTo(w * 0.3, h * 0.97); c.moveTo(w / 2, h * 0.62); c.lineTo(w * 0.7, h * 0.97);
+      c.moveTo(w / 2, h * 0.38); c.lineTo(w * 0.15, h * 0.3); c.moveTo(w / 2, h * 0.38); c.lineTo(w * 0.85, h * 0.27); c.stroke();
+      c.fillStyle = '#2f3a6a'; c.beginPath(); c.moveTo(w * 0.26, h * 0.13); c.quadraticCurveTo(w / 2, h * 0.0, w * 0.74, h * 0.13); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#ffe24a'; c.beginPath(); c.arc(w / 2, h * 0.095, 6, 0, 7); c.fill();
+      c.lineWidth = 3; c.beginPath(); c.arc(w / 2, h * 0.21, 9, 0.2, Math.PI - 0.2); c.stroke();
+      c.fillStyle = INKC; for (const s of [-1, 1]) { c.beginPath(); c.arc(w / 2 + s * 7, h * 0.18, 3, 0, 7); c.fill(); }
+      c.fillStyle = '#ffe24a'; for (const [x, y] of [[0.12, 0.5], [0.88, 0.45], [0.8, 0.7]]) { c.beginPath(); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, r = i % 2 ? 3 : 9; c.lineTo(w * x + Math.cos(a) * r, h * y + Math.sin(a) * r); } c.fill(); }
+    });
+    wig.position.y = 0.265; cap.add(wig);
+    decal(0.6, 0.1, (c, w, h) => { c.font = `700 40px ${SCRIPT}`; c.fillStyle = '#ffe24a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Captain Wiggles!', w / 2, h / 2 + 2); }, 300, 50, G, sx, 0.97, sz + 0.258);
+    // curtains, each gathered towards its own post
+    const curtTex = canvasTex(64, 128, (c, w, h) => {
+      c.fillStyle = '#d8302a'; c.fillRect(0, 0, w, h);
+      for (let x = 0; x < w; x += 16) { const g = c.createLinearGradient(x, 0, x + 16, 0); g.addColorStop(0, 'rgba(0,0,0,0.25)'); g.addColorStop(0.5, 'rgba(255,255,255,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0.25)'); c.fillStyle = g; c.fillRect(x, 0, 16, h); }
+    });
+    curtTex.wrapS = THREE.RepeatWrapping; curtTex.repeat.x = 2;
+    const curtM = paint(0xffffff, { map: curtTex, hatch: 0, side: THREE.DoubleSide });
+    const curts = [-1, 1].map(s => {
+      const g = grp(sx + s * 0.46, 0.14, sz + 0.2);
+      const m = mesh(new THREE.PlaneGeometry(0.47, 0.76).translate(-s * 0.235, 0.38, 0), curtM, g); m.userData.noInk = true;
+      return g;
+    });
+    let tShow = -99;
+    tap(cap, 'start Captain Wiggles’ show', (sfx) => { tShow = now(); sfx([[392, 0.12], [392, 0.12], [523, 0.12], [659, 0.18], [523, 0.12], [784, 0.35]], 'triangle', 0.06); });
+    for (const c of curts) c.userData.toy = cap.userData.toy;
+    live((t) => {
+      const k = t - tShow;
+      let open = 0.3;                                          // fraction of the curtain still drawn
+      if (k >= 0 && k < 0.4) open = 0.3 + smooth(k / 0.4) * 0.7;
+      else if (k >= 0.4 && k < 0.9) open = 1 - smooth((k - 0.4) / 0.5) * 0.85;
+      else if (k >= 0.9 && k < 3) open = 0.15 + smooth((k - 2.4) / 0.6) * 0.15;
+      for (const c of curts) c.scale.x = open;
+      const dancing = k >= 0.7 && k < 3;
+      cap.rotation.z = Math.sin(t * 1.5) * 0.05 + (dancing ? Math.sin(k * 12) * 0.25 : 0);
+      cap.position.y = 0.14 + (dancing ? Math.abs(Math.sin(k * 6)) * 0.12 : 0);
+    });
+  }
+
+  // ── 17. a stack of oversized notebooks to sit on, back-left: tap and the top one opens ──
+  {
+    const nx = -1.85, nz = -5.08;
+    solid(nx, nz, 0.3);
+    const NB = grp(nx, 0, nz); NB.rotation.y = 0.25;
+    const nb = baker(THREE), pageM = paint(0xfffdf6, { hatch: 0.2 });
+    [[0xe8466b, 0.1], [0x2a78d6, -0.08], [0x3fae5a, 0.05], [0xf6c445, 0]].forEach(([col, ry], i) => {
+      nb.add(paint(col), rb(0.56, 0.035, 0.42, 0.01), 0, 0.018 + i * 0.075, 0, [0, ry, 0]);
+      nb.add(pageM, rb(0.54, 0.035, 0.4, 0.004), 0.005, 0.053 + i * 0.075, 0, [0, ry, 0]);
+      if (i < 3) nb.add(paint(col), rb(0.56, 0.008, 0.42, 0.003), 0, 0.074 + i * 0.075, 0, [0, ry, 0]);
+    });
+    for (let i = 0; i < 9; i++) nb.add(metal, new THREE.TorusGeometry(0.022, 0.005, 5, 10), -0.28, 0.27, -0.18 + i * 0.045, [0, 0, 0]);
+    nb.flush(NB);
+    decal(0.48, 0.36, (c, w, h) => {
+      c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(76,155,232,0.4)'; c.lineWidth = 2; for (let y = 24; y < h; y += 18) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      c.font = `700 22px ${HAND}`; c.fillStyle = INKC; c.fillText('The ______ (noun)', 14, 40); c.fillText('began to ______!', 14, 64);
+      inkLine(c, 3); c.beginPath(); c.arc(w * 0.75, h * 0.7, 20, 0, 7); c.stroke(); c.beginPath(); c.moveTo(w * 0.75, h * 0.7 + 20); c.lineTo(w * 0.75, h - 6); c.stroke();
+    }, 240, 180, NB, 0.0, 0.297, 0, [-HPI, 0, 0]);
+    const cover = grp(-0.275, 0.302, 0, NB);                      // hinged on the spiral
+    mesh(rb(0.55, 0.012, 0.42, 0.004), paint(0xf6c445), cover, 0.275, 0, 0);
+    decal(0.3, 0.12, (c, w, h) => { c.font = `700 40px ${SCRIPT}`; c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('my stories', w / 2, h / 2); }, 200, 80, cover, 0.3, 0.007, 0, [-HPI, 0, 0]);
+    let tBook = -99;
+    tap(NB, 'open the giant notebook', (sfx) => { tBook = now(); sfx([[700, 0.05], [1000, 0.06], [1300, 0.1]], 'sine', 0.05); });
+    live((t) => {
+      const k = t - tBook;
+      const a = k >= 0 && k < 3 ? smooth(k / 0.5) * (1 - smooth((k - 2.3) / 0.6)) : 0;
+      cover.rotation.z = a * 2.5 + (a > 0.99 ? 0 : Math.max(0, Math.sin(t * 0.7)) * 0.02);
+    });
+  }
+
+  // ── 18. crumpled paper everywhere it gathers: a pyramid in the back-left corner, a heap by the bin ──
+  {
+    const pb = baker(THREE);
+    let seed = 60;
+    const pyr = (x0, z0, r) => {
+      const d = r * 1.9;
+      [[3, 0], [2, 1], [1, 2]].forEach(([n, lvl]) => {
+        for (let i = 0; i < n; i++) for (let j = 0; j <= i; j++) {
+          const x = x0 + (j - i / 2) * d, z = z0 + (i - (n - 1) * 0.6) * d * 0.87;
+          pb.add(paper, crumple(r, seed++), x, r * 0.9 + lvl * r * 1.55, z, [seed, seed * 2, 0]);
+        }
+      });
+    };
+    solid(-3.62, -5.16, 0.25); pyr(-3.62, -5.16, 0.075);
+    for (const [x, z, r] of [[-3.7, -4.3, 0.08], [-3.55, -4.22, 0.065], [-3.72, -4.15, 0.06], [-3.62, -4.28, 0.06], [-2.3, -3.7, 0.07], [-0.8, -0.02, 0.06], [0.72, -0.4, 0.055]]) {
+      pb.add(paper, crumple(r, seed++), x, r * 0.85 + ((x === -3.62) ? 0.1 : 0), z, [seed, seed, 0]);
+    }
+    claim(-3.65, -4.25, 0.12);
+    pb.flush(G);
+  }
+
+  // ── 19. a castle cut-out in the back-right corner, its flag flying ──
+  {
+    const kx = 3.45, kz = -5.22;
+    solid(kx, kz, 0.2);
+    const castle = cutout(0.92, 1.12, 240, 292, (c, w, h) => {
+      inkLine(c, 6); c.fillStyle = '#d9b48a';
+      const crenel = (x0, x1, y) => { c.lineTo(x0, y); for (let x = x0; x < x1 - 1; x += (x1 - x0) / 5) { c.lineTo(x, y - 14); c.lineTo(x + (x1 - x0) / 10, y - 14); c.lineTo(x + (x1 - x0) / 10, y); c.lineTo(x + (x1 - x0) / 5, y); } };
+      c.beginPath(); c.moveTo(10, h - 6); c.lineTo(10, 70); crenel(10, 70, 70); c.lineTo(70, 120); crenel(70, 170, 120); c.lineTo(170, 70); crenel(170, 230, 70); c.lineTo(230, h - 6); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#8a5a3a'; c.beginPath(); c.moveTo(95, h - 6); c.lineTo(95, 210); c.arc(120, 210, 25, Math.PI, 0); c.lineTo(145, h - 6); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#5fc6ef'; for (const [x, y] of [[40, 110], [200, 110], [120, 160]]) { c.beginPath(); c.roundRect(x - 10, y - 16, 20, 32, 10); c.fill(); c.stroke(); }
+      c.lineWidth = 3; c.strokeStyle = 'rgba(42,34,48,0.4)'; for (const [x, y] of [[30, 200], [60, 240], [190, 190], [200, 250]]) { c.strokeRect(x, y, 22, 12); }
+    });
+    castle.position.set(kx, 0.56, kz);
+    G.add(castle);
+    B.add(paint(0xc9a06a), rb(0.04, 0.7, 0.03, 0.008), kx, 0.34, kz - 0.12, [-0.3, 0, 0]);
+    B.add(dark, new THREE.CylinderGeometry(0.006, 0.006, 0.38, 5), kx - 0.31, 1.03, kz);
+    const flag = grp(kx - 0.31, 1.21, kz);                     // hinged on its pole
+    const fl = mesh(new THREE.PlaneGeometry(0.18, 0.1).translate(0.09, -0.05, 0), paint(0xe8466b, { side: THREE.DoubleSide, hatch: 0 }), flag); fl.userData.noInk = true;
+    live((t) => { flag.rotation.y = Math.sin(t * 3) * 0.35; flag.scale.x = 0.9 + Math.sin(t * 6) * 0.1; });
+  }
+
+  // ── 20. a paper cloud on a stick, swaying, back-right ──
+  {
+    const cx = 3.62, cz = -4.6;
+    solid(cx, cz, 0.12);
+    const CS = grp(cx, 0, cz);                                  // rocks on its foot
+    mesh(rb(0.2, 0.05, 0.2, 0.01), woodDk, CS, 0, 0.025, 0);
+    mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.3, 6), wood, CS, 0, 0.67, 0);
+    const cl = cutout(0.5, 0.3, 200, 120, (c, w, h) => {
+      c.fillStyle = '#fff'; inkLine(c, 6);
+      c.beginPath(); c.arc(w * 0.3, h * 0.62, 32, Math.PI * 0.5, Math.PI * 1.5); c.arc(w * 0.47, h * 0.38, 36, Math.PI, Math.PI * 1.9); c.arc(w * 0.7, h * 0.52, 32, Math.PI * 1.3, Math.PI * 0.5); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = INKC; for (const s of [-1, 1]) { c.beginPath(); c.arc(w * 0.5 + s * 14, h * 0.52, 4, 0, 7); c.fill(); }
+    });
+    cl.position.y = 1.4; cl.rotation.y = -0.5; CS.add(cl);
+    live((t) => { CS.rotation.z = Math.sin(t * 0.9) * 0.04; CS.rotation.x = Math.sin(t * 0.7 + 1) * 0.03; });
+  }
+
+  // ── 21. giant paperclips on the floor and pushpins stuck in the floorboards ──
+  {
+    const clip = (x, z, ry, col) => {
+      const pts = [[0.03, -0.15], [0.03, 0.2], [0, 0.24], [-0.03, 0.2], [-0.03, -0.24], [0, -0.28], [0.05, -0.24], [0.05, 0.28], [0, 0.32], [-0.05, 0.28], [-0.05, 0.04]];
+      const c = Math.cos(ry), s = Math.sin(ry);
+      const curve = new THREE.CatmullRomCurve3(pts.map(([u, v]) => new THREE.Vector3(x + (u * c + v * s) * 1.6, 0.02, z + (-u * s + v * c) * 1.6)));
+      B.add(paint(col), new THREE.TubeGeometry(curve, 60, 0.014, 6));
+    };
+    clip(-2.95, -2.75, 0.7, 0xe8466b); clip(2.6, -1.4, -0.4, 0x2a78d6); clip(-0.6, -0.3, 1.4, 0x3fae5a);
+    for (const [x, z, col] of [[2.15, -1.6, 0xe8463a], [-2.9, -3.25, 0x2a78d6], [1.05, -0.15, 0xf6c445]]) {
+      if (!free(x, z, 0.1)) { console.warn('[doodle-libs] crowded spot', x, z); continue; }
+      claim(x, z, 0.1);
+      B.add(paint(col), new THREE.CylinderGeometry(0.08, 0.085, 0.03, 16), x, 0.015, z);
+      B.add(paint(col), new THREE.CylinderGeometry(0.045, 0.05, 0.14, 12), x, 0.1, z);
+      B.add(paint(col), new THREE.CylinderGeometry(0.095, 0.09, 0.045, 16), x, 0.19, z);
+    }
+  }
+
+  // ── 22. doodles strung right across the room overhead, and paper chains in the back corners ──
+  {
+    const SH = [
+      (c, w, h) => { c.fillStyle = '#ffe24a'; c.beginPath(); for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - HPI, r = i % 2 ? w * 0.2 : w * 0.46; c.lineTo(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r); } c.closePath(); c.fill(); c.stroke(); },
+      (c, w, h) => { c.fillStyle = '#e8466b'; c.beginPath(); c.moveTo(w / 2, h * 0.85); c.bezierCurveTo(-w * 0.1, h * 0.4, w * 0.25, h * 0.05, w / 2, h * 0.32); c.bezierCurveTo(w * 0.75, h * 0.05, w * 1.1, h * 0.4, w / 2, h * 0.85); c.fill(); c.stroke(); },
+      (c, w, h) => { c.fillStyle = '#f6c445'; c.beginPath(); c.moveTo(w * 0.6, 6); c.lineTo(w * 0.25, h * 0.55); c.lineTo(w * 0.5, h * 0.55); c.lineTo(w * 0.35, h - 6); c.lineTo(w * 0.78, h * 0.4); c.lineTo(w * 0.52, h * 0.4); c.closePath(); c.fill(); c.stroke(); },
+      (c, w, h) => { c.fillStyle = '#fffdf6'; c.beginPath(); c.arc(w / 2, h / 2, w * 0.45, 0, 7); c.fill(); c.stroke(); c.strokeStyle = '#2a78d6'; c.beginPath(); for (let a = 0; a < 16; a += 0.2) c.lineTo(w / 2 + Math.cos(a) * a * 2.4, h / 2 + Math.sin(a) * a * 2.4); c.stroke(); },
+      (c, w, h) => { c.fillStyle = '#fffdf6'; c.beginPath(); c.arc(w / 2, h / 2, w * 0.45, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#e8463a'; c.font = `700 ${h * 0.7}px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('!', w / 2, h / 2 + 4); },
+      (c, w, h) => { c.fillStyle = '#7fd8f0'; c.beginPath(); c.arc(w / 2, h / 2, w * 0.45, 0, 7); c.fill(); c.stroke(); c.fillStyle = INKC; c.font = `700 ${h * 0.6}px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('♪', w / 2, h / 2 + 3); },
+      (c, w, h) => { c.fillStyle = '#ffe24a'; c.beginPath(); c.arc(w / 2, h / 2, w * 0.45, 0, 7); c.fill(); c.stroke(); c.fillStyle = INKC; for (const s of [-1, 1]) { c.beginPath(); c.arc(w / 2 + s * 10, h * 0.42, 4, 0, 7); c.fill(); } c.beginPath(); c.arc(w / 2, h * 0.52, 14, 0.2, Math.PI - 0.2); c.stroke(); },
+      (c, w, h) => { c.fillStyle = '#b8f0b0'; c.beginPath(); c.arc(w / 2, h / 2, w * 0.45, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#8f7ae8'; c.font = `700 ${h * 0.6}px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('?', w / 2, h / 2 + 3); },
+    ];
+    const mats = SH.map(draw => { const m = paint(0xffffff, { map: canvasTex(96, 96, (c, w, h) => { inkLine(c, 5); draw(c, w, h); }), hatch: 0, side: THREE.DoubleSide, unique: true }); m.alphaTest = 0.5; return m; });
+    const bits = [];
+    [-1.55, -3.25].forEach((z, li) => {
+      const y = 2.66, sagD = 0.14;
+      const cv = new THREE.CatmullRomCurve3([new THREE.Vector3(-3.97, y, z), new THREE.Vector3(0, y - sagD, z + 0.05), new THREE.Vector3(3.97, y, z)]);
+      const ln = mesh(new THREE.TubeGeometry(cv, 30, 0.005, 4), dark, G); ln.userData.noInk = true;
+      for (let i = 0; i < 9; i++) {
+        const p = cv.getPoint((i + 0.5) / 9);
+        const P = grp(p.x, p.y, p.z);                            // swings from its knot on the string
+        B.add(dark, new THREE.CylinderGeometry(0.003, 0.003, 0.08, 3), p.x, p.y - 0.04, p.z);
+        const m = mesh(new THREE.PlaneGeometry(0.2, 0.2).translate(0, -0.18, 0), mats[(i + li * 3) % mats.length], P);
+        m.userData.noInk = true;
+        bits.push([P, i + li * 9]);
+      }
+    });
+    live((t) => { for (const [P, i] of bits) { P.rotation.x = Math.sin(t * 1.2 + i * 0.8) * 0.18; P.rotation.y = Math.sin(t * 0.5 + i) * 0.6; } });
+    // paper chains, looped link through link
+    const chainCols = [0xe8466b, 0x2a78d6, 0xf6c445, 0x3fae5a].map(c => paint(c, { hatch: 0.3 }));
+    for (const [x0, x1] of [[-3.92, -2.1], [2.1, 3.92]]) {
+      const cv = new THREE.CatmullRomCurve3([new THREE.Vector3(x0, 2.62, -5.42), new THREE.Vector3((x0 + x1) / 2, 2.44, -5.42), new THREE.Vector3(x1, 2.62, -5.42)]);
+      const n = 22;
+      for (let i = 0; i <= n; i++) {
+        const p = cv.getPoint(i / n), tg = cv.getTangent(i / n);
+        const a = Math.atan2(tg.y, tg.x);
+        B.add(chainCols[i % 4], new THREE.TorusGeometry(0.045, 0.01, 4, 12), p.x, p.y, p.z, i % 2 ? [HPI, 0, a] : [0, 0, a], [1.4, 1, 1]);
+      }
+    }
+  }
+
   B.flush(G);
 }
