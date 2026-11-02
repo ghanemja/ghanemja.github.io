@@ -103,7 +103,7 @@ export default function dress(kit) {
       [['Insert hook', 0.02], ['Yarn over', 0.21], ['Pull up a loop', 0.42], ['Yarn over', 0.58], ['Pull through both loops', 0.7], ['Done', 0.98]].forEach(([s, f]) => c.fillText(s, Math.min(w - 90, 8 + f * (w - 16)), h - 8));
     }, -3.99, y, (za + zb) / 2, 'left', { board: 0x2a2230 });
     const off = paint(0x2f5ea8, { hatch: 0 }), on = paint(0xf0862a, { hatch: 0, emissive: 0x7a3a00 });
-    const dia = keys.map(f => { const m = put(new THREE.OctahedronGeometry(0.035), off, -3.955, y + 0.01, zb - 0.05 - f * (L - 0.1));   // (the wall reads front → back) m.scale.set(0.5, 1, 1); return m; });
+    const dia = keys.map(f => { const m = put(new THREE.OctahedronGeometry(0.035), off, -3.955, y + 0.01, zb - 0.05 - f * (L - 0.1)); m.scale.set(0.5, 1, 1); return m; });   // (the wall reads front → back)
     const head = new THREE.Group(); head.position.set(-3.95, y, za); G.add(head);
     const H = sub(head);
     H.box(0.012, 0.42, 0.014, M.orange, 0, 0, 0, 0.004);

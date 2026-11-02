@@ -232,14 +232,17 @@ export default function dress(kit) {
     const hands = [];
     for (const [len, wd] of [[0.09, 0.014], [0.13, 0.009]]) { const hnd = grp(0, 1.8, 0.168, clock); mesh(new THREE.PlaneGeometry(wd, len).translate(0, len / 2, 0), paint(0x2a2230, { hatch: 0 }), hnd).userData.noInk = true; hands.push(hnd); }
     // the glass door over the pendulum
-    const glass = mesh(new THREE.PlaneGeometry(0.28, 0.9), paint(0x1a1418, { hatch: 0 }), clock, 0, 0.98, 0.131); glass.userData.noInk = true;
-    const pend = grp(0, 1.5, 0.12, clock);                                                // pivot at the top of the rod
+    // the case's dark inside, the pendulum in front of it, a faint glass door over both
+    const inside = mesh(new THREE.PlaneGeometry(0.28, 0.9), paint(0x2a1c18, { hatch: 0 }), clock, 0, 0.98, 0.131); inside.userData.noInk = true;
+    const glass = mesh(new THREE.PlaneGeometry(0.28, 0.9), paint(0xcfe0e6, { hatch: 0, opacity: 0.18 }), clock, 0, 0.98, 0.17); glass.userData.noInk = true;
+    for (const s of [-1, 1]) mesh(rb(0.04, 0.94, 0.03, 0.008), wood, clock, s * 0.16, 0.98, 0.15);
+    const pend = grp(0, 1.5, 0.145, clock);                                                // pivot at the top of the rod
     mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.72, 4).translate(0, -0.36, 0), brass, pend).userData.noInk = true;
-    mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.015, 18).rotateX(Math.PI / 2).translate(0, -0.74, 0), brass, pend);
+    mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.015, 18).rotateX(Math.PI / 2).translate(0, -0.74, 0), brass, pend);
     let bong = 0;
     live((t, dt) => {
       bong = Math.max(0, bong - dt * 0.5);
-      pend.rotation.z = Math.sin(t * Math.PI * 0.8) * 0.22 * (1 + bong * 0.5);
+      pend.rotation.z = Math.sin(t * Math.PI * 0.8) * 0.11 * (1 + bong * 0.3);
       const now = new Date(), m = now.getMinutes() + now.getSeconds() / 60, hr = (now.getHours() % 12) + m / 60;
       hands[0].rotation.z = -hr / 12 * Math.PI * 2; hands[1].rotation.z = -m / 60 * Math.PI * 2 - bong * Math.PI * 4;
       clock.rotation.z = Math.sin(t * 30) * bong * 0.006;
@@ -355,7 +358,7 @@ export default function dress(kit) {
         pg.userData.noInk = true;
         lf.rotation.z = 0.04; leaves.push({ lf, t0: -9 });
       }
-      const ribbon = mesh(rb(0.02, 0.003, 0.22, 0.001), paint(0xe4b84f), BK, 0.01, 0.04, 0.24); ribbon.userData.noInk = true;
+      const ribbon = mesh(rb(0.014, 0.003, 0.1, 0.001), paint(0xe4b84f), BK, 0.01, 0.038, 0.19); ribbon.userData.noInk = true;
       const flip = (k, t) => { leaves[k].t0 = t; };
       let nextBreeze = 6;
       live((t) => {
