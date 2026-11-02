@@ -9,6 +9,7 @@ import { PAL, paint, ink, blobShadow } from './style.js';
 import { APPS, LIBRARY, PLACES } from './apps.js';
 import { bush } from './props.js';
 import { DRESS } from './dress/index.js';
+export { dressReady } from './dress/index.js';
 
 const INKC = '#2a2230';
 const HAND = '"Patrick Hand", "Comic Sans MS", cursive', SCRIPT = '"Caveat", "Patrick Hand", cursive';
@@ -2956,8 +2957,13 @@ export function buildInteriors(scene) {
     SETS[place.id]?.(K);
     MINI[place.id]?.(K);
     for (const m of K.minis) gameMarker(K, place.id, m);
-    if (DRESS[place.id]) DRESS[place.id](dressKit(K, place, lib));
-    else scatterToys(K, place.id, i, lib);
+    let dressed = false;
+    if (DRESS[place.id]) {
+      const n = K.g.children.length, cols = K.cols.length;
+      try { DRESS[place.id](dressKit(K, place, lib)); dressed = true; }
+      catch (e) { console.warn(`room ${place.id} left plain:`, e); K.g.children.slice(n).forEach(o => K.g.remove(o)); K.cols.length = cols; }
+    }
+    if (!dressed) scatterToys(K, place.id, i, lib);
     // a soft pool of light on the floor
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
     ink(g, 'mid');

@@ -649,8 +649,8 @@ export default function dress(kit) {
         c.fillStyle = '#e4b84f'; c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 2, 0, 7); c.fill();
         c.fillStyle = '#2a2230'; for (let k = 0; k < 3; k++) { const a = k * 2.094; c.beginPath(); c.arc(w / 2 + Math.cos(a) * 12, h / 2 + Math.sin(a) * 12, 8, 0, 7); c.fill(); }
       }), drum, 0, 0, 0.267); tom.userData.noInk = true;
-      // the two bachi sticks resting on the crossbar
-      for (const s of [-1, 1]) add(new THREE.CylinderGeometry(0.014, 0.018, 0.4, 8), paint(0xc9a26b), X + s * 0.05, 0.62, Z + 0.24, [Math.PI / 2 - 0.2, s * 0.15, 0]);
+      // the two bachi sticks
+      for (const s of [-1, 1]) add(new THREE.CylinderGeometry(0.014, 0.018, 0.4, 8), paint(0xc9a26b), X + 0.02 * s, 0.018 + (s > 0 ? 0.03 : 0), Z + 0.3 + s * 0.04, [0, s * 0.25, Math.PI / 2]);   // the sticks, laid on the mat in front
       let hit = 0;
       live((t, dt) => {
         hit = Math.max(0, hit - dt * 2.5);

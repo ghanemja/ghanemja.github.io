@@ -156,9 +156,9 @@ export default function dress(kit) {
     // deco fan sconces between the posters, flickering like gaslight
     const sconces = [];
     for (const z of [-1.25, -2.25, -3.25]) {
-      S.put(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 16, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(Math.PI / 2), gold, LW + 0.0, 2.08, z);
+      S.box(0.04, 0.05, 0.3, gold, LW + 0.01, 2.2, z, 0.01);
       const m = new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.9 });
-      const fan = put(new THREE.CircleGeometry(0.14, 16, 0, Math.PI), m, LW + 0.03, 2.08, z, [0, Math.PI / 2, 0]); fan.userData.noInk = true;
+      const fan = put(new THREE.CircleGeometry(0.14, 16, 0, Math.PI), m, LW + 0.035, 2.22, z, [0, Math.PI / 2, 0]); fan.userData.noInk = true;
       sconces.push(m);
     }
     live((t) => sconces.forEach((m, i) => { m.opacity = 0.75 + 0.2 * Math.sin(t * 13 + i * 2) * Math.sin(t * 7.3 + i); }));
@@ -182,8 +182,9 @@ export default function dress(kit) {
     const ropeM = paint(0x8e2f3a), ropes = [];
     for (let i = 0; i < 2; i++) {
       const [ax, az] = posts[i], [bx, bz] = posts[i + 1];
-      const m = new THREE.Mesh(new THREE.BufferGeometry(), ropeM); g.add(m);
-      ropes.push({ m, a: new THREE.Vector3(ax, 0.83, az), b: new THREE.Vector3(bx, 0.83, bz) });
+      const a = new THREE.Vector3(ax, 0.83, az), b = new THREE.Vector3(bx, 0.83, bz), mid = a.clone().lerp(b, 0.5); mid.y -= 0.2;
+      const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, mid, b), 14, 0.022, 6), ropeM); g.add(m);
+      ropes.push({ m, a, b });
     }
     const rope = new THREE.Group(); g.add(rope);
     ropes.forEach(r => rope.add(r.m));
@@ -194,7 +195,7 @@ export default function dress(kit) {
       ropes.forEach((r, i) => {
         const mid = r.a.clone().lerp(r.b, 0.5); mid.y -= 0.2 + wob * (i ? -1 : 1) + Math.sin(t * 1.2 + i) * 0.01; mid.x += wob * 0.5;
         const geo = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(r.a, mid, r.b), 14, 0.022, 6);
-        r.m.geometry.dispose(); r.m.geometry = geo;
+        r.m.geometry.dispose(); r.m.geometry = geo; r.m.children.forEach(c => { if (c.userData.isInk) c.geometry = geo; });
       });
     });
     tap(rope, 'twang the velvet rope', (sfx) => { t0 = now(); sfx([[98, 0.25], [110, 0.35]], 'triangle', 0.5); });
@@ -243,7 +244,7 @@ export default function dress(kit) {
     const SK = sub(st);
     SK.box(0.66, 1.18, 0.025, paint(0xc8a47c), 0, 0.62, 0, 0.01);
     const face = SK.put(new THREE.PlaneGeometry(0.62, 1.1), sm, 0, 0.62, 0.014); face.userData.noInk = true;
-    SK.box(0.04, 0.7, 0.025, paint(0xc8a47c), 0, 0.36, -0.2, 0.01, [-0.55, 0, 0]);
+    SK.box(0.04, 0.7, 0.025, paint(0xc8a47c), 0, 0.33, -0.2, 0.01, [0.55, 0, 0]);
     let t0 = -9;
     live(() => { const s = since(t0); const k = s < 2.2 ? Math.sin(s * 10) * Math.exp(-s * 1.8) : 0; st.rotation.x = k * 0.18; st.rotation.z = k * 0.08; });
     tap(st, 'wobble the standee', (sfx) => { t0 = now(); sfx([[200, 0.06], [170, 0.06], [150, 0.1]], 'sine', 0.5); });
@@ -257,7 +258,7 @@ export default function dress(kit) {
     const B = S.at(x, 0, z, ry);
     B.box(0.92, 0.95, 0.56, red, 0, 0.475, 0, 0.03);
     B.box(0.98, 0.06, 0.64, gold, 0, 0.98, 0.02, 0.015);
-    for (let k = 0; k < 3; k++) B.box(0.92 - k * 0.001, 0.025, 0.012, gold, 0, 0.25 + k * 0.25, 0.283, 0.005);
+    for (const ty of [0.25, 0.86]) B.box(0.92, 0.025, 0.012, gold, 0, ty, 0.283, 0.005);
     for (const s of [-1, 1]) B.box(0.06, 0.8, 0.06, gold, s * 0.45, 1.41, 0.27, 0.015);
     B.box(0.92, 0.82, 0.04, plum, 0, 1.41, -0.26, 0.01);
     B.box(1.0, 0.1, 0.66, red, 0, 1.86, 0.0, 0.02);
@@ -382,7 +383,7 @@ export default function dress(kit) {
     const af = new THREE.Group(); af.position.set(x, 0, z); af.rotation.y = -0.6; g.add(af);
     const AK = sub(af);
     for (const s of [-1, 1]) AK.box(0.5, 0.9, 0.03, dark, 0, 0.44, s * 0.13, 0.01, [s * 0.15, 0, 0]);
-    AK.box(0.52, 0.04, 0.08, gold, 0, 0.9, 0, 0.01);
+    AK.box(0.52, 0.05, 0.15, gold, 0, 0.9, 0, 0.015);
     const faces = ['NOW SHOWING|your deck|in four stages', 'TONIGHT|Scope · Story|Visuals · Deck'].map(txt => opaque(160, 240, (c, w, h) => {
       c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h);
       c.strokeStyle = '#e8c46a'; c.lineWidth = 4; c.strokeRect(8, 8, w - 16, h - 16);
@@ -392,7 +393,7 @@ export default function dress(kit) {
       c.fillStyle = '#f6eedb'; c.font = `400 18px ${HAND}`; c.fillText(d, w / 2, 170);
       c.fillStyle = '#e8604c'; c.beginPath(); c.arc(w / 2, 205, 8, 0, 7); c.fill();
     }));
-    const card = new THREE.Group(); card.position.set(0, 0.82, 0.15); card.rotation.x = 0.15; af.add(card);   // hinged at the top
+    const card = new THREE.Group(); card.position.set(0, 0.82, 0.1); card.rotation.x = 0.15; af.add(card);   // hinged at the top
     const cm = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.62).translate(0, -0.33, 0.006), faces[0]); cm.userData.noInk = true; card.add(cm);
     let t0 = -9, n = 0;
     live(() => { const s = since(t0); card.rotation.x = 0.15 - (s < 0.5 ? Math.sin(s / 0.5 * Math.PI) * 1.6 : 0); });
@@ -415,9 +416,9 @@ export default function dress(kit) {
   // ══ dust motes drifting in the projector's beam ══
   {
     const N = 40, mg = new THREE.SphereGeometry(0.008, 4, 3), mat = new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true, opacity: 0.7, depthWrite: false });
-    const motes = new THREE.InstancedMesh(mg, mat, N); motes.userData.noInk = true; g.add(motes);
+    const motes = new THREE.InstancedMesh(mg, mat, N); motes.userData.noInk = true; motes.frustumCulled = false; g.add(motes);
     const M = new THREE.Matrix4(), seeds = Array.from({ length: N }, (_, i) => [Math.sin(i * 12.9) * 0.5 + 0.5, Math.sin(i * 7.7) * 0.5 + 0.5, Math.sin(i * 3.3) * 0.5 + 0.5]);
-    const A = new THREE.Vector3(3.0, 1.12, -2.3), B = new THREE.Vector3(0.6, 1.3, -5.3);
+    const A = new THREE.Vector3(3.05, 1.1, -2.35), B = new THREE.Vector3(0.3, 1.2, -5.2);
     live((t) => {
       seeds.forEach(([a, b, c], i) => {
         const u = (a + t * 0.015 * (0.5 + c)) % 1;
