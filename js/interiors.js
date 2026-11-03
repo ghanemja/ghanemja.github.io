@@ -2017,13 +2017,9 @@ const THEMES = {
         }
       }
     }],
-    floor: (c, w, h) => {                      // a crocheted floor: granny squares, stitch by stitch
-      const pal = [['#e8604c', '#e4b84f', '#7fb3a8', '#f6eedb'], ['#8f7ae8', '#f6eedb', '#dc9e9a', '#e4b84f'], ['#7fb3a8', '#e8604c', '#f3dfa8', '#93abc0'], ['#dc9e9a', '#a8b994', '#8f7ae8', '#f6eedb']];
-      c.fillStyle = '#7a6670'; c.fillRect(0, 0, w, h);          // the shadow showing through the holes
-      const s = w / 2;
-      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) grannySquare(c, i * s, j * s, s, pal[i * 2 + j]);
-    },
-    floorTile: 1.8, floorPx: 512,
+    // pale, blush-washed boards: a calm floor so the crocheted rugs and yarn on it are the colour
+    floor: (c, w, h) => planksDraw(c, w, h, ['#ecd6c4', '#e6cfbb', '#f0dccb', '#e2c9b4'], 10, 'rgba(120,80,70,0.32)'),
+    floorTile: 2.6, floorPx: 512,
     rug: false,
   },
   hookpath: {
