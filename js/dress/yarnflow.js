@@ -41,7 +41,9 @@ function bag(THREE, rb) {
 export default function dress(kit) {
   const { THREE, g, put, box, paint, tap, live, free, claim, rb, canvasTex, HAND, SCRIPT, INKC, D, kit: sub, now, shadow } = kit;
   const S = bag(THREE, rb), L = bag(THREE, rb);           // S: inked statics; L: fine strands, no ink
-  const warn = (what, x, z, r) => { if (!free(x, z, r)) (window.__dressWarn ??= []).push(`yarnflow: ${what} at ${x},${z}`); };
+  const { fx, say, onExit, games, shuffle } = kit;
+  const showAll = (o, v) => o.traverse(q => { q.visible = v; });      // hidden things mustn't catch taps
+  const tapsWithin = (arr, n, secs) => { arr.push(now()); while (arr.length && now() - arr[0] > secs) arr.shift(); if (arr.length >= n) { arr.length = 0; return true; } return false; };
   const COLS = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0xb7a3c6, 0xdc9e9a, 0x8f7ae8, 0xa8b994, 0x93abc0];
   const wood = paint(0x9a7c5c), dark = paint(0x6b4a34), cream = paint(0xf6eedb), brass = paint(0xd8b25a);
   const opaque = (w, h, draw) => paint(0xffffff, { map: canvasTex(w, h, draw), hatch: 0, unique: true });
@@ -67,7 +69,7 @@ export default function dress(kit) {
   // ── the spinning wheel (taps: spin it up) ──
   {
     const x = -3.2, z = -2.4, ry = 0.75;
-    warn('wheel', x, z, 0.45); claim(x, z, 0.42);
+    claim(x, z, 0.42);
     const W0 = new THREE.Group(); W0.position.set(x, 0, z); W0.rotation.y = ry; g.add(W0);
     const B = S.at(x, 0, z, ry);
     B.box(0.95, 0.06, 0.26, wood, 0, 0.32, 0, 0.02);                         // the bench
@@ -112,14 +114,15 @@ export default function dress(kit) {
       foot.position.copy(tip);
       const d = pin.clone().sub(tip); foot.scale.set(1, d.length(), 1); foot.quaternion.setFromUnitVectors(up, d.normalize());
     });
-    tap(W0, 'spin the wheel', (sfx) => { t0 = now(); sfx([[220, 0.12], [262, 0.12], [330, 0.12], [392, 0.3]], 'triangle', 0.5); });
+    const wt = [];
+    tap(W0, 'spin the wheel', (sfx) => { if (tapsWithin(wt, 4, 5)) say('Spinning straw into gold is the shop next door. This one only does wool.'); t0 = now(); sfx([[220, 0.12], [262, 0.12], [330, 0.12], [392, 0.3]], 'triangle', 0.5); });
     g.add(shadow(0.55).translateX(x).translateZ(z));
   }
 
   // ── the reading armchair, granny blanket over the back, knitting on the seat ──
   {
     const x = -3.36, z = -3.6, ry = Math.PI / 2;
-    warn('chair', x, z, 0.4); claim(x, z, 0.4);
+    claim(x, z, 0.4);
     const C = S.at(x, 0, z, ry), seat = paint(0x7fb3a8), seatD = paint(0x5f9a90);
     C.box(0.78, 0.18, 0.62, seat, 0, 0.36, 0.02, 0.06);
     C.box(0.78, 0.7, 0.18, seat, 0, 0.72, -0.24, 0.07, [-0.12, 0, 0]);
@@ -155,7 +158,7 @@ export default function dress(kit) {
   // ── the standard lamp with a fringed shade (taps: pull the chain) ──
   {
     const x = -3.55, z = -4.4;
-    warn('lamp', x, z, 0.18); claim(x, z, 0.18);
+    claim(x, z, 0.18);
     S.put(new THREE.CylinderGeometry(0.16, 0.19, 0.05, 16), dark, x, 0.025, z);
     S.put(new THREE.CylinderGeometry(0.02, 0.025, 1.55, 8), brass, x, 0.8, z);
     const shadeM = paint(0xe8604c, { side: THREE.DoubleSide, emissive: 0x5a2010 });
@@ -178,7 +181,14 @@ export default function dress(kit) {
       const s = since(t0); chain.rotation.z = s < 3 ? Math.sin(s * 9) * 0.5 * Math.exp(-s * 1.5) : Math.sin(t * 1.1) * 0.04;
       chain.rotation.x = s < 3 ? Math.cos(s * 7) * 0.3 * Math.exp(-s * 1.5) : 0;
     });
+    const lt = []; let rave = -9;
+    live((t) => {
+      const s = since(rave);
+      if (s < 6) { fx.filter(`hue-rotate(${Math.round(s * 300)}deg) saturate(1.5)`); fringe.rotation.y += 0.3; bulb.material.color.setHSL((t * 2) % 1, 0.8, 0.65); }
+      else if (rave > 0) { rave = -9; fx.filter(''); bulb.material.color.set(on ? 0xfff1b0 : 0x8a7a60); }
+    });
     tap(chain, 'pull the lamp chain', (sfx) => {
+      if (tapsWithin(lt, 5, 4)) { rave = now(); say('Yarn rave! (Five pulls of the chain. The cats are unimpressed.)'); sfx([[392, 0.08], [523, 0.08], [392, 0.08], [659, 0.08], [392, 0.08], [784, 0.2]], 'square', 0.12); }
       t0 = now(); on = !on;
       bulb.material.color.set(on ? 0xfff1b0 : 0x8a7a60); shadeM.emissive.set(on ? 0x5a2010 : 0x000000);
       sfx([[1400, 0.03], [900, 0.04]], 'square', 0.25);
@@ -189,7 +199,7 @@ export default function dress(kit) {
   // ── the skein tree by the shelf: it's what Mochi's dangling strand hangs from ──
   {
     const x = -2.62, z = -4.7;
-    warn('tree', x, z, 0.15); claim(x, z, 0.16);
+    claim(x, z, 0.16);
     for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2 + 0.3; S.box(0.3, 0.05, 0.06, dark, x + Math.cos(a) * 0.13, 0.025, z + Math.sin(a) * 0.13, 0.015, [0, -a, 0]); }
     S.put(new THREE.CylinderGeometry(0.025, 0.035, 1.5, 8), wood, x, 0.75, z);
     S.put(new THREE.SphereGeometry(0.045, 8, 6), wood, x, 1.52, z);
@@ -207,7 +217,7 @@ export default function dress(kit) {
   // ── a crocheted pouf by the door (taps: plop on it) ──
   {
     const x = -3.4, z = -0.45;
-    warn('pouf', x, z, 0.3); claim(x, z, 0.28);
+    claim(x, z, 0.28);
     const pouf = new THREE.Group(); pouf.position.set(x, 0, z); g.add(pouf);
     const pm = opaque(256, 64, (c, w, h) => {
       const pal = ['#8f7ae8', '#f6eedb', '#e4b84f', '#f6eedb', '#7fb3a8', '#f6eedb'];
@@ -279,7 +289,7 @@ export default function dress(kit) {
   // ── a side table with an umbrella swift feeding a ball winder (taps: crank it) ──
   {
     const x = 3.42, z = -1.5;
-    warn('winder', x, z, 0.32); claim(x, z, 0.3);
+    claim(x, z, 0.3);
     S.put(new THREE.CylinderGeometry(0.32, 0.32, 0.045, 20), wood, x, 0.7, z);
     for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2 + 0.5; S.put(new THREE.CylinderGeometry(0.02, 0.026, 0.68, 6), dark, x + Math.cos(a) * 0.22, 0.34, z + Math.sin(a) * 0.22, [Math.sin(a) * 0.1, 0, -Math.cos(a) * 0.1]); }
     // the swift: a clamp, a post, and the umbrella ribs with a hank stretched round them
@@ -325,7 +335,7 @@ export default function dress(kit) {
   // ── a big basket of yarn balls by the door (taps: one hops out) ──
   {
     const x = 3.42, z = -0.55;
-    warn('basket', x, z, 0.34); claim(x, z, 0.32);
+    claim(x, z, 0.32);
     const bm = opaque(256, 64, (c, w, h) => {
       c.fillStyle = '#c8a47c'; c.fillRect(0, 0, w, h);
       c.strokeStyle = '#8a6448'; c.lineWidth = 3;
@@ -358,7 +368,7 @@ export default function dress(kit) {
   // ── a tower of yarn cones under the shelves ──
   {
     const x = 3.66, z = -4.0;
-    warn('cones', x, z, 0.2); claim(x, z, 0.2);
+    claim(x, z, 0.2);
     S.box(0.36, 0.06, 0.36, wood, x, 0.03, z, 0.015);
     [[0, 0, 0x8f7ae8], [-0.09, 0.1, 0xe4b84f], [0.09, -0.09, 0x7fb3a8], [0.08, 0.09, 0xe8604c]].forEach(([dx, dz, col], i) => {
       S.put(new THREE.CylinderGeometry(0.05, 0.075, 0.26, 12), paint(col, { hatch: 0.7 }), x + dx, 0.19, z + dz);
@@ -371,7 +381,7 @@ export default function dress(kit) {
   // ── the giant-hook jar in the back corner (taps: rattle) ──
   {
     const x = 3.62, z = -5.12;
-    warn('hookjar', x, z, 0.16); claim(x, z, 0.17);
+    claim(x, z, 0.17);
     S.put(new THREE.CylinderGeometry(0.15, 0.13, 0.42, 16, 1, true), paint(0xcfe6ef, { side: THREE.DoubleSide, hatch: 0 }), x, 0.21, z);
     S.put(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 16), paint(0xcfe6ef, { hatch: 0 }), x, 0.01, z);
     S.put(new THREE.TorusGeometry(0.15, 0.015, 5, 20).rotateX(Math.PI / 2), paint(0xe4b84f), x, 0.42, z);
@@ -383,6 +393,7 @@ export default function dress(kit) {
       hk.put(new THREE.CylinderGeometry(0.018, 0.018, len, 8).translate(0, len / 2, 0), paint(col));
       hk.put(new THREE.TorusGeometry(0.025, 0.012, 5, 10, Math.PI * 1.3).translate(0.025, 0, 0).rotateZ(Math.PI * 0.35), paint(col), 0, len, 0);
       hk.put(rb(0.045, 0.1, 0.02, 0.008), cream, 0, len * 0.55, 0);
+      if (i === 3) { hk.put(new THREE.PlaneGeometry(0.16, 0.07), opaque(128, 56, (c, w, h) => { c.fillStyle = '#fffaf0'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `400 15px ${HAND}`; c.textAlign = 'center'; c.fillText('crochet hooks.', w / 2, 22); c.fillText('NOT for pirates.', w / 2, 44); }), 0.0, len * 0.78, 0.022).userData.noInk = true; }
       hooks.push([h, lean]);
     });
     let t0 = -9;
@@ -431,7 +442,7 @@ export default function dress(kit) {
     const st = opaque(320, 260, (c, w, h) => {
       c.fillStyle = '#fbf8f1'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#9ccbe8'; c.fillRect(0, 0, w, 78);
-      c.fillStyle = INKC; c.font = `700 56px ${HAND}`; c.fillText('dc', 16, 60);
+      c.fillStyle = INKC; c.font = `700 56px ${HAND}`; c.fillText('dc', 16, 60); c.font = `400 12px ${HAND}`; c.fillText('(not the capital)', 222, 72);
       c.font = `400 22px ${HAND}`; c.fillText('Double crochet', 86, 58);
       const rows = [['ch ×14', '#f3dfa8'], ['sc ×13', '#f2b8c6'], ['sc ×13', '#f2b8c6'], ['hdc ×13', '#a8dcc6'], ['dc ×13', '#9ccbe8']];
       rows.forEach(([s, col], i) => {
@@ -452,7 +463,7 @@ export default function dress(kit) {
       c.fillStyle = '#c99a68'; c.fillRect(0, 0, w, h);
       c.fillStyle = 'rgba(120,80,40,0.35)'; for (let i = 0; i < 900; i++) c.fillRect((i * 97) % w, (i * 57) % h, 2, 2);
       c.fillStyle = INKC; c.font = `700 30px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('made with YarnFlow', w / 2, 32);
-      const items = [['scarf', '#f2b8c6'], ['coaster', '#e4b84f'], ['amigurumi', '#7fb3a8'], ['beanie', '#8f7ae8'], ['granny', '#e8604c'], ['tote', '#a8b994']];
+      const items = [['scarf', '#f2b8c6'], ['coaster', '#e4b84f'], ['amigurumi', '#7fb3a8'], ['beanie', '#8f7ae8'], ['granny', '#e8604c'], ['cat (accidental)', '#e09a52']];
       items.forEach(([n, col], i) => {
         const x = 18 + (i % 3) * 100, y = 48 + Math.floor(i / 3) * 102, rot = ((i * 37) % 7 - 3) * 0.03;
         c.save(); c.translate(x + 42, y + 46); c.rotate(rot);
@@ -506,17 +517,145 @@ export default function dress(kit) {
   }
   live((t) => planters.forEach((p, i) => { p.rotation.z = Math.sin(t * 0.8 + i * 2) * 0.05; p.rotation.x = Math.sin(t * 0.6 + i) * 0.04; p.rotation.y = Math.sin(t * 0.3 + i) * 0.3; }));
 
-  // ── a rug: a giant crocheted round where the cats run ──
+  // ── a small round rug by the door ──
   {
     const rug = opaque(256, 256, (c, w, h) => {
       const pal = ['#f6eedb', '#e4b84f', '#dc9e9a', '#7fb3a8', '#8f7ae8', '#f6eedb'];
       for (let k = pal.length - 1; k >= 0; k--) { c.fillStyle = pal[k]; c.beginPath(); c.arc(w / 2, h / 2, (k + 1) * w / 12.5, 0, 7); c.fill(); }
-      c.strokeStyle = 'rgba(90,60,70,0.3)'; c.lineWidth = 2;
-      for (let k = 1; k <= 6; k++) for (let a = 0; a < 6.28; a += 0.5 / k) { const r = k * w / 12.5 - 4; c.beginPath(); c.arc(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r, 3, 0, 7); c.stroke(); }
     });
     rug.transparent = true; rug.alphaTest = 0.5;
-    const m = plane(1.5, 1.5, rug, -1.7, 0.012, -3.15, [-Math.PI / 2, 0, 0]); m.renderOrder = 1;
-    const m2 = plane(1.1, 1.1, rug, 1.55, 0.012, -0.55, [-Math.PI / 2, 0, 0.5]); m2.renderOrder = 1;
+    plane(1.1, 1.1, rug, 1.55, 0.012, -0.55, [-Math.PI / 2, 0, 0.5]).renderOrder = 1;
+  }
+
+  // ══ THE SIGNATURE TRICK: pull the loose thread and the big rug is frogged (unravelled)
+  // round by round into a ball, then crocheted back stitch by stitch: a pattern, played ══
+  {
+    const X0 = -1.7, Z0 = -3.15, SZ = 1.5, NR = 6;
+    const PAL = ['#e8604c', '#e4b84f', '#dc9e9a', '#7fb3a8', '#8f7ae8', '#f6eedb'];
+    const STEP = ['ch 4, join', '12 dc', '24 dc', '36 dc', '48 dc', '60 sc, fasten off'];
+    const rugM = opaque(256, 256, () => {}); rugM.transparent = true; rugM.alphaTest = 0.5;
+    const cv = rugM.map.image, cc = cv.getContext('2d');
+    // P: how much is crocheted, in rounds (0..6); round k is whole when P >= k
+    const drawRug = (P) => {
+      const w = 256, rw = w / 2 / (NR + 0.3);
+      cc.clearRect(0, 0, w, w);
+      for (let k = 1; k <= NR; k++) {
+        const f = Math.max(0, Math.min(1, P - (k - 1)));
+        if (f <= 0) break;
+        const r0 = (k - 1) * rw, r1 = k * rw, a1 = f * Math.PI * 2;
+        cc.fillStyle = PAL[(k - 1) % PAL.length];
+        cc.beginPath(); cc.arc(w / 2, w / 2, r1, 0, a1); if (r0 > 0) cc.arc(w / 2, w / 2, r0, a1, 0, true); else cc.lineTo(w / 2, w / 2); cc.closePath(); cc.fill();
+        cc.strokeStyle = 'rgba(90,60,70,0.35)'; cc.lineWidth = 2;
+        const n = 6 * k;
+        for (let s = 0; s < n * f; s++) { const a = (s + 0.5) / n * Math.PI * 2, r = (r0 + r1) / 2; cc.beginPath(); cc.ellipse(w / 2 + Math.cos(a) * r, w / 2 + Math.sin(a) * r, 3, rw * 0.35, a, 0, 7); cc.stroke(); }
+      }
+      rugM.map.needsUpdate = true;
+      return rw;
+    };
+    const RW_ = drawRug(NR);
+    const rug = plane(SZ, SZ, rugM, X0, 0.013, Z0, [-Math.PI / 2, 0, 0]); rug.renderOrder = 1;
+    const toWorld = (P) => {                               // where the stitch being worked sits
+      const k = Math.max(1, Math.min(NR, Math.ceil(P))), f = P - (k - 1), r = ((k - 0.5) * RW_) / 128 * (SZ / 2), a = f * Math.PI * 2;
+      return [X0 + Math.cos(a) * r, Z0 + Math.sin(a) * r];
+    };
+    // the loose thread end, curling off the rug's edge with a little tassel
+    const tail = new THREE.Group(); g.add(tail);
+    const tc = new THREE.CatmullRomCurve3([new THREE.Vector3(X0 + 0.7, 0.02, Z0), new THREE.Vector3(X0 + 0.85, 0.02, Z0 + 0.1), new THREE.Vector3(X0 + 0.95, 0.02, Z0 - 0.05), new THREE.Vector3(X0 + 1.08, 0.03, Z0 + 0.06)]);
+    tail.add(put(new THREE.TubeGeometry(tc, 16, 0.014, 6), paint(0xf6eedb), 0, 0, 0));
+    tail.add(put(new THREE.ConeGeometry(0.035, 0.08, 8).rotateZ(Math.PI / 2), paint(0xe8604c), X0 + 1.12, 0.035, Z0 + 0.06));
+    // the ball it winds into, and the hook that crochets it back
+    const ball = new THREE.Group(); ball.position.set(X0 + 0.85, 0, Z0 - 0.75); g.add(ball);
+    const bm = sub(ball).put(new THREE.SphereGeometry(0.16, 14, 10), paint(0xe8604c)); bm.position.y = 0.16;
+    sub(ball).put(new THREE.TorusGeometry(0.16, 0.012, 5, 18), paint(0xe4b84f), 0, 0.16, 0, [0.7, 0.3, 0]).userData.noInk = true;
+    showAll(ball, false);
+    const str = put(new THREE.CylinderGeometry(0.006, 0.006, 1, 4).translate(0, 0.5, 0), paint(0xe8604c, { hatch: 0 }), 0, 0, 0); str.userData.noInk = true; str.visible = false;
+    const hook = new THREE.Group(); g.add(hook);
+    const HK = sub(hook);
+    HK.put(new THREE.CylinderGeometry(0.016, 0.016, 0.5, 8).translate(0, 0.25, 0), paint(0x8f7ae8));
+    HK.put(new THREE.TorusGeometry(0.022, 0.01, 5, 10, Math.PI * 1.3).rotateZ(Math.PI * 0.3), paint(0x8f7ae8), 0.02, 0.0, 0);
+    HK.put(rb(0.06, 0.12, 0.03, 0.01), paint(0xf6eedb), 0, 0.3, 0);
+    showAll(hook, false);
+    // the lost page was under the rug all along
+    const pg = kit.page(); let pgOut = pg.collected;
+    if (!pg.collected) { pg.position.set(X0 - 0.05, 0.015, Z0 + 0.02); pg.rotation.y = 0.4; g.add(pg); showAll(pg, false); const poke = pg.userData.toy.poke; pg.userData.toy.poke = (sfx) => { poke(sfx); say('A page of Vivi’s guest list! It was under the rug the whole time.'); }; }
+    const A = new THREE.Vector3(), B = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+    const T_UN = 6, T_REST = 3, T_RE = 10;
+    let t0 = -99, lastK = 0, busy = false;
+    onExit(() => { if (busy) { t0 = -99; busy = false; drawRug(NR); showAll(ball, false); showAll(hook, false); str.visible = false; showAll(tail, true); } });
+    live((t) => {
+      if (!busy) return;
+      const s = since(t0);
+      let P, phase;
+      if (s < T_UN) { phase = 0; P = NR * (1 - s / T_UN); }
+      else if (s < T_UN + T_REST) { phase = 1; P = 0; }
+      else if (s < T_UN + T_REST + T_RE) { phase = 2; P = NR * (s - T_UN - T_REST) / T_RE; }
+      else { busy = false; P = NR; drawRug(NR); showAll(ball, false); showAll(hook, false); str.visible = false; showAll(tail, true); say('Stitch by stitch, round by round: that’s how YarnFlow plays a pattern.'); return; }
+      drawRug(P);
+      if (!pgOut && P < 0.6) { pgOut = true; showAll(pg, true); say('Fully frogged… and there’s something under where the rug was!'); }
+      // the ball fattens as the rug unravels, and slims as it's crocheted back
+      const r = 0.05 + 0.13 * (1 - P / NR); bm.scale.setScalar(r / 0.16); bm.position.y = r;
+      ball.rotation.y += phase === 0 ? 0.2 : phase === 2 ? -0.1 : 0;
+      const [sx, sz] = toWorld(Math.max(0.05, P));
+      A.set(sx, 0.02, sz); B.set(ball.position.x, r * 2 - 0.02, ball.position.z);
+      str.position.copy(A); const d = B.clone().sub(A); str.scale.set(1, d.length(), 1); str.quaternion.setFromUnitVectors(UP, d.normalize()); str.visible = P > 0.02;
+      // the hook works each stitch as it comes back
+      if (phase === 2) {
+        if (!hook.visible) showAll(hook, true);
+        const dip = Math.abs(Math.sin(t * 14));
+        hook.position.set(sx, 0.02 + dip * 0.06, sz); hook.rotation.set(0.5 + dip * 0.3, -Math.atan2(sz - Z0, sx - X0), 0.25);
+        const k = Math.max(1, Math.ceil(P));
+        if (k !== lastK) { lastK = k; say(`Round ${k} of ${NR} · ${STEP[k - 1]}`); kit.sfx([[392 + k * 60, 0.08]], 'triangle', 0.1); }
+      } else if (hook.visible) showAll(hook, false);
+    });
+    tap(tail, 'pull the loose thread', (sfx) => {
+      if (busy) return;
+      busy = true; t0 = now(); lastK = 0; showAll(tail, false); showAll(ball, true);
+      say('Frogging! (Rip it, rip it: that’s what crocheters call unravelling.)');
+      sfx([[700, 0.05], [600, 0.05], [500, 0.05], [400, 0.05], [300, 0.1]], 'sawtooth', 0.12);
+    });
+  }
+
+  // ══ THE SMARTER GAME: a pattern detective. Every answer is somewhere in this room. ══
+  {
+    const Q = [
+      { q: 'The stitch chart on the right wall: which stitch is Row 4 worked in?', look: 'the chart on the right wall', choices: ['chain', 'single crochet', 'half double', 'double crochet'], answer: 2, why: 'Row 4 is hdc × 13: half double crochet.' },
+      { q: 'How many hanks of yarn hang on the pegboard behind the spinning wheel?', look: 'the pegboard on the left wall', choices: ['7', '9', '10', '12'], answer: 1, why: 'Nine twisted hanks: five on the top row, four below.' },
+      { q: 'Which of these is NOT on the shelf of crochet treats?', look: 'the shelves on the right wall', choices: ['a mushroom', 'a strawberry', 'a cactus', 'a teapot'], answer: 3, why: 'Mushroom, strawberry, cactus: no teapot (yet).' },
+      { q: 'On the “made with YarnFlow” board, what did somebody make by accident?', look: 'the corkboard by the door, right wall', choices: ['a scarf', 'a cat', 'a beanie', 'a sock'], answer: 1, why: 'A cat. To be fair, the shop has several.' },
+      { q: 'The framed granny square chart over the armchair: how many rounds does it show?', look: 'the chart above the armchair', choices: ['3', '4', '5', '6'], answer: 1, why: 'Rounds 1 to 4. The rug is a six-rounder.' },
+    ];
+    let runId = 0;
+    onExit(() => { runId++; });
+    const spotAt = (() => { for (const [x, z] of [[-2.15, -1.55], [-2.3, -1.4], [-1.9, -1.7], [-2.4, -1.75]]) if (free(x, z, 0.55)) return [x, z]; return [-2.15, -1.55]; })();
+    games.add(spotAt[0], spotAt[1], 'pattern detective', (m) => {
+      const G = m.game, id = ++runId, rounds = shuffle(Q).slice(0, 4);
+      let r = 0, score = 0, stepping = false;
+      const panel = () => { G.open('Pattern detective', { onClose: () => { if (!stepping) runId++; } }); G.score(`${r + 1} of ${rounds.length} · ★ ${score}`); };
+      const ask = () => {
+        panel(); const R = rounds[r]; G.note(''); G.text(R.q);
+        G.choices(R.choices, (i) => {
+          const ok = i === R.answer; if (ok) score++;
+          G.choices(R.choices, () => {}); G.lock(i, R.answer);          // (rebuilt: drops the look button)
+          if (ok) G.good(`Yes! ${R.why}`); else G.bad(`Not quite. ${R.why}`);
+          G.score(`${r + 1} of ${rounds.length} · ★ ${score}`);
+          G.next(r + 1 < rounds.length ? 'next clue →' : 'case closed?', () => { r++; r < rounds.length ? ask() : finish(); });
+        });
+        G.next('let me look (8 s)', () => {
+          stepping = true; G.close(); stepping = false;
+          say(`Have a look at ${R.look}…`);
+          setTimeout(() => { if (id === runId && kit.player()) ask(); }, 8000);
+        });
+      };
+      const finish = () => {
+        G.score(`★ ${score} of ${rounds.length}`); G.note('');
+        G.text(`${score} of ${rounds.length}. ${score === rounds.length ? 'Case closed: you read a room like a pattern.' : 'Patterns are all about noticing. YarnFlow shows you every stitch so you don’t have to squint.'}`);
+        if (score >= 3) G.cheer();
+        G.choices([], () => {});
+        G.next('another case', () => { r = 0; score = 0; rounds.splice(0, rounds.length, ...shuffle(Q).slice(0, 4)); ask(); });
+        G.next('done', () => G.close());
+      };
+      ask();
+    });
   }
 
   S.flush(g); L.flush(g, true);
