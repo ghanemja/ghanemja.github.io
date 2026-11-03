@@ -6,7 +6,7 @@
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export default function dress(kit) {
-  const { THREE, put, paint, rb, tap, live, block, claim, texMat, HAND, SCRIPT, INKC, D, g: G, shadow } = kit;
+  const { THREE, put, paint, rb, tap, live, block, claim, texMat, canvasTex, HAND, SCRIPT, INKC, D, g: G, shadow } = kit;
   const sub = kit.kit;
   const BACK = -D + 0.5;                                   // the back wall's inner face (z)
   const PI = Math.PI;
@@ -32,6 +32,14 @@ export default function dress(kit) {
     lilac: paint(0x8f7ae8), blue: paint(0x5f8cc8), green: paint(0x5fae7f), glass: paint(0x9fd0d8), wood: paint(0xb98d62),
     orange: paint(0xf07a3a), white: paint(0xfffaf0), rubber: paint(0x3a3440),
   };
+  // ── the room's big trick: pull the lever and the whole lab tilts; everything loose reacts
+  //    the way its behaviour class says (roll / slide / tip / hold), then the results come down ──
+  const tilt = { t0: -99 }, onTilt = [];
+  const TH = 0.1;                                          // how far it tilts (rad, right side down)
+  const ease = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+  // 0→1 while the room is tilted; the props' own clocks run off tilt.t0
+  const tiltEnv = (k) => (k < 0 ? 0 : k < 0.8 ? ease(k / 0.8) : k < 4.4 ? 1 : 1 - ease((k - 4.4) / 1.0));
+  const rewind = (k) => (k < 4.4 ? 1 : 1 - ease((k - 4.4) / 1.2));
   const CAT = [['slides', '1,488', '#3f7fd6'], ['tips if pushed high', '358', '#f07a3a'], ['tips easily', '126', '#2fae7f'], ['rolls', '194', '#e9b23a']];
 
   // a flat canvas picture on a backing board; face: 'back' | 'left' | 'right'
@@ -85,6 +93,7 @@ export default function dress(kit) {
       for (let l = 0; l < 4; l++) for (let k = 0; k < 3; k++) {
         if ((b * 4 + l * 3 + k) % 7 === 5) continue;              // a few gaps, like a real shelf
         if (b === 1 && l === 2 && k === 1) continue;               // room for the metronome
+        if (l === 1 && k === 1) continue;                          // the slot a misfit can sit in
         fill[b](xc + (R() - 0.5) * 0.08, lv[l] + 0.015, zc + (k - 1) * 0.2, k);
       }
     }
@@ -105,6 +114,44 @@ export default function dress(kit) {
       });
     }), 3.985, 2.4, (za + zb) / 2, [0, -PI / 2, 0]);
     strip.renderOrder = 2;
+    // ── the misfit: one object shelved in the wrong bay (the puzzle station asks which) ──
+    {
+      const slot = (b) => new THREE.Vector3(xc, lv[1] + 0.015, za + (b + 0.5) * bay);
+      const mk = [
+        (Q) => { Q.box(0.2, 0.15, 0.16, M.card, 0, 0.075, 0, 0.012); Q.box(0.206, 0.025, 0.166, M.wood, 0, 0.075, 0, 0.004); },
+        (Q) => { Q.put(new THREE.CylinderGeometry(0.04, 0.042, 0.2, 12), M.lilac, 0, 0.1, 0); Q.put(new THREE.CylinderGeometry(0.016, 0.034, 0.06, 10), M.lilac, 0, 0.23, 0); Q.put(new THREE.CylinderGeometry(0.018, 0.018, 0.025, 10), M.dark, 0, 0.272, 0); },
+        (Q) => { Q.put(new THREE.ConeGeometry(0.06, 0.22, 14), M.orange, 0, 0.11, 0); },
+        (Q) => { Q.put(new THREE.SphereGeometry(0.075, 14, 10), M.teal, 0, 0.075, 0); },
+      ].map((f) => { const q = new THREE.Group(); f(sub(q)); q.visible = false; G.add(q); return q; });
+      const mis = { kind: 0, bay: 1, t0: -9, from: new THREE.Vector3(), to: new THREE.Vector3() };
+      mis.shuffle = () => {
+        mk.forEach(q => { q.visible = false; });
+        mis.kind = Math.floor(Math.random() * 4);
+        do mis.bay = Math.floor(Math.random() * 4); while (mis.bay === mis.kind);
+        mk[mis.kind].visible = true; mk[mis.kind].position.copy(slot(mis.bay)); mis.t0 = -9;
+      };
+      mis.fix = () => { mis.from.copy(slot(mis.bay)); mis.to.copy(slot(mis.kind)); mis.t0 = kit.now(); mis.bay = mis.kind; };
+      live((t) => {
+        const k = (t - mis.t0) / 1.1; if (k < 0 || k > 1.05) return;
+        const q = mk[mis.kind], e = ease(k);
+        q.position.lerpVectors(mis.from, mis.to, e); q.position.x -= Math.sin(e * PI) * 0.25;    // hops out, along, and back in
+        q.position.y += Math.sin(e * PI) * 0.18;
+      });
+      mis.shuffle();
+      // the puzzle: look at the rack and find the one that doesn't belong
+      const NAMES = ['the slides bay', 'the tips-if-pushed-high bay', 'the tips-easily bay', 'the rolls bay'];
+      const WHAT = ['a crate', 'a tall bottle', 'a traffic cone', 'a ball'];
+      const WHY = ['slides: low and wide, so a push just shoves it along', 'tips if pushed high: tall, so a high push topples it', 'tips easily: narrow and top-heavy', 'rolls: round, so it never waits'];
+      kit.games.replace('predict the ramp', (m) => {
+        mis.shuffle();
+        kit.quiz(m.game, 'Spot the misfit', [
+          { q: 'Somebody shelved one object in the wrong bay of the test rack (on the right wall, sorted by how things move). Go and look: which bay has the misfit?',
+            choices: NAMES.map(n => n[0].toUpperCase() + n.slice(1)), answer: mis.bay, why: `It's ${WHAT[mis.kind]}, sitting in ${NAMES[mis.bay]}.` },
+          { q: `So where should ${WHAT[mis.kind]} live?`, choices: NAMES.map(n => n[0].toUpperCase() + n.slice(1)), answer: mis.kind,
+            why: `${WHAT[mis.kind][0].toUpperCase() + WHAT[mis.kind].slice(1)} ${WHY[mis.kind]}. Watch: it's filing itself.`, reveal: (ok) => { if (ok) mis.fix(); } },
+        ], { intro: 'Behavior Search files every object by how it moved, not how it looks. Somebody on the night shift got careless.', end: (s, n) => (s === n ? 'Perfect filing. You would make a fine search index.' : 'Close! Have another look at the rack.'), onClose: () => {} });
+      }, 'spot the misfit');
+    }
     // a metronome on the shelf: its arm pivots at the bottom
     {
       const mx = xc, my = lv[2] + 0.015, mz = za + 1.5 * bay;
@@ -214,6 +261,7 @@ export default function dress(kit) {
     const hit = new THREE.Group(); hit.position.set(RX, 1.7, -2.1); G.add(hit);
     const marbles = cols.map((c) => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.034, 14, 10), paint(c)); hit.add(m); return m; });
     let clock = 0, boost = 0, ring = 0;
+    onTilt.push(() => { boost = 4; });
     const P = new THREE.Vector3();
     live((t, dt) => {
       boost = Math.max(0, boost - dt);
@@ -275,6 +323,7 @@ export default function dress(kit) {
       balls.push(pv);
     }
     let amp = 0.22, ph = 0, clacks = 0;
+    onTilt.push(() => { amp = 0.8; });
     tap(hit, "swing Newton's cradle", (sfx) => { amp = 0.75; sfx([[1900, 0.03], [0, 0.45], [1900, 0.03], [0, 0.45], [1800, 0.03], [0, 0.45], [1700, 0.03]], 'square', 0.03); });
     live((t, dt) => {
       amp += (0.22 - amp) * Math.min(1, dt * 0.35);
@@ -304,6 +353,7 @@ export default function dress(kit) {
     const rest = parts.map(p => p.position.y);
     kit.g.add(shadow(0.3).translateX(x).translateZ(z));
     let t0 = -99;
+    onTilt.push(() => { if (kit.now() - t0 > 4.5) t0 = kit.now() + 0.5; });       // tall and thin: it tips
     tap(piv, 'topple the tower', (sfx) => { if (kit.now() - t0 > 4.5) { t0 = kit.now(); sfx([[330, 0.1], [0, 0.35], [140, 0.12], [110, 0.18]], 'triangle', 0.08); } });
     live((t) => {
       const k = t - t0;
@@ -319,7 +369,7 @@ export default function dress(kit) {
 
   // ════════ 6. a bin of bouncy balls, front left: tap and they pop like popcorn ════════
   {
-    const x = -1.4, z = 0.02;
+    const x = -1.4, z = -0.12;
     const bin = paint(0x5f8cc8, { side: THREE.DoubleSide });
     const wall = put(new THREE.CylinderGeometry(0.25, 0.21, 0.24, 22, 1, true), bin, x, 0.12, z);
     wall.userData.noInk = true;
@@ -341,6 +391,7 @@ export default function dress(kit) {
       bs.forEach((b, i) => { b.t = -i * 0.05; b.v0 = 2.6 + R() * 1.6; });
       sfx([[600, 0.05], [900, 0.05], [700, 0.05], [1100, 0.05], [800, 0.08]], 'square', 0.03);
     });
+    onTilt.push(() => bs.forEach((b, i) => { b.t = -0.4 - i * 0.04; b.v0 = 1.0 + R() * 0.8; }));
     live((t, dt) => {
       for (const b of bs) {
         b.t += dt;
@@ -375,11 +426,22 @@ export default function dress(kit) {
     });
     for (const s of [-1, 1]) { const m = Wk.flat(0.08, 0.08, com, 0, 0.06, s * (r * 0.89 + 0.008), [0, s < 0 ? PI : 0, 0]); m.renderOrder = 2; }
     kit.g.add(shadow(0.22).translateX(x).translateZ(z));
-    let A = 0, t0 = 0;
-    tap(wob, 'push the wobbler', (sfx) => { A = 0.7; t0 = kit.now(); sfx([[300, 0.08], [400, 0.08], [300, 0.08], [400, 0.12]], 'sine', 0.06); });
+    let A = 0, t0 = 0, pokes = [], flop = -99;
+    tap(wob, 'push the wobbler', (sfx) => {
+      const now = kit.now(); pokes = pokes.filter(p => now - p < 4); pokes.push(now);
+      if (pokes.length >= 5 && now - flop > 5) {                     // the secret: poke it five times and it gives up
+        flop = now; pokes = []; sfx([[400, 0.1], [300, 0.1], [200, 0.3]], 'triangle', 0.07);
+        kit.say("Behaviour updated: “self-righting”, except after five pokes. It needs a minute.");
+        return;
+      }
+      A = 0.7; t0 = now; sfx([[300, 0.08], [400, 0.08], [300, 0.08], [400, 0.12]], 'sine', 0.06);
+    });
     live((t) => {
-      const k = t - t0, th = A * Math.exp(-k * 0.9) * Math.cos(k * 6.5) + 0.03 * Math.sin(t * 1.3);
-      wob.position.x = x + r * th; wob.rotation.z = -th;                  // rolling without slipping
+      const k = t - t0, f = t - flop;
+      let th = A * Math.exp(-k * 0.9) * Math.cos(k * 6.5) + 0.03 * Math.sin(t * 1.3);
+      if (f < 4) th = f < 0.5 ? (PI / 2) * ease(f / 0.5) : f < 3.3 ? PI / 2 + Math.sin(f * 3) * 0.02 : (PI / 2) * (1 - ease((f - 3.3) / 0.7)) * Math.cos((f - 3.3) * 9);
+      const kk = t - tilt.t0, roll = 0.3 * ease((kk - 0.3) / 1.2) * rewind(kk);    // round bottom: it rolls downhill
+      wob.position.x = x + r * th + roll; wob.rotation.z = -th - roll / r;     // rolling without slipping
     });
     claim(x, z, 0.2);
   }
@@ -492,6 +554,7 @@ export default function dress(kit) {
     const bulbM = paint(0xfff2c0, { emissive: 0xffd77a, hatch: 0, unique: true });
     const bulb = Lk.put(new THREE.SphereGeometry(0.045, 12, 8), bulbM, 0, -0.29, 0); bulb.userData.noInk = true;
     let kick = 0, t0 = -9;
+    onTilt.push(() => { kick = 0.45; });
     tap(pv, 'flick the lamp', (sfx) => { kick = 0.5; t0 = kit.now(); sfx([[1200, 0.03], [0, 0.1], [1200, 0.03]], 'square', 0.025); });
     live((t, dt) => {
       kick *= Math.exp(-dt * 0.6);
@@ -524,6 +587,160 @@ export default function dress(kit) {
   // a crate of sandbags by the drop rig
   for (let k = 0; k < 3; k++) S(new THREE.CapsuleGeometry(0.06, 0.16, 4, 10), paint(0xd9c29a), -2.2, 0.06 + k * 0.1, -5.25, [0, 0, PI / 2 + (k - 1) * 0.12]);
   claim(-2.2, -5.25, 0.15);
+
+  // ════════ 12. THE TRICK: the tilt lever, a lineup of loose objects, the whole lab tilting ════════
+  {
+    // the lineup along the front: each object knows its behaviour
+    const loose = [];
+    const add = (x, z, kind, build, { travel = 0, hw = 0, r = 0 } = {}) => {
+      const g = new THREE.Group(); g.position.set(kind === 'tip' ? x + hw : x, 0, z); G.add(g);   // tippers pivot on their downhill edge
+      const inner = new THREE.Group(); inner.position.x = kind === 'tip' ? -hw : 0; g.add(inner);
+      build(sub(inner));
+      kit.g.add(shadow(Math.max(0.12, hw * 2.2 || r * 2.2 || 0.15)).translateX(x).translateZ(z));
+      loose.push({ g, inner, kind, x0: g.position.x, travel, r });
+      return g;
+    };
+    add(-2.75, 0.25, 'slide', (Q) => { Q.box(0.24, 0.16, 0.2, M.card, 0, 0.08, 0, 0.015); Q.box(0.246, 0.03, 0.206, M.wood, 0, 0.08, 0, 0.004); }, { travel: 0.18 });
+    add(-2.35, 0.25, 'tip', (Q) => {
+      Q.put(new THREE.CylinderGeometry(0.045, 0.048, 0.3, 14), M.glass, 0, 0.15, 0);
+      Q.put(new THREE.CylinderGeometry(0.018, 0.04, 0.08, 12), M.glass, 0, 0.34, 0);
+      Q.put(new THREE.CylinderGeometry(0.02, 0.02, 0.03, 10), M.red, 0, 0.395, 0);
+    }, { hw: 0.048 });
+    add(-1.85, 0.25, 'roll', (Q) => { Q.put(new THREE.SphereGeometry(0.09, 16, 12), M.gold, 0, 0.09, 0); Q.put(new THREE.TorusGeometry(0.091, 0.014, 6, 20), M.white, 0, 0.09, 0); }, { travel: 0.5, r: 0.09 });
+    add(-0.95, 0.23, 'hold', (Q) => {                                                       // the anvil
+      Q.box(0.26, 0.06, 0.14, M.dark, 0, 0.03, 0, 0.01); Q.box(0.1, 0.08, 0.1, M.dark, 0, 0.1, 0, 0.01);
+      Q.box(0.3, 0.07, 0.15, M.dark, 0.02, 0.17, 0, 0.012); Q.put(new THREE.ConeGeometry(0.06, 0.14, 8), M.dark, -0.18, 0.17, 0, [0, 0, PI / 2]);
+      Q.flat(0.16, 0.05, texMat(96, 30, (c, w, h) => { c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h); c.font = `700 22px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.fillText('100 kg', w / 2, 23); }), 0.02, 0.17, 0.077).renderOrder = 2;
+    });
+    add(0.95, 0.25, 'roll', (Q) => { Q.put(new THREE.CylinderGeometry(0.05, 0.05, 0.15, 16), M.red, 0, 0.05, 0, [PI / 2, 0, 0]); Q.put(new THREE.CylinderGeometry(0.051, 0.051, 0.06, 16), M.white, 0, 0.05, 0, [PI / 2, 0, 0]); }, { travel: 0.7, r: 0.05 });
+    add(1.85, 0.25, 'tip', (Q) => { Q.put(new THREE.ConeGeometry(0.075, 0.32, 14), M.orange, 0, 0.16, 0); Q.put(new THREE.CylinderGeometry(0.046, 0.055, 0.045, 14), M.white, 0, 0.13, 0); }, { hw: 0.075 });
+    add(2.4, 0.25, 'slide', (Q) => { const cs = [M.blue, M.red, M.gold]; for (let k = 0; k < 3; k++) Q.box(0.2 - k * 0.015, 0.04, 0.15, cs[k], 0, 0.02 + k * 0.041, 0, 0.006, [0, (k - 1) * 0.1, 0]); }, { travel: 0.1 });
+    live((t) => {
+      const k = t - tilt.t0, rw = rewind(k);
+      for (const o of loose) {
+        if (o.kind === 'roll') {                    // round: it goes at once and keeps going
+          const d = Math.min(o.travel, 0.9 * Math.max(0, k - 0.25) ** 2) * rw;
+          o.g.position.x = o.x0 + d; o.inner.rotation.z = -d / o.r;
+        } else if (o.kind === 'slide') {            // low and wide: friction holds it, then it creeps
+          const d = Math.min(o.travel, 0.25 * Math.max(0, k - 0.9) ** 2) * rw;
+          o.g.position.x = o.x0 + d;
+        } else if (o.kind === 'tip') {              // tall and thin: it falls over its downhill edge
+          const f = Math.max(0, k - 0.45) / 0.55;
+          let a = f < 1 ? (PI / 2) * f * f : PI / 2 - Math.abs(Math.sin((f - 1) * 7)) * 0.12 * Math.exp(-(f - 1) * 5);
+          o.g.rotation.z = -a * rw;
+        } else {                                    // heavy: it holds, and looks smug about it
+          o.g.rotation.z = k > 0.3 && k < 4.4 ? Math.sin(k * 30) * 0.004 : 0;
+        }
+      }
+    });
+
+    // the lever: a big handle on a hazard-striped box, front right
+    const lx = 2.78, lz = 0.1;
+    const base = new THREE.Group(); base.position.set(lx, 0, lz); G.add(base);
+    const Lb = sub(base);
+    const stripes = paint(0xffffff, { map: canvasTex(64, 64, (c, w, h) => { c.fillStyle = '#e4b84f'; c.fillRect(0, 0, w, h); c.fillStyle = '#2a2230'; for (let x = -h; x < w; x += 20) { c.beginPath(); c.moveTo(x, h); c.lineTo(x + 10, h); c.lineTo(x + 10 + h, 0); c.lineTo(x + h, 0); c.fill(); } }) });
+    Lb.box(0.3, 0.26, 0.24, stripes, 0, 0.13, 0, 0.02);
+    Lb.box(0.2, 0.03, 0.06, M.dark, 0, 0.27, 0, 0.008);
+    Lb.flat(0.26, 0.09, texMat(128, 44, (c, w, h) => { c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(2, 2, w - 4, h - 4); c.font = `700 26px ${HAND}`; c.fillStyle = '#d2483e'; c.textAlign = 'center'; c.fillText('DO NOT TILT', w / 2, 31); }), 0, 0.15, 0.122).renderOrder = 2;
+    const arm = new THREE.Group(); arm.position.set(0, 0.27, 0); base.add(arm);          // hinged at the box top
+    const Ar = sub(arm);
+    Ar.put(new THREE.CylinderGeometry(0.018, 0.018, 0.55, 10), M.steel, 0, 0.275, 0);
+    Ar.put(new THREE.SphereGeometry(0.06, 14, 10), M.red, 0, 0.58, 0);
+    Ar.put(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 12), M.dark, 0, 0, 0, [0, 0, PI / 2]);
+    Ar.flat(0.14, 0.06, texMat(80, 34, (c, w, h) => { c.fillStyle = '#e8604c'; c.fillRect(0, 0, w, h); c.font = `700 26px ${HAND}`; c.fillStyle = '#fffaf0'; c.textAlign = 'center'; c.fillText('TILT', w / 2, 26); }), 0, 0.42, 0.02).renderOrder = 2;
+    claim(lx, lz, 0.18);
+    const LINES = ['Same tilt, four behaviours. Sorted by how they moved: that’s Behavior Search.',
+      'Tilt probe logged. 106,758 runs now. Still no GPUs.', 'The anvil would like it noted that it did not move.',
+      'Please stop tilting the lab. — Management'];
+    let pulls = 0, O = null, P = { x: 0, z: -2.5 };
+    tap(base, 'pull the TILT lever', (sfx) => {
+      const now = kit.now();
+      if (now - tilt.t0 < 6) return;
+      tilt.t0 = now; P = kit.player() || { x: 0, z: -2.5 };
+      for (const f of onTilt) f();
+      sfx([[160, 0.25], [120, 0.35], [0, 0.4], [880, 0.08], [660, 0.08], [990, 0.08], [520, 0.2]], 'triangle', 0.07);
+      const line = LINES[Math.min(pulls++, LINES.length - 1)];
+      setTimeout(() => kit.say(line), 2600);
+    });
+    live((t) => {
+      const k = t - tilt.t0, env = tiltEnv(k);
+      arm.rotation.x = k < 0.3 ? -0.6 + 1.2 * ease(k / 0.3) : k < 5.4 ? 0.6 : 0.6 - 1.2 * ease((k - 5.4) / 0.4);
+      if (k > 6) arm.rotation.x = -0.6;
+      if (!O) O = G.position.clone();
+      const th = -TH * env, c = Math.cos(th), s = Math.sin(th);
+      G.rotation.z = th;                       // rotate the whole lab about an axis through the player's feet
+      G.position.set(O.x + P.x - P.x * c, O.y - P.x * s, O.z);
+    });
+
+    // the results come down over the behaviour map like a roller blind
+    const blind = new THREE.Group(); blind.position.set(3.965, 2.17, -1.38); blind.rotation.y = -PI / 2; G.add(blind);  // hangs from its roller
+    const roller = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.56, 12), M.steel); roller.rotation.z = PI / 2; roller.position.z = 0.02; blind.add(roller);
+    const sheetM = texMat(480, 320, (c, w, h) => {
+      c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 6; c.strokeRect(3, 3, w - 6, h - 6);
+      c.fillStyle = INKC; font(c, 30); c.textAlign = 'center'; c.fillText('TILT PROBE: RESULTS', w / 2, 40);
+      const cols = [['ROLLED', '#e9b23a', ['ball', 'can', 'wobbler', 'marbles']], ['SLID', '#3f7fd6', ['crate', 'books']], ['TIPPED', '#2fae7f', ['bottle', 'cone', 'tower']], ['HELD', '#6f7d92', ['anvil (smug)']]];
+      cols.forEach(([name, col, items], i) => {
+        const x = 20 + i * (w - 40) / 4, cw = (w - 40) / 4 - 10;
+        c.fillStyle = col; c.beginPath(); c.roundRect(x, 58, cw, 36, 10); c.fill();
+        c.fillStyle = '#fffaf0'; font(c, 22); c.fillText(name, x + cw / 2, 84);
+        font(c, 19, HAND, 400); c.fillStyle = INKC;
+        items.forEach((it, j) => c.fillText(it, x + cw / 2, 124 + j * 30));
+      });
+      font(c, 22, SCRIPT); c.fillStyle = '#d2483e'; c.fillText('same tilt · sorted by how they moved, not how they look', w / 2, h - 22);
+    });
+    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.0).translate(0, -0.5, 0), sheetM); sheet.position.z = 0.03; sheet.userData.noInk = true; sheet.renderOrder = 3; blind.add(sheet);
+    live((t) => { const k = t - tilt.t0, d = k < 2.6 ? 0 : k < 3.4 ? ease((k - 2.6) / 0.8) : k < 13 ? 1 : 1 - ease((k - 13) / 0.8); sheet.scale.y = Math.max(0.001, d); sheet.visible = d > 0.002; });
+
+    // Vivi's page: tucked under the blue tote, a corner showing. Tilt the room and it slides out.
+    const pg = kit.page();
+    if (!pg.collected) {
+      pg.rotation.set(-PI / 2, 0, 0.3); G.add(pg);
+      const A = new THREE.Vector3(-3.48, 0.004, -2.78), B = new THREE.Vector3(-3.28, 0.004, -2.98);
+      let out = 0, taken = false;
+      const poke = pg.userData.toy.poke; pg.userData.toy.poke = (sfx) => { taken = true; poke(sfx); };
+      onTilt.push(() => { out = Math.max(out, 0.001); });
+      live((t, dt) => {
+        if (taken) return;
+        const k = t - tilt.t0;
+        if (out > 0 && out < 1 && k > 0.6) out = Math.min(1, out + dt / 1.3);
+        const e = ease(out);
+        pg.position.lerpVectors(A, B, e); pg.position.y += Math.sin(e * PI) * 0.12;
+        pg.rotation.z = 0.3 + e * 2.2;
+      });
+    }
+  }
+
+  // ════════ 13. jokes: the lost & found of objects that misbehaved, and the employee of the month ════════
+  {
+    const x = -3.62, z = -0.82;
+    SB(0.42, 0.26, 0.36, M.card, x, 0.13, z, 0.015);
+    SB(0.43, 0.03, 0.37, M.wood, x, 0.26, z, 0.006);
+    S(new THREE.CylinderGeometry(0.01, 0.01, 0.5, 6), M.wood, x - 0.12, 0.45, z - 0.12);
+    poster(0.34, 0.2, 170, (c, w, h) => { c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h); font(c, 22); c.fillStyle = INKC; c.textAlign = 'center'; c.fillText('LOST & FOUND', w / 2, 30); font(c, 15, HAND, 400); c.fillText('objects that', w / 2, 56); c.fillText('misbehaved', w / 2, 76); }, x - 0.12, 0.72, z - 0.11, 'back', { board: 0x8a6448 });
+    // a square wheel (it "rolls"), a cube ball, and a ball-shaped crate
+    const wheel = new THREE.Group(); wheel.position.set(x + 0.05, 0.34, z + 0.02); G.add(wheel);       // turns on its axle
+    const Wh = sub(wheel);
+    Wh.box(0.16, 0.16, 0.05, M.rubber, 0, 0, 0, 0.012);
+    Wh.put(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 10), M.steel, 0, 0, 0, [PI / 2, 0, 0]);
+    SB(0.1, 0.1, 0.1, M.red, x - 0.1, 0.32, z + 0.05, 0.01, [0.3, 0.5, 0]);
+    S(new THREE.SphereGeometry(0.06, 12, 8), M.card, x + 0.12, 0.3, z - 0.08);
+    S(new THREE.TorusGeometry(0.061, 0.01, 6, 14), M.wood, x + 0.12, 0.3, z - 0.08, [PI / 2, 0, 0]);
+    let t0 = -9;
+    const quips = ['Square wheel. Filed under “slides”. Deeply disappointing.', 'The cube ball refuses to roll on principle.', 'The round crate rolled away twice. It’s on probation.'];
+    let qi = 0;
+    tap(wheel, 'poke the lost & found', (sfx) => { t0 = kit.now(); sfx([[200, 0.08], [0, 0.12], [200, 0.08], [0, 0.12], [150, 0.15]], 'square', 0.04); kit.say(quips[qi++ % quips.length]); });
+    live((t) => { const k = t - t0; wheel.rotation.z = k < 1.2 ? -(Math.floor(k / 0.3) + ease((k % 0.3) / 0.3)) * PI / 2 : 0; wheel.position.y = 0.34 + (k < 1.2 ? Math.abs(Math.sin(k / 0.3 * PI)) * 0.03 : 0); });
+    claim(x, z, 0.24);
+  }
+  poster(0.38, 0.46, 160, (c, w, h) => {
+    c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h);
+    font(c, 15); c.fillStyle = INKC; c.textAlign = 'center'; c.fillText('EMPLOYEE OF THE MONTH', w / 2, 22);
+    c.fillStyle = '#e6edf0'; c.fillRect(20, 32, w - 40, 110);
+    c.fillStyle = '#c8a47c'; c.fillRect(48, 62, w - 96, 70); c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(48, 62, w - 96, 70);
+    c.strokeStyle = '#8a6448'; c.beginPath(); c.moveTo(48, 97); c.lineTo(w - 48, 97); c.stroke();
+    c.fillStyle = '#e4b84f'; c.beginPath(); c.arc(w - 40, 150, 14, 0, 7); c.fill();
+    font(c, 17, SCRIPT); c.fillStyle = INKC; c.fillText('the crate', w / 2, 166); font(c, 12, HAND, 400); c.fillText('never once moved', w / 2, 184);
+  }, -3.99, 1.62, -4.12, 'left', { board: 0xe4b84f });
 
   bake();
 }

@@ -152,7 +152,30 @@ export default function dress(kit) {
       sheet.rotation.x = Math.sin(t * 0.9) * 0.012 + (goal - open) * 0.12;
       hem.rotation.x = sheet.rotation.x;
     });
+    // the secret: tap the curtain five times quickly and fitting room 1 turns out to be… occupied
+    const moth = grp(3.55, -5, -5.0); moth.visible = false;
+    const mothM = paint(0xb8a890, { side: THREE.DoubleSide });
+    mesh(new THREE.CapsuleGeometry(0.018, 0.07, 4, 8).rotateX(Math.PI / 2), paint(0x7a6a58), moth);
+    const wings = [-1, 1].map(s => { const w = grp(s * 0.008, 0.004, 0, moth); const pl = mesh(new THREE.CircleGeometry(0.085, 3, s > 0 ? -0.6 : Math.PI - 0.6 + 0, 1.2).rotateX(-Math.PI / 2), mothM, w); pl.userData.noInk = true; return w; });
+    let mothT = -1, ctaps = [];
+    live((t, dt) => {
+      if (mothT < 0) return;
+      mothT += dt;
+      const u = mothT / 9, a = mothT * 1.3;
+      if (u >= 1) { mothT = -1; moth.visible = false; return; }
+      const k = Math.min(1, mothT);                                     // out of the booth, then loops round the shop
+      moth.position.set(3.55 + (2.2 + Math.sin(a) * 1.2 - 3.55) * k, 1.3 + (0.3 + Math.sin(a * 2.3) * 0.3) * k, -5.0 + (-3.2 + Math.cos(a) * 1.2 + 5.0) * k);
+      moth.rotation.y = a + Math.PI / 2;
+      wings.forEach((w, i) => { w.rotation.z = (i ? 1 : -1) * Math.sin(t * 40) * 0.9; });
+    });
     tap(cur, 'fitting-room curtain', (sfx) => {
+      const now = kit.now(); ctaps = ctaps.filter(q => now - q < 4); ctaps.push(now);
+      if (ctaps.length >= 5 && mothT < 0) {
+        ctaps = []; goal = 1; reopenAt = now + 4; mothT = 0; moth.visible = true;
+        sfx([[300, 0.05], [320, 0.05], [300, 0.05], [340, 0.05], [300, 0.1]], 'square', 0.02);
+        setTimeout(() => kit.say('Fitting room 1 was… occupied. By a moth. It says it is “just browsing”.'), 400);
+        return;
+      }
       goal = goal > 0.6 ? 0.3 : 1; reopenAt = goal > 0.6 ? kit.now() + 3 : -1;
       sfx([[1200, 0.04], [900, 0.05], [700, 0.07], [500, 0.09]], 'triangle', 0.03);
       if (goal > 0.6) setTimeout(() => sfx([[523, 0.1], [659, 0.1], [784, 0.25]], 'triangle', 0.05), 3000);
@@ -178,6 +201,11 @@ export default function dress(kit) {
         const hold = grp(Math.cos(a) * RR, RH, Math.sin(a) * RR, spin); hold.rotation.y = -a;   // hook on the rail, garment radial
         const GB = batch(hold);
         garment(GB, KINDS[(i * 3) % KINDS.length], C(i * 5 + 1), null, C(i + 6));
+        if (i === 0) {                                                  // the lost page, tucked in a shirt pocket, wall side
+          GB.box(0.1, 0.09, 0.02, C(i + 6), 0.08, -0.26, 0.032, 0.006);          // a breast pocket on the shirt's face
+          const pg = kit.page();
+          if (!pg.collected) { pg.position.set(0.08, -0.29, 0.045); pg.rotation.set(0, 0, 0.12); pg.scale.setScalar(0.72); hold.add(pg); }
+        }
         GB.flush();
         swing.push(hold);
       }
@@ -186,7 +214,7 @@ export default function dress(kit) {
       const card = mesh(new THREE.PlaneGeometry(0.3, 0.18), texMat(150, 90, (c, w, h) => {
         c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 4; c.strokeRect(2, 2, w - 4, h - 4);
         c.fillStyle = '#c0392b'; c.font = `700 40px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('½ off', w / 2, 52);
-        c.fillStyle = INKC; c.font = `20px ${HAND}`; c.fillText('this rail only', w / 2, 78);
+        c.fillStyle = INKC; c.font = `17px ${HAND}`; c.fillText('this rail only', w / 2, 70); c.fillText('(check the pockets!)', w / 2, 86);
       }), spin, 0, RH + 0.2, 0); card.userData.noInk = true;
       add(new THREE.CylinderGeometry(0.005, 0.005, 0.12, 4), metal, RX, RH + 0.07, RZ);
       let vel = 0;
@@ -450,18 +478,6 @@ export default function dress(kit) {
       });
       tap(bag, 'shopping bag', (sfx) => { pop = 1; sfx(Array.from({ length: 6 }, (_, k) => [2400 + (k % 3) * 600, 0.025]), 'square', 0.012); });
     });
-    // two framed fashion plates above the sofa
-    [[-0.85, 0, 'Spring'], [-0.15, 1, 'Autumn']].forEach(([z, k, word]) => {
-      addBox(0.04, 0.6, 0.46, paint(0xd9a640), -EW + 0.02, 1.62, z, 0.01);
-      put(new THREE.PlaneGeometry(0.4, 0.54), texMat(160, 216, (c, w, h) => {
-        c.fillStyle = k ? '#f3e0c8' : '#e9f0e4'; c.fillRect(0, 0, w, h);
-        // a pattern plate: a coat and a dress drawn as flat sewing patterns
-        c.strokeStyle = INKC; c.lineWidth = 3; c.setLineDash([6, 4]);
-        c.beginPath(); c.moveTo(30, 40); c.lineTo(70, 30); c.lineTo(80, 60); c.lineTo(76, 150); c.lineTo(24, 150); c.lineTo(20, 60); c.closePath(); c.stroke();
-        c.beginPath(); c.moveTo(110, 40); c.lineTo(130, 40); c.lineTo(150, 150); c.lineTo(90, 150); c.closePath(); c.stroke();
-        c.setLineDash([]); c.fillStyle = k ? '#8e2f3a' : '#2f5a52'; c.font = `700 30px ${SCRIPT}`; c.textAlign = 'center'; c.fillText(word, w / 2, 192);
-      }), -EW + 0.045, 1.62, z, [0, Math.PI / 2, 0]).userData.noInk = true;
-    });
   }
 
   // ═════════════ 9. the nesting table of folded stacks, by the cutting table ═════════════
@@ -589,6 +605,166 @@ export default function dress(kit) {
         jt = 0; sfx([[330, 0.06], [660, 0.08], [990, 0.1], [495, 0.12]], 'square', 0.025);
       });
     }
+  }
+
+  // ═════════════ 14. THE SIGNATURE TRICK: the shop cuts a real citizen, and they walk out onto the street ═════════════
+  // A client's order comes in; every clue points at something in this shop (the sofa, the bolt on
+  // the cutting table, what the customers are wearing). Get it right and they're cut to measure;
+  // either way the new citizen is sewn for real and strolls the town from then on.
+  {
+    const TOPS = [
+      ['sea-green', 0x7fb3a8, 'a coat the colour of the sofa'],
+      ['wine red', 0x8e2f3a, 'a coat the colour of the fitting-room curtain'],
+      ['mustard', 0xe4b84f, 'a coat the colour of the ottoman by the sofa'],
+      ['rose pink', 0xf2a7bd, 'a coat the colour of the big hat box on the top shelf'],
+    ];
+    const BOTTOMS = [
+      ['navy', 0x3f5872, 'trousers in the cloth rolled out on the cutting table'],
+      ['ink black', 0x2a2230, 'trousers as dark as the sewing machine'],
+      ['conker brown', 0x5c4030, 'trousers the colour of the hat tree'],
+      ['slate grey', 0x6f7d92, 'trousers the grey of the clothes rails'],
+    ];
+    const HATS = [
+      ['a flat cap', 'flat', 'the same kind of hat as the customer admiring themselves in the long mirror'],
+      ['a cycling helmet', 'helmet', 'the same kind of hat as the customer browsing the round rack'],
+    ];
+    const HAT_DECOYS = [['a peaked cap', 'cap'], ['a beanie', 'beanie'], ['no hat', null]];
+    const CUTS = [['a long coat', 'coat'], ['a cardigan', 'cardigan'], ['a work apron', 'apron'], ['a hi-vis vest', 'vest'], ['a dress', 'dress'], ['just the shirt', null]];
+    const BUILDS = [['slim', 0.92, 1.0, 0], ['athletic', 1.02, 1.01, 0], ['broad', 1.14, 1.0, 0.3], ['round', 1.1, 0.97, 0.8], ['lanky', 0.9, 1.06, 0], ['petite', 0.95, 0.94, 0]];
+    const HABITS = ['walks the dog twice a day', 'reads the paper on the bench', 'always has a coffee', 'is never off the phone', 'sits by the fountain', 'hums the same four notes', 'counts the pigeons', 'is training for a marathon (slowly)', 'collects other people’s lost gloves'];
+    const FIRST = ['Rosa', 'Otto', 'Pia', 'Rex', 'Vivi', 'Juno', 'Milo', 'Ines', 'Theo', 'Nell', 'Arlo', 'Sunny', 'Wren', 'Bea', 'Kofi', 'Lupe', 'Ada', 'Ravi', 'Mei', 'Tomas', 'Yara', 'Idris'];
+    const SURN = ['Button', 'Hem', 'Stitchwell', 'Bobbin', 'Thimble', 'Pleat', 'Seam', 'Selvedge', 'Gusset', 'Dart', 'Tuck', 'Bias'];
+    const SKIN = ['fair', 'rose', 'olive', 'tan', 'brown', 'deep'], HAIR = [0x2b1d1a, 0x1d1a1a, 0x7a4a2a, 0xc98a4a, 0x9a9490, 0xe0c080, 0x8e2f3a];
+    const HAIRSTYLE = ['bob', 'bun', 'crop', 'bald', 'pony', 'curls'];
+    const SHOES = [0x5a3d2c, 0x2a2230, 0xe9e2d0, 0x8e2f3a, 0x3f5872];
+    const pick = kit.anyOf, shuffle = kit.shuffle;
+
+    // ── the send-off: the finished outfit rises off the cutting table on its hanger and glides out of the door ──
+    const send = grp(0, -5, 0); send.visible = false;
+    const topM = paint(0xffffff, { unique: true }), botM = paint(0xffffff, { unique: true }), hatM = paint(0xffffff, { unique: true });
+    mesh(new THREE.TorusGeometry(0.03, 0.006, 5, 10, Math.PI * 1.3), metal, send, 0, 0.0, 0, [0, 0, 0.2]);
+    mesh(rb(0.34, 0.02, 0.025, 0.006), hangerM, send, 0, -0.045, 0);
+    mesh(rb(0.3, 0.46, 0.06, 0.025), topM, send, 0, -0.29, 0);
+    for (const s of [-1, 1]) mesh(rb(0.08, 0.38, 0.05, 0.02), topM, send, s * 0.18, -0.26, 0, [0, 0, s * 0.12]);
+    for (const s of [-1, 1]) mesh(rb(0.12, 0.5, 0.045, 0.02), botM, send, s * 0.065, -0.72, 0);
+    const sendHat = mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.012, 16), hatM, send, 0, 0.09, 0);
+    mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.07, 14), hatM, sendHat, 0, 0.035, 0);
+    let sendT = -1;
+    const FROM = V3(-1.9, 1.0, -2.4), TO = V3(0, 1.6, 0.9);
+    live((t, dt) => {
+      if (sendT < 0) return;
+      sendT += dt;
+      const u = Math.min(1, sendT / 3.2), e = u * u * (3 - 2 * u);
+      send.position.lerpVectors(FROM, TO, e); send.position.y += Math.sin(u * Math.PI) * 0.6 + (u < 0.2 ? (u / 0.2 - 1) * 0.6 : 0);
+      send.rotation.y = Math.sin(sendT * 4) * 0.4; send.rotation.z = Math.sin(sendT * 6) * 0.08;
+      send.scale.setScalar(1 - Math.max(0, u - 0.75) * 3);
+      if (u >= 1) { sendT = -1; send.visible = false; }
+    });
+
+    // ── the corkboard: the citizens this shop has cut, read back from the street's own list ──
+    const boardTex = canvasTex(360, 240, () => {});
+    const drawBoard = () => {
+      const c = boardTex.image.getContext('2d'), w = 360, h = 240;
+      c.fillStyle = '#c69c6d'; c.fillRect(0, 0, w, h);
+      for (let k = 0; k < 500; k++) { c.fillStyle = `rgba(90,60,30,${0.1 + (k % 5) * 0.03})`; c.fillRect((k * 97) % w, (k * 53) % h, 2, 2); }
+      c.fillStyle = INKC; c.textAlign = 'center'; c.font = `700 28px ${SCRIPT}`; c.fillText('Freshly cut — now on the street', w / 2, 30);
+      let list = [];
+      try { list = JSON.parse(localStorage.getItem('street-citizens') || '[]').slice(-3).reverse(); } catch (e) { /* ok */ }
+      if (!list.length) { c.font = `22px ${HAND}`; c.fillText('nobody yet. cut the first!', w / 2, 130); c.fillText('(★ at the cutting table)', w / 2, 158); }
+      list.forEach(({ look, name }, i) => {
+        const x0 = 14 + i * 114, y0 = 46, cw = 104, chh = 180;
+        c.save(); c.translate(x0 + cw / 2, y0 + chh / 2); c.rotate((i - 1) * 0.05); c.translate(-cw / 2, -chh / 2);
+        c.fillStyle = '#f6ecd0'; c.fillRect(0, 0, cw, chh);
+        // the pattern: a coat and trousers, dashed, in the client's colours
+        const hex = (v) => '#' + new THREE.Color(v ?? 0x888888).getHexString();
+        c.fillStyle = hex(look.top); c.beginPath(); c.moveTo(30, 28); c.lineTo(74, 28); c.lineTo(86, 52); c.lineTo(78, 56); c.lineTo(74, 96); c.lineTo(30, 96); c.lineTo(26, 56); c.lineTo(18, 52); c.closePath(); c.fill();
+        c.fillStyle = hex(look.bottom); c.fillRect(32, 98, 18, 46); c.fillRect(54, 98, 18, 46);
+        c.strokeStyle = INKC; c.lineWidth = 2; c.setLineDash([4, 3]); c.strokeRect(6, 6, cw - 12, 144); c.setLineDash([]);
+        c.fillStyle = INKC; c.font = `700 17px ${HAND}`; c.fillText(name.split(' ')[0], cw / 2, 166);
+        c.font = `13px ${HAND}`; c.fillText(look.hat ? 'with a ' + look.hat : 'no hat', cw / 2, 178);
+        c.fillStyle = '#e8604c'; c.beginPath(); c.arc(cw / 2, 8, 5, 0, 7); c.fill();       // the pin
+        c.restore();
+      });
+      boardTex.needsUpdate = true;
+    };
+    drawBoard();
+    addBox(0.04, 0.66, 0.98, paint(0x6b4a34), -EW + 0.02, 1.62, -0.5, 0.01);
+    put(new THREE.PlaneGeometry(0.9, 0.6), paint(0xffffff, { map: boardTex, hatch: 0.2, unique: true }), -EW + 0.045, 1.62, -0.5, [0, Math.PI / 2, 0]).userData.noInk = true;
+
+    // ── the game: read the client's order, find each clue in the shop, cut, send them out ──
+    kit.games.replace('cut a new citizen', (m) => {
+      const g = m.game;
+      const begin = () => {
+        const name = `${pick(FIRST)} ${pick(SURN)}`, build = pick(BUILDS), habit = pick(HABITS);
+        const top = pick(TOPS), bot = pick(BOTTOMS), hat = pick(HATS), cut = pick(CUTS);
+        const got = { top: null, bot: null, hat: null }; let right = 0;
+        g.open('Cut to measure');
+        const order = `ORDER for ${name} — ${build[0]} build, ${cut[0]}. ${top[2][0].toUpperCase() + top[2].slice(1)}; ${bot[2]}; and ${hat[2]}. (Habit: ${habit}.)`;
+        g.text(order + '\n\nEverything on the order is somewhere in this shop. Have a look round, then cut.');
+        g.score('');
+        const step = (k) => {
+          const S = [
+            ['The coat: which fabric?', TOPS.map(q => q[0]), TOPS.indexOf(top), (i) => { got.top = TOPS[i]; }],
+            ['The trousers: which cloth?', BOTTOMS.map(q => q[0]), BOTTOMS.indexOf(bot), (i) => { got.bot = BOTTOMS[i]; }],
+            ['And the hat?', null, 0, null],
+          ][k];
+          if (k === 2) {
+            const opts = shuffle([[hat[0], hat[1], true], ...HATS.filter(q => q !== hat).map(q => [q[0], q[1], false]), ...shuffle(HAT_DECOYS).slice(0, 1).map(q => [q[0], q[1], false])]);
+            g.text(order); g.note(''); g.score(`snip ${k + 1} of 3`);
+            g.choices(opts.map(o => o[0]), (i) => { got.hat = opts[i]; if (opts[i][2]) right++; finish(); });
+            return;
+          }
+          g.text(order); g.note(''); g.score(`snip ${k + 1} of 3`);
+          g.choices(S[1], (i) => { S[3](i); if (i === S[2]) right++; step(k + 1); });
+        };
+        const finish = () => {
+          const look = {
+            skin: pick(SKIN), hair: pick(HAIR), hairStyle: pick(HAIRSTYLE),
+            top: got.top[1], bottom: got.bot[1], shoes: pick(SHOES), sleeve: Math.random() < 0.3 ? 'short' : 'long',
+            outfit: cut[1], accent: pick([0xd6e04c, 0xf1e4c8, 0xe8604c, 0xd8c9a8]),
+            hat: got.hat[1], hatColor: pick([0x3f5872, 0x5b4636, 0x8e2f3a, 0x2f5a52, 0xe0b445]),
+            height: build[2], build: build[1], belly: build[3], glasses: Math.random() < 0.25, beard: Math.random() < 0.2,
+          };
+          if (look.outfit === 'dress') look.bottom = got.bot[1];
+          const ok = right === 3;
+          // the outfit leaves on its hanger…
+          topM.color.setHex(look.top); botM.color.setHex(look.bottom); hatM.color.setHex(look.hatColor); sendHat.visible = !!look.hat;
+          send.visible = true; sendT = 0; send.position.copy(FROM);
+          kit.sfx([[1568, 0.12], [2093, 0.3]], 'sine', 0.05);
+          // …and the citizen is made for real, out on the street
+          try { kit.street.addCitizen(look, name); } catch (e) { console.warn('citizen not sent:', e); }
+          setTimeout(drawBoard, 50);
+          g.choices([], () => {}); g.score(`${right} of 3 to measure`);
+          g.text(`${ok ? 'Cut to measure!' : right ? 'Near enough — they love it anyway (they are very polite).' : 'Bold choices. They asked for none of this, and they are wearing it with pride.'} ` +
+            `Meet ${name}: ${build[0]}, in ${got.top[0]} and ${got.bot[0]}, ${got.hat[1] ? got.hat[0] : 'no hat'}. ${name.split(' ')[0]} ${habit}. ` +
+            `They're out on the street now — look for them when you leave. (Citizen Maker makes people like this on demand, for games.)`);
+          if (ok) { g.good('Every clue spotted. A tailor’s eye!'); g.cheer(); } else g.bad(`${3 - right} snip${right === 2 ? '' : 's'} off the order — the clues are all in the shop: look again.`);
+          g.next('cut another', begin); g.next('done', () => g.close());
+          kit.say(`${name} is out on the street now.`);
+        };
+        g.next('start cutting ✂', () => step(0));
+      };
+      begin();
+    }, 'cut a citizen to order');
+  }
+
+  // ═════════════ 15. funny bits: a mirror that compliments, an alterations notice, the moth in fitting room 1 ═════════════
+  {
+    const hm = paint(0xffffff, { opacity: 0, hatch: 0, unique: true }); hm.depthWrite = false;
+    const mir = grp(3.33, 0, -1.4);
+    mesh(rb(0.12, 1.7, 0.72, 0.01).translate(0, 0.88, 0), hm, mir).userData.noInk = true;
+    const PRAISE = ['Mirror: “Looking procedurally generated — in the best way.”', 'Mirror: “Is that a new texture? It really brings out your normals.”',
+      'Mirror: “Ten out of ten. Would render again.”', 'Mirror: “Honestly? Main-character energy. Not an NPC at all.”',
+      'Mirror: “I’m only a mirror, but… wow.”', 'Mirror: “You’ve got great topology. I’m not supposed to say that.”'];
+    let pi = 0;
+    tap(mir, 'long mirror', (sfx) => { kit.say(PRAISE[pi++ % PRAISE.length]); sfx([[1318, 0.06], [1760, 0.12]], 'sine', 0.04); });
+    // a notice on the fitting room's outer wall
+    put(new THREE.PlaneGeometry(0.42, 0.5), texMat(168, 200, (c, w, h) => {
+      c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 4; c.strokeRect(3, 3, w - 6, h - 6);
+      c.fillStyle = '#8e2f3a'; c.textAlign = 'center'; c.font = `700 26px ${SCRIPT}`; c.fillText('Alterations', w / 2, 34);
+      c.fillStyle = INKC; c.font = `16px ${HAND}`;
+      ['We take in.', 'We let out.', 'We talk you out of it.', '', 'Sleeves: shortened', 'Patience: lengthened', 'NPCs: given backstories'].forEach((l, i) => c.fillText(l, w / 2, 64 + i * 19));
+    }), 3.17, 1.35, -5.1, [0, -Math.PI / 2, 0]).userData.noInk = true;
   }
 
   S.flush();

@@ -30,6 +30,7 @@ function baker(THREE) {
 export default function dress(K) {
   const { THREE, g: G, paint, PAL, tap, live, free, claim, rb, canvasTex, texMat, HAND, SCRIPT, INKC, now } = K;
   const B = baker(THREE);
+  const VIS = { mode: '' }, HOOK = {}, HPI2 = Math.PI / 2;   // which eyes you're wearing; props the visions reach into
   const grp = (x = 0, y = 0, z = 0, parent = G) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
   const mesh = (geo, mat, parent, x = 0, y = 0, z = 0, rot) => {
     const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
@@ -242,7 +243,7 @@ export default function dress(K) {
   {
     const lx = -2.15, lz = -0.55;
     solid(lx, lz, 0.45);
-    const L = grp(lx, 0.23, lz); L.rotation.y = 0.45;       // its open end faces the room's front-right
+    const L = grp(lx, 0.23, lz); L.rotation.y = 0.45; HOOK.log = L;       // its open end faces the room's front-right
     const bark = paint(0x7a5a40, { hatch: 0.6 }), barkLt = paint(0xb08a62), hollow = paint(0x2a1e18, { hatch: 0, side: THREE.BackSide });
     mesh(new THREE.CylinderGeometry(0.23, 0.25, 0.95, 16, 1, true).rotateX(Math.PI / 2), bark, L);
     mesh(new THREE.CylinderGeometry(0.19, 0.2, 0.95, 16, 1, true).rotateX(Math.PI / 2), hollow, L).userData.noInk = true;
@@ -306,7 +307,7 @@ export default function dress(K) {
     tap(bed, 'see the flowers like a bee', (sfx) => { tUV = now(); sfx([[880, 0.1], [1175, 0.1], [1568, 0.3]], 'sine', 0.05); });
     const tmp = new THREE.Color();
     live((t) => {
-      const k = t - tUV, u = k >= 0 && k < 4 ? smooth(k / 0.4) * (1 - smooth((k - 3) / 1)) : 0;
+      const k = t - tUV, u = VIS.mode === 'bee' ? 1 : k >= 0 && k < 4 ? smooth(k / 0.4) * (1 - smooth((k - 3) / 1)) : 0;
       for (const f of flowers) {
         f.base.rotation.z = Math.sin(t * 0.9 + f.ph) * 0.06;
         f.base.rotation.x = Math.cos(t * 0.7 + f.ph) * 0.04;
@@ -369,7 +370,9 @@ export default function dress(K) {
     mesh(new THREE.SphereGeometry(0.009, 6, 5), led, C, 0.045, 0.072, 0.045).userData.noInk = true;
     const flash = glow(0xffffff, 0.9, C); flash.position.set(0, 0.035, 0.12);
     let tSnap = -99;
-    tap(C, 'set off the trail camera', (sfx) => { tSnap = now(); sfx([[2200, 0.03], [1200, 0.05], [600, 0.08]], 'square', 0.035); });
+    const CAMSAY = ['Trail cam: 412 photos of a fern. 1 photo of your thumb.', 'Trail cam: a hedgehog, 3:12 a.m., looking smug.', 'Trail cam: a blurry bee. It’s always a blurry bee.', 'Trail cam: you, just now, looking at a trail cam.'];
+    let snaps = 0;
+    tap(C, 'set off the trail camera', (sfx) => { tSnap = now(); K.say(CAMSAY[snaps++ % CAMSAY.length]); sfx([[2200, 0.03], [1200, 0.05], [600, 0.08]], 'square', 0.035); });
     live((t) => {
       const k = t - tSnap;
       led.emissiveIntensity = (t % 2) < 0.1 ? 1.5 : 0.15;
@@ -400,7 +403,9 @@ export default function dress(K) {
     for (const s of [-1, 1]) mesh(new THREE.SphereGeometry(0.006, 5, 4), paint(0x111014, { hatch: 0 }), bird, s * 0.017, 0.01, 0.024).userData.noInk = true;
     bird.visible = false;
     let tBird = -99;
-    tap(P, 'knock on the birdhouse', (sfx) => { tBird = now(); sfx([[2600, 0.06], [3100, 0.05], [2600, 0.06], [3300, 0.08]], 'sine', 0.05); });
+    const BIRDSAY = ['A tiny voice: “No thank you, we already have a worm subscription.”', 'A tiny voice: “Occupied!”', 'A tiny voice: “If this is about the noise at 5 a.m., that’s just singing.”'];
+    let knocks = 0;
+    tap(P, 'knock on the birdhouse', (sfx) => { tBird = now(); K.say(BIRDSAY[knocks++ % BIRDSAY.length]); sfx([[2600, 0.06], [3100, 0.05], [2600, 0.06], [3300, 0.08]], 'sine', 0.05); });
     live((t) => {
       const k = t - tBird, on = k >= 0 && k < 3.2;
       P.rotation.z = Math.sin(t * 1.3) * 0.04 + (on ? Math.sin(k * 6) * 0.22 * (1 - k / 3.2) : 0);
@@ -454,7 +459,7 @@ export default function dress(K) {
     const iron = paint(0x3a3448);
     const hook = new THREE.CatmullRomCurve3([new THREE.Vector3(px, 0, pz), new THREE.Vector3(px, 1.45, pz), new THREE.Vector3(px + 0.08, 1.62, pz + 0.04), new THREE.Vector3(px + 0.22, 1.6, pz + 0.1), new THREE.Vector3(px + 0.28, 1.52, pz + 0.13)]);
     B.add(iron, new THREE.TubeGeometry(hook, 24, 0.014, 6));
-    const LP = grp(px + 0.28, 1.52, pz + 0.13);
+    const LP = grp(px + 0.28, 1.52, pz + 0.13); HOOK.lantern = LP;
     const lb = baker(THREE);
     lb.add(iron, new THREE.TorusGeometry(0.025, 0.005, 5, 12), 0, -0.02, 0);
     lb.add(iron, new THREE.ConeGeometry(0.07, 0.06, 6), 0, -0.07, 0);
@@ -559,6 +564,156 @@ export default function dress(K) {
     }), G, -0.85, 0.021, -3.35, [-Math.PI / 2, 0, 0.5]);
     prints.userData.noInk = true; prints.renderOrder = 2;
   }
+
+  const decal2 = (w, h, draw, pw, ph, x, y, z, rot) => { const m = mesh(new THREE.PlaneGeometry(w, h), texMat(pw, ph, draw), G, x, y, z, rot); m.userData.noInk = true; m.renderOrder = 2; return m; };
+
+  // ═══ round 2: BORROW SOME EYES — the room itself changes with whose eyes you wear ═══
+  // Each animal's vision reveals a hidden layer: bees see a word written in ultraviolet and
+  // landing strips on the flowers; a pit viper sees warm paw prints and who's in the log;
+  // an owl sees eyes in the canopy and what's tucked in the darkest corner (the lost page);
+  // a bat "sees" its own sonar and the moths round the lantern.
+  const { games, quiz, fx, say, onExit, page } = K;
+  const layers = { bee: grp(), heat: grp(), owl: grp(), bat: grp() };
+  for (const g of Object.values(layers)) { g.visible = false; g.position.y = -50; }      // hidden layers can't be tapped either
+  const addMat = (col, op = 1) => new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const flatIn = (layer, w, h, mat, x, y, z, rot) => { const m = mesh(new THREE.PlaneGeometry(w, h), mat, layer, x, y, z, rot); m.userData.noInk = true; return m; };
+  // bee: a word written in ultraviolet across the back wall, and nectar guides on the flowers
+  flatIn(layers.bee, 1.7, 0.62, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, map: canvasTex(512, 188, (c, w, h) => {
+    c.font = `700 120px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.shadowColor = '#fff'; c.shadowBlur = 18; c.lineWidth = 10; c.strokeStyle = '#6a2aff'; c.strokeText('NECTAR', w / 2, h * 0.45);
+    c.fillStyle = '#ffffff'; c.fillText('NECTAR', w / 2, h * 0.45);
+    c.font = `700 26px ${HAND}`; c.fillText('(only bees can read this · the code word for your field notes)', w / 2, h - 18);
+  }) }), -3.0, 0.98, -5.46);
+  for (const [x, y, z] of [[2.23, 0.66, -0.45], [2.48, 0.84, -0.58], [2.4, 0.54, -0.36]]) {
+    const r = flatIn(layers.bee, 0.32, 0.32, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, map: canvasTex(64, 64, (c, w, h) => {
+      c.strokeStyle = '#fff'; c.lineWidth = 3; for (let a = 0; a < 6.28; a += 0.52) { c.beginPath(); c.moveTo(w / 2 + Math.cos(a) * 8, h / 2 + Math.sin(a) * 8); c.lineTo(w / 2 + Math.cos(a) * 30, h / 2 + Math.sin(a) * 30); c.stroke(); }
+      c.fillStyle = '#fff'; c.beginPath(); c.arc(w / 2, h / 2, 8, 0, 7); c.fill();
+    }) }), x, y, z, [-0.87, 0, 0]);
+    r.userData.spin = true;
+  }
+  // heat: five warm paw prints leading to the log, a warm someone curled inside, the lantern blazing
+  const pawTex = canvasTex(64, 64, (c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,200,120,0)');
+    c.fillStyle = g; c.beginPath(); c.ellipse(w / 2, h * 0.62, 14, 12, 0, 0, 7); c.fill();
+    for (let k = 0; k < 4; k++) { c.beginPath(); c.arc(w / 2 - 15 + k * 10, h * 0.34 - (k % 3 ? 4 : 0), 5, 0, 7); c.fill(); }
+  });
+  for (let i = 0; i < 5; i++) {
+    const u = i / 4, x = -0.85 - u * 1.0 + (i % 2 ? 0.08 : -0.08), z = -1.3 + u * 1.05;
+    flatIn(layers.heat, 0.24, 0.24, addMat(0xffffff, 1).clone(), x, 0.03, z, [-HPI2, 0, Math.atan2(1.0, 1.05) + Math.PI]).material.map = pawTex;
+  }
+  const hog = flatIn(layers.heat, 0.32, 0.22, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, map: canvasTex(160, 110, (c, w, h) => {
+    c.fillStyle = '#ffd080'; c.beginPath();                               // a spiky dome: a hedgehog, curled up warm
+    for (let i = 0; i <= 24; i++) { const a = Math.PI + i / 24 * Math.PI, r = i % 2 ? 62 : 50; c.lineTo(w * 0.46 + Math.cos(a) * r, h - 8 + Math.sin(a) * r * 0.85); }
+    c.lineTo(w - 12, h - 26); c.lineTo(w - 4, h - 10); c.closePath(); c.fill();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(w * 0.48, h - 30, 34, 22, 0, 0, 7); c.fill();
+    c.beginPath(); c.arc(w - 18, h - 20, 9, 0, 7); c.fill();
+  }) }), 0, 0, 0);
+  HOOK.log.add(hog); hog.position.set(0, -0.07, 0.3);                // inside the log, by the opening
+  const hogHeat = hog;                                               // (lives in the log, toggled with heat)
+  const lampHeat = glow(0xffffff, 1.3, HOOK.lantern); lampHeat.position.y = -0.165;
+  // owl: four pairs of eyes in the canopy, and the darkest corner, which isn't empty
+  const owlEye = new THREE.MeshBasicMaterial({ color: 0xfff27a });
+  const peepers = [[-3.55, 2.28, -3.1], [3.55, 2.32, -1.25], [3.6, 2.36, -3.5], [-3.6, 2.25, -0.75]].map(([x, y, z]) => {
+    const p = grp(x, y, z, layers.owl); p.rotation.y = x < 0 ? HPI2 : -HPI2;
+    for (const s of [-1, 1]) mesh(new THREE.SphereGeometry(0.022, 8, 6), owlEye, p, s * 0.04, 0, 0.02).userData.noInk = true;
+    return p;
+  });
+  const pg = page();
+  const pageSpot = grp(3.3, 0, -5.28, layers.owl);                  // tucked in the ferns of the back-right corner
+  pageSpot.add(pg); pg.rotation.y = -0.4;
+  const darkSpot = mesh(new THREE.CircleGeometry(0.42, 20), new THREE.MeshBasicMaterial({ color: 0x0e1a12, transparent: true, opacity: 0.55, depthWrite: false }), G, 3.3, 0.022, -5.2, [-HPI2, 0, 0]);
+  darkSpot.userData.noInk = true;
+  // bat: sonar rings from wherever you stand, and the moths round the lantern it's hunting
+  const sonarM = [0, 1, 2].map(() => new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+  const sonar = sonarM.map(m => { const r = mesh(new THREE.RingGeometry(0.95, 1, 40), m, layers.bat, 0, 0.03, 0, [-HPI2, 0, 0]); r.userData.noInk = true; return r; });
+  const mothM = paint(0x111111, { hatch: 0, side: THREE.DoubleSide });
+  const moths = [0, 1, 2].map(() => { const m = grp(0, 0, 0, layers.bat); for (const s of [-1, 1]) { const w = mesh(new THREE.PlaneGeometry(0.05, 0.04).translate(s * 0.025, 0, 0), mothM, m); w.userData.noInk = true; } return m; });
+  const lampW = new THREE.Vector3(-3.27, 1.38, -4.72);
+
+  const VISIONS = [
+    ['your own eyes', '', '', 'Back to your own eyes: sharp, colourful, and hopeless in the dark.'],
+    ['a honeybee', 'bee', 'hue-rotate(235deg) saturate(1.8) contrast(1.1)', 'Ultraviolet! The flowers grow landing strips, and something is written on the wall that only bees can read.'],
+    ['a pit viper', 'heat', 'grayscale(1) sepia(1) hue-rotate(-40deg) saturate(6) contrast(1.5) brightness(1.05)', 'Heat pits: warm things glow. Somebody warm walked across this floor not long ago…'],
+    ['an owl', 'owl', 'brightness(0.55) contrast(1.5) grayscale(0.75) sepia(0.4) hue-rotate(170deg)', 'Night eyes. The canopy is full of watchers, and the darkest corner isn’t empty any more.'],
+    ['a bat', 'bat', 'grayscale(1) invert(0.9) contrast(1.8)', 'Echolocation: you see your own clicks bounce back. Something small is fluttering by the lantern.'],
+  ];
+  const setVision = (i) => {
+    const [, key, css] = VISIONS[i];
+    VIS.mode = key;
+    fx.filter(css);
+    for (const [k, g] of Object.entries(layers)) { const on = k === key; g.visible = on; g.position.y = on ? 0 : -50; }
+    hogHeat.visible = key === 'heat'; lampHeat.visible = key === 'heat';
+  };
+  hogHeat.visible = false; lampHeat.visible = false;
+  onExit(() => { setVision(0); });
+  live((t) => {
+    if (!VIS.mode) return;
+    if (VIS.mode === 'bee') layers.bee.children.forEach(m => { if (m.userData.spin) m.rotation.z = t * 0.6; });
+    if (VIS.mode === 'heat') lampHeat.material.opacity = 0.8 + Math.sin(t * 9) * 0.1;
+    if (VIS.mode === 'owl') peepers.forEach((p, i) => { p.scale.y = ((t + i * 1.3) % 3.4) < 0.15 ? 0.1 : 1; });
+    if (VIS.mode === 'bat') {
+      const pl = K.player() || { x: 0, z: -1 };
+      sonar.forEach((r, i) => { const u = (t * 0.7 + i / 3) % 1; r.position.set(pl.x, 0.03, pl.z); r.scale.setScalar(0.2 + u * 3.2); sonarM[i].opacity = 0.9 * (1 - u); });
+      moths.forEach((m, i) => { const a = t * (2 + i * 0.4) + i * 2.1; m.position.set(lampW.x + Math.cos(a) * 0.25, lampW.y + Math.sin(t * 3 + i) * 0.12, lampW.z + Math.sin(a) * 0.22); m.rotation.y = -a; m.children.forEach((w, s) => { w.rotation.y = (s ? 1 : -1) * Math.sin(t * 30 + i) * 0.8; }); });
+    }
+  });
+  const fieldTest = (m) => quiz(m.game, 'The field-notes test', [
+    { q: 'Bees see ultraviolet. Borrow bee eyes: what word is written on the back wall?', choices: ['POLLEN', 'NECTAR', 'BUZZ OFF'], answer: 1, why: 'NECTAR, in letters only a bee can see. Real flowers do this too: UV landing strips point the way in.' },
+    { q: 'A pit viper sees heat. How many warm paw prints lead to the hollow log?', choices: ['three', 'five', 'seven'], answer: 1, why: 'Five warm prints, fading as they cool. Pit vipers can feel a mouse’s warmth from a metre away.' },
+    { q: 'So who is curled up in the log? (Heat vision again.)', choices: ['a hedgehog', 'a snake', 'a lost sock'], answer: 0, why: 'A spiky little hedgehog: a warm ball with a spiky outline. Its glowing eyes were watching you all along.' },
+    { q: 'Owls see in the dark. How many pairs of eyes watch you from the canopy at night?', choices: ['two', 'four', 'none, it’s fine'], answer: 1, why: 'Four pairs. Owl eyes are tubes, not balls: they can’t roll them, so they turn their whole head.' },
+    { q: 'Bats “see” with echoes. What is the bat hunting round the lantern?', choices: ['moths', 'fireflies', 'the researcher'], answer: 0, why: 'Moths! Some moths can even jam bat sonar with clicks of their own.' },
+  ], { intro: 'The researcher left a test in the field notes. Every answer is somewhere in this room, but you’ll need to borrow the right eyes to see it.',
+    end: (s, n) => `${s} of ${n}. ${s === n ? 'A true field naturalist! (Did the owl show you the dark corner?)' : 'Borrow some more eyes and look again.'} Borrowed Eyes has 14 animals to find.` });
+  games.replace('whose eyes are these?', (m) => {
+    const g = m.game.open('Borrow some eyes');
+    const now0 = VISIONS.find(v => v[1] === VIS.mode) || VISIONS[0];
+    g.text('Look through the field camera and swap eyes with an animal. Each one sees something in this room that you can’t. Pick a pair, then walk around and look.');
+    g.score(`wearing: ${now0[0]}`);
+    g.choices([...VISIONS.map(v => v[0]), '📓 the field-notes test'], (i) => {
+      if (i === VISIONS.length) return fieldTest(m);
+      setVision(i); g.score(`wearing: ${VISIONS[i][0]}`); g.good(VISIONS[i][3]);
+      sfx2(i);
+      g.next('go and look →', () => g.close());
+    });
+  }, 'borrow some eyes');
+  const sfx2 = (i) => K.sfx([[300 + i * 120, 0.1], [450 + i * 150, 0.16]], 'sine', 0.05);
+
+  // ── secrets and jokes ──
+  // the giant eye under the dome: stare it out (tap it five times)
+  let eyeG = null, dome = null;
+  G.traverse(o => {
+    if (o.isGroup && Math.abs(o.position.x - 1.6) < 0.01 && Math.abs(o.position.y - 1.05) < 0.01 && Math.abs(o.position.z + 1.8) < 0.01) eyeG = o;
+    if (o.isMesh && o.geometry?.parameters?.radius === 0.26 && Math.abs(o.position.x - 1.6) < 0.01) dome = o;
+  });
+  if (eyeG) {
+    let stares = 0, tBlink = -99, won = false;
+    const pupil = eyeG.children[2], iris = eyeG.children[1];
+    const LINES = ['The eye blinks first. Point to you.', 'It’s looking at you looking at it.', 'The eye is starting to water.', 'One more and it gives up…'];
+    const poke = (sfx) => {
+      stares++; tBlink = now();
+      if (stares < 5) { say(LINES[stares - 1]); sfx([[600 - stares * 60, 0.08]], 'sine', 0.05); }
+      else if (!won) { won = true; say('…fine. You win the staring contest. (The eye has gone all starry.)'); sfx([[523, 0.1], [659, 0.1], [784, 0.1], [1046, 0.3]], 'triangle', 0.06); iris.material = paint(0xe8466b, { hatch: 0 }); }
+      else say('The eye refuses a rematch.');
+    };
+    tap(eyeG, 'have a staring contest', poke);
+    if (dome) dome.userData.toy = eyeG.userData.toy;
+    live((t) => {
+      const k = t - tBlink;
+      eyeG.scale.set(1, k >= 0 && k < 0.18 ? 0.15 : 1, 1);
+      if (pupil) pupil.scale.set(won ? 1.9 : 1, won ? 1.9 : 1, 0.4);
+    });
+  }
+  // signs at the camp
+  decal2(0.5, 0.3, (c, w, h) => {
+    c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 5; c.strokeRect(3, 3, w - 6, h - 6);
+    c.font = `700 30px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.fillText('FIELD STATION', w / 2, 40);
+    c.font = `400 20px ${HAND}`; c.fillText('please do not feed', w / 2, 70); c.fillText('the researcher', w / 2, 94);
+  }, 200, 120, -3.97, 1.0, -3.35, [0, HPI2, 0]);
+  decal2(0.36, 0.14, (c, w, h) => {
+    c.fillStyle = '#f6efdf'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 4; c.strokeRect(2, 2, w - 4, h - 4);
+    c.font = `700 22px ${HAND}`; c.fillStyle = '#b03a30'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('do not lick the glow-caps', w / 2, h / 2);
+  }, 200, 78, 1.05, 0.06, 0.02, [-0.9, 0, 0]);
 
   B.flush(G);
 }

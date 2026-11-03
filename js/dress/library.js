@@ -75,7 +75,7 @@ export default function dress(kit) {
 
   // ═════════════ 1. tall bookcases on both side walls ═════════════
   // `sx` is the wall (−1 west, +1 east); the case runs along z and opens toward the room.
-  const bookcase = (sx, z0, z1, H = 2.25) => {
+  const bookcase = (sx, z0, z1, H = 2.25, gap = null) => {
     const DP = 0.38, xb = sx * EW, xc = xb - sx * DP / 2, xf = xb - sx * DP;   // back, centre, front
     const L = z1 - z0, zc = (z0 + z1) / 2;
     block(Math.min(xb, xf) - 0.02, Math.max(xb, xf) + 0.02, z0 - 0.02, z1 + 0.02);
@@ -90,6 +90,7 @@ export default function dress(kit) {
       let z = z0 + 0.06;
       const titled = r === 2 || r === 3;
       while (z < z1 - 0.1) {
+        if (gap && r === gap[0] && z + 0.12 > gap[1] && z < gap[2]) { z = gap[2]; continue; }
         const roll = R();
         if (roll < 0.06 && z < z1 - 0.4) {                                                  // a lying stack, and a little gap
           let yy = y0 + 0.018;
@@ -128,7 +129,7 @@ export default function dress(kit) {
     }
   };
   bookcase(-1, -4.85, -2.3);
-  bookcase(1, -4.85, -2.85);
+  bookcase(1, -4.85, -2.85, 2.25, [2, -4.1, -3.3]);
 
   // a library ladder leaning on the west case
   {
@@ -250,6 +251,7 @@ export default function dress(kit) {
     tap(clock, 'grandfather clock', (sfx) => {
       bong = 1;
       sfx([[392, 0.8], [330, 0.8], [349, 0.8], [262, 1.4]], 'sine', 0.09);
+      kit.say(kit.anyOf(['BONG. It is HEAD o’clock.', 'BONG. Time to commit.', 'BONG. (It is always five minutes to the deadline in here.)', 'BONG. The cat did not wake up. The cat never wakes up.']));
     });
   }
 
@@ -276,9 +278,17 @@ export default function dress(kit) {
       });
       mesh(new THREE.SphereGeometry(0.24, 24, 16), paint(0xffffff, { map: tex, hatch: 0.3, unique: true }), spin);
       mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.58, 6), brass, tilt);
-      let vel = 0.25;
-      live((t, dt) => { vel += (0.25 - vel) * Math.min(1, dt * 0.5); spin.rotation.y += vel * dt; });
-      tap(tilt, 'globe', (sfx) => { vel = 9; sfx([[600, 0.05], [500, 0.05], [420, 0.05], [360, 0.05], [320, 0.08]], 'triangle', 0.03); });
+      let vel = 0.25, flat = 0, flatUntil = -1, gtaps = [];
+      live((t, dt) => {
+        vel += (0.25 - vel) * Math.min(1, dt * 0.5); spin.rotation.y += vel * dt;
+        flat += ((t < flatUntil ? 1 : 0) - flat) * Math.min(1, dt * 4);
+        spin.scale.set(1 + flat * 0.25, 1 - flat * 0.8, 1 + flat * 0.25);
+      });
+      tap(tilt, 'globe', (sfx) => {
+        const now = kit.now(); gtaps = gtaps.filter(q => now - q < 4); gtaps.push(now);
+        vel = 9; sfx([[600, 0.05], [500, 0.05], [420, 0.05], [360, 0.05], [320, 0.08]], 'triangle', 0.03);
+        if (gtaps.length >= 5) { gtaps = []; flatUntil = now + 5; setTimeout(() => kit.say('You spun it flat. Please open an issue: “globe.js — world no longer round (regression)”.'), 500); }
+      });
     }
     // a "new arrivals" chalkboard above it
     addBox(0.03, 0.62, 0.72, woodDk, EW - 0.012, 1.55, -0.55, 0.01);
@@ -374,12 +384,15 @@ export default function dress(kit) {
       tap(desk, 'big open book', (sfx) => {
         const now = kit.now();
         leaves.forEach((L, k) => flip(k, now + k * 0.15));
+        kit.say(kit.anyOf(['README, step 1: clone it. Step 2: install it. Step 3: “works on my machine”.', 'README: “This project is a work in progress.” (Since 2019.)',
+          'README: “Contributions welcome!” (Please, anyone.)', 'README: “For the full docs, see the code.”', 'README: “TODO: write README.”']));
         sfx([[2600, 0.03], [2200, 0.03], [2800, 0.03], [2400, 0.03]], 'square', 0.01);
       });
     }
   }
 
   // ═════════════ 7. brass lamps hanging off the side walls ═════════════
+  let shushT = -9;                                                                   // (the desk bell's secret makes them flicker)
   {
     const lamps = [];
     for (const [sx, z] of [[-1, -4.1], [-1, -2.9], [1, -4.1], [1, -3.2]]) {
@@ -400,6 +413,7 @@ export default function dress(kit) {
       l.L.rotation.x = Math.sin(t * 0.6 + l.k) * 0.03 + kick;
       l.L.rotation.z = Math.cos(t * 0.5 + l.k * 2) * 0.02;
       l.b.scale.setScalar(1 + (s > 0 && s < 1 ? (1 - s) * 0.5 : 0));
+      const sh = t - shushT; l.b.visible = !(sh > 0 && sh < 1.6 && Math.sin(sh * 40 + l.k * 2) > 0.2);
     }));
   }
 
@@ -417,7 +431,22 @@ export default function dress(kit) {
       btn.position.y = 0.07 - (ring > 0.85 ? 0.012 : 0);
       dome.scale.set(1 + Math.sin(t * 60) * 0.03 * ring, 1 - Math.sin(t * 60) * 0.03 * ring, 1 + Math.sin(t * 60) * 0.03 * ring);
     });
-    tap(bell, 'desk bell', (sfx) => { ring = 1; sfx([[2093, 0.9]], 'sine', 0.06); setTimeout(() => sfx([[4186, 0.5]], 'sine', 0.015), 10); });
+    const shh = mesh(new THREE.PlaneGeometry(0.7, 0.3), texMat(280, 120, (c, w, h) => {
+      c.fillStyle = '#fffdf6'; c.beginPath(); c.roundRect(4, 4, w - 8, h - 30, 20); c.fill(); c.strokeStyle = INKC; c.lineWidth = 5; c.stroke();
+      c.beginPath(); c.moveTo(60, h - 27); c.lineTo(50, h - 4); c.lineTo(90, h - 27); c.fill();
+      c.fillStyle = '#c0392b'; c.font = `700 56px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('SHHHH!', w / 2, 66);
+    }), bell, 0.1, 0.5, 0.05); shh.userData.noInk = true; shh.visible = false;
+    let btaps = [], shhT = -9;
+    live((t) => { const k = t - shhT; shh.visible = k > 0 && k < 2.4; const s = Math.min(1, k * 5); shh.scale.setScalar(Math.max(0.01, s * (1 + Math.sin(k * 20) * 0.04))); });
+    tap(bell, 'desk bell', (sfx) => {
+      ring = 1; sfx([[2093, 0.9]], 'sine', 0.06); setTimeout(() => sfx([[4186, 0.5]], 'sine', 0.015), 10);
+      const now = kit.now(); btaps = btaps.filter(q => now - q < 4); btaps.push(now);
+      if (btaps.length >= 5) {
+        btaps = []; shhT = now; shushT = now;
+        setTimeout(() => sfx(Array.from({ length: 10 }, () => [5200 + Math.random() * 1800, 0.05]), 'sawtooth', 0.012), 200);
+        kit.say('SHHHHHH! — every book in the library, at once');
+      }
+    });
   }
 
   // ═════════════ 9. a shaft of light with dust drifting in it ═════════════
@@ -449,6 +478,263 @@ export default function dress(kit) {
       });
       motes.instanceMatrix.needsUpdate = true;
     });
+  }
+
+  // ═════════════ 10. THE SIGNATURE TRICK: books are portals ═════════════
+  // Six glowing books on the east case are real repositories. Pull one and it flies to the
+  // reading table, falls open, and the repo springs up out of it as a pop-up diorama.
+  {
+    const PORTALS = [
+      ['whiteboard', 'A coding agent draws what it’s doing on a whiteboard: its plan, its decisions and why.', 0x2f5a52],
+      ['equalizer', 'Beats from math: every drum and bass line is an equation you can read and tweak.', 0x8f7ae8],
+      ['RL_Tutorial', 'Reinforcement learning on a cart-pole: reward design, PPO — and reward hacking.', 0xe8604c],
+      ['ros2_depth_camera_tutorial', 'Stream a RealSense depth camera over HTTP from your own ROS2 nodes.', 0x3f5872],
+      ['adapter-portability', 'Move a LoRA fine-tune onto the next version of its base model without retraining it.', 0xe4b84f],
+      ['art-heist', 'The Vanishing Gallery: the detective game this whole street borrows its look from.', 0x8e2f3a],
+    ];
+    const TX = 2.38, TY = 0.775, TZ = -1.45;                                       // where books open: the reading table
+    const books = PORTALS.map(([name, blurb, col], i) => {
+      const z = -4.02 + i * 0.115, home = V3(3.79, 1.118, z);
+      const b = grp(home.x, home.y, home.z);
+      const BB = batch(b);
+      BB.box(0.26, 0.32, 0.085, paint(col), 0, 0, 0, 0.01);
+      BB.box(0.25, 0.3, 0.07, cream, 0.008, 0, 0, 0.004);                          // the page block, set in from the covers
+      BB.box(0.005, 0.03, 0.088, brass, -0.131, 0.11, 0, 0.002); BB.box(0.005, 0.03, 0.088, brass, -0.131, -0.11, 0, 0.002);
+      BB.flush();
+      const spine = mesh(new THREE.PlaneGeometry(0.075, 0.2), texMat(48, 128, (c, w, h) => {
+        c.save(); c.translate(w / 2, h / 2); c.rotate(-Math.PI / 2); c.fillStyle = '#fbe7b0'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        let s = 22; do { c.font = `700 ${s}px ${HAND}`; s -= 1; } while (c.measureText(name).width > h - 8 && s > 8); c.fillText(name, 0, 1); c.restore();
+      }), b, -0.1315, 0, 0, [0, -Math.PI / 2, 0]); spine.userData.noInk = true;
+      const glow = mesh(new THREE.PlaneGeometry(0.09, 0.34), new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }), b, -0.134, 0, 0, [0, -Math.PI / 2, 0]);
+      glow.userData.noInk = true;
+      return { name, blurb, col, b, home, glow, i };
+    });
+    // the pop-up: one cover stays flat, the other swings open about the spine; the scene rises from the fold
+    const P = grp(TX, TY, TZ); P.visible = false;
+    const coverM = paint(0x8e2f3a), coverM2 = paint(0x8e2f3a);
+    mesh(rb(0.3, 0.02, 0.42, 0.006).translate(0.15, 0.01, 0), coverM, P);
+    mesh(rb(0.28, 0.025, 0.4, 0.006).translate(0.145, 0.03, 0), cream, P);
+    const lid = grp(0, 0.0, 0, P);
+    mesh(rb(0.3, 0.02, 0.42, 0.006).translate(-0.15, 0.01, 0), coverM2, lid);
+    mesh(rb(0.28, 0.025, 0.4, 0.006).translate(-0.145, 0.03, 0), cream, lid);
+    const stage = grp(0, 0.045, 0, P);                                            // the diorama rises from here
+
+    // ── the six dioramas ──
+    const scenes = {};
+    const sceneGrp = (name) => { const s = grp(0, 0, 0, stage); s.visible = false; scenes[name] = { g: s, tick: () => {} }; return s; };
+    // 1. whiteboard: a little board on an easel; a marker draws the agent's plan, box by box
+    {
+      const s = sceneGrp('whiteboard');
+      for (const sx of [-1, 1]) mesh(rb(0.015, 0.36, 0.015, 0.004), woodDk, s, sx * 0.17, 0.18, -0.05, [-0.1, 0, 0]);
+      const bt = canvasTex(256, 176, () => {});
+      const board = mesh(rb(0.38, 0.27, 0.012, 0.004), paint(0xffffff, { map: bt, hatch: 0, unique: true }), s, 0, 0.25, -0.04);
+      const pen = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 8), paint(0xe8604c), s, 0, 0.25, -0.02, [0.6, 0, 0.4]);
+      const STEPS = [['PLAN', 20, 20], ['read the repo', 20, 62], ['why: tests first', 136, 62], ['DECIDE', 20, 104], ['✓ done', 136, 140]];
+      scenes.whiteboard.tick = (t, u) => {
+        const c = bt.image.getContext('2d'), k = (u * 1.4) % 1.25;
+        c.fillStyle = '#fbfbf6'; c.fillRect(0, 0, 256, 176);
+        c.strokeStyle = '#3f5872'; c.fillStyle = '#2a2230'; c.lineWidth = 3; c.font = `700 18px ${HAND}`;
+        const n = Math.min(STEPS.length, Math.floor(k * STEPS.length * 1.1));
+        STEPS.slice(0, n).forEach(([txt, x, y], j) => {
+          c.strokeRect(x, y, 104, 30); c.fillText(txt, x + 6, y + 21);
+          if (j) { c.beginPath(); c.moveTo(STEPS[j - 1][1] + 52, STEPS[j - 1][2] + 30); c.lineTo(x + 52, y); c.stroke(); }
+        });
+        bt.needsUpdate = true;
+        const cur = STEPS[Math.min(STEPS.length - 1, n)];
+        pen.position.set(-0.19 + (cur[1] + 52 + Math.sin(t * 12) * 40) / 256 * 0.38, 0.385 - (cur[2] + 15) / 176 * 0.27, -0.025);
+      };
+    }
+    // 2. equalizer: bars bouncing to an equation
+    {
+      const s = sceneGrp('equalizer');
+      const bars = [];
+      for (let k = 0; k < 9; k++) { const m = mesh(rb(0.035, 1, 0.035, 0.008).translate(0, 0.5, 0), paint(BOOKC[k % BOOKC.length]), s, -0.2 + k * 0.05, 0, 0.02); bars.push(m); }
+      const eq = mesh(new THREE.PlaneGeometry(0.36, 0.08), texMat(256, 56, (c, w, h) => { c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 26px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('kick = sin(2π·2t)⁸', w / 2, 38); }), s, 0, 0.33, -0.08);
+      eq.userData.noInk = true;
+      scenes.equalizer.tick = (t) => bars.forEach((m, k) => { const beat = Math.pow(Math.abs(Math.sin(t * Math.PI * 2 + (k < 3 ? 0 : k * 0.7))), k < 3 ? 8 : 2); m.scale.y = 0.02 + beat * (0.25 - Math.abs(k - 4) * 0.015); });
+    }
+    // 3. RL_Tutorial: a cart-pole, balanced by a little policy (and nudged now and then)
+    {
+      const s = sceneGrp('RL_Tutorial');
+      mesh(rb(0.48, 0.015, 0.03, 0.004), paint(0x6f7d92), s, 0, 0.05, 0.02);
+      for (const sx of [-1, 1]) mesh(rb(0.015, 0.05, 0.03, 0.004), paint(0x6f7d92), s, sx * 0.24, 0.025, 0.02);
+      const cart = grp(0, 0.075, 0.02, s);
+      mesh(rb(0.09, 0.04, 0.06, 0.008), paint(0xe8604c), cart);
+      for (const sx of [-1, 1]) mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.065, 10).rotateX(Math.PI / 2), paint(0x2a2230), cart, sx * 0.03, -0.022, 0);
+      const pole = grp(0, 0.02, 0.0, cart);                                       // pivot at the hinge on the cart
+      mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.26, 6).translate(0, 0.13, 0), paint(0xc9a24a), pole);
+      mesh(new THREE.SphereGeometry(0.016, 8, 6), paint(0xc9a24a), pole, 0, 0.26, 0);
+      const rt = canvasTex(200, 48, () => {});
+      const sign = mesh(new THREE.PlaneGeometry(0.3, 0.07), paint(0xffffff, { map: rt, hatch: 0, unique: true }), s, 0, 0.34, -0.1); sign.userData.noInk = true;
+      let th = 0.1, w = 0, x = 0, v = 0, reward = 0, nudge = 2, lastR = -1;
+      scenes.RL_Tutorial.tick = (t, u, dt) => {
+        const h = Math.min(dt, 0.033);
+        nudge -= h; if (nudge < 0) { w += (Math.random() < 0.5 ? -1 : 1) * 3.2; nudge = 2.5 + Math.random() * 2; }
+        const a = 18 * th + 4 * w + 1.2 * x + 1.6 * v;                            // the trained policy (a PD controller in a trench coat)
+        v += a * h; v *= 0.98; x += v * h; x = Math.max(-0.17, Math.min(0.17, x));
+        w += (9.8 / 0.26 * Math.sin(th) - a * Math.cos(th) / 0.26) * h; w *= 0.995; th += w * h;
+        if (Math.abs(th) > 1.2) { th = 0.05; w = 0; x = 0; v = 0; reward = 0; }    // fell over: new episode
+        reward += h * 30;
+        cart.position.x = x; pole.rotation.z = -th;
+        if (Math.floor(reward) !== lastR) { lastR = Math.floor(reward); const c = rt.image.getContext('2d'); c.fillStyle = '#fffdf6'; c.fillRect(0, 0, 200, 48); c.fillStyle = INKC; c.font = `700 20px ${HAND}`; c.textAlign = 'center'; c.fillText(`reward: ${lastR}  (+1 per frame upright)`, 100, 30); rt.needsUpdate = true; }
+      };
+    }
+    // 4. ros2_depth_camera_tutorial: a depth camera on a tripod sweeps the blocks; points appear, coloured by depth
+    {
+      const s = sceneGrp('ros2_depth_camera_tutorial');
+      for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; mesh(rb(0.01, 0.16, 0.01, 0.003), paint(0x2a2230), s, -0.2 + Math.cos(a) * 0.03, 0.075, 0.12 + Math.sin(a) * 0.03, [Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3]); }
+      const cam = grp(-0.2, 0.16, 0.12, s);
+      mesh(rb(0.09, 0.025, 0.025, 0.006), paint(0x3a3c40), cam);
+      for (const dx of [-0.028, 0, 0.028]) mesh(new THREE.CircleGeometry(0.007, 10).rotateY(Math.PI / 2), paint(0x93abc0, { hatch: 0 }), cam, 0.046, 0, 0, [0, 0, 0]).position.z = dx;
+      const fanM = new THREE.MeshBasicMaterial({ color: 0x7fd0ff, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
+      const fan = new THREE.Mesh(new THREE.CircleGeometry(0.45, 12, -0.3, 0.6).rotateX(-Math.PI / 2), fanM); fan.userData.noInk = true; cam.add(fan);
+      const blocks = [[0.05, 0.05, -0.1, 0.1], [0.18, 0.04, 0.0, 0.08], [0.0, 0.07, 0.12, 0.06]];
+      for (const [bx, by, bz, r] of blocks) mesh(rb(r * 1.4, by * 2, r * 1.4, 0.006), paint(0xd9c9a3), s, bx, by, bz);
+      const NP = 120, pts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.008, 0.008, 0.008), new THREE.MeshBasicMaterial({ color: 0xffffff }), NP);
+      pts.userData.noInk = true; s.add(pts);
+      const dmy = new THREE.Object3D(), col = new THREE.Color();
+      const P0 = Array.from({ length: NP }, (_, k) => { const [bx, by, bz, r] = blocks[k % 3]; const top = Math.random() < 0.5; return [bx + (Math.random() - 0.5) * r * 1.4, top ? by * 2 + 0.005 : Math.random() * by * 2, bz + (top ? (Math.random() - 0.5) * r * 1.4 : r * 0.7 + 0.005)]; });
+      P0.forEach((p, k) => { const d = Math.hypot(p[0] + 0.2, p[2] - 0.12); col.setHSL(0.66 * Math.min(1, d / 0.45), 0.9, 0.55); pts.setColorAt(k, col); });
+      scenes.ros2_depth_camera_tutorial.tick = (t) => {
+        const sweep = Math.sin(t * 1.2) * 0.6;
+        cam.rotation.y = -0.25 + sweep;
+        P0.forEach((p, k) => {
+          const ang = Math.atan2(-(p[2] - 0.12), p[0] + 0.2), seen = Math.abs(ang - (-0.25 + sweep) * -1) < 0.6 || ((t * 1.2) % 6.28) > 3.5;
+          dmy.position.set(p[0], p[1], p[2]); dmy.scale.setScalar(seen ? 1 : 0.001); dmy.updateMatrix(); pts.setMatrixAt(k, dmy.matrix);
+        });
+        pts.instanceMatrix.needsUpdate = true; if (pts.instanceColor) pts.instanceColor.needsUpdate = true;
+      };
+    }
+    // 5. adapter-portability: the LoRA adapter hops from base model v1 to v2 and clicks in
+    {
+      const s = sceneGrp('adapter-portability');
+      const tower = (x, label, col) => {
+        for (let k = 0; k < 5; k++) mesh(rb(0.14, 0.035, 0.12, 0.006), paint(k % 2 ? col : 0x93abc0), s, x, 0.02 + k * 0.04, 0);
+        const lb = mesh(new THREE.PlaneGeometry(0.14, 0.05), texMat(96, 34, (c, w, h) => { c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 22px ${HAND}`; c.textAlign = 'center'; c.fillText(label, w / 2, 25); }), s, x, 0.1, 0.062);
+        lb.userData.noInk = true;
+      };
+      tower(-0.15, 'base v1', 0x5a6f86); tower(0.15, 'base v2', 0x2f5a52);
+      const plug = grp(-0.15, 0.22, 0, s);
+      mesh(rb(0.08, 0.035, 0.07, 0.008), paint(0xe4b84f, { emissive: 0x806020 }), plug);
+      for (const dx of [-0.02, 0.02]) mesh(rb(0.008, 0.025, 0.008, 0.002), brass, plug, dx, -0.028, 0);
+      const tag = mesh(new THREE.PlaneGeometry(0.2, 0.05), texMat(150, 36, (c, w, h) => { c.fillStyle = '#e4b84f'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 20px ${HAND}`; c.textAlign = 'center'; c.fillText('LoRA · no retraining', w / 2, 24); }), s, 0, 0.34, -0.05);
+      tag.userData.noInk = true;
+      scenes['adapter-portability'].tick = (t) => {
+        const ph = (t * 0.35) % 1, e = Math.min(1, Math.max(0, (ph - 0.2) / 0.5)), k = e * e * (3 - 2 * e);
+        plug.position.x = -0.15 + 0.3 * k; plug.position.y = 0.22 + Math.sin(k * Math.PI) * 0.1;
+        plug.rotation.z = Math.sin(k * Math.PI) * 0.6;
+      };
+    }
+    // 6. art-heist: a tiny gallery wall; the painting vanishes, a torch sweeps, it's back
+    {
+      const s = sceneGrp('art-heist');
+      mesh(rb(0.46, 0.3, 0.02, 0.004), paint(0x6a4a8a), s, 0, 0.15, -0.12);
+      const frame = grp(0, 0.17, -0.105, s);
+      for (const [w, h, x, y] of [[0.2, 0.018, 0, 0.075], [0.2, 0.018, 0, -0.075], [0.018, 0.15, -0.09, 0], [0.018, 0.15, 0.09, 0]]) mesh(rb(w, h, 0.015, 0.004), paint(0xd9a640), frame, x, y, 0);
+      const art = mesh(new THREE.PlaneGeometry(0.165, 0.13), texMat(96, 76, (c, w, h) => { c.fillStyle = '#7fb3c8'; c.fillRect(0, 0, w, h); c.fillStyle = '#e4b84f'; c.beginPath(); c.arc(70, 22, 10, 0, 7); c.fill(); c.fillStyle = '#5f8f3e'; c.beginPath(); c.moveTo(0, h); c.lineTo(30, 30); c.lineTo(60, h); c.fill(); }), frame, 0, 0, 0.004);
+      art.userData.noInk = true;
+      const q = mesh(new THREE.PlaneGeometry(0.1, 0.1), texMat(64, 64, (c, w, h) => { c.fillStyle = INKC; c.font = `700 56px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('?', w / 2, 52); }), frame, 0, 0, 0.003);
+      q.userData.noInk = true;
+      const beam = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 14, 1, true).translate(0, -0.15, 0).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xfff1a0, transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide }));
+      beam.userData.noInk = true; beam.position.set(0, 0.2, 0.2); s.add(beam);
+      scenes['art-heist'].tick = (t) => {
+        const ph = (t * 0.3) % 1, gone = ph > 0.35 && ph < 0.75;
+        art.visible = !gone; q.visible = gone;
+        beam.visible = gone; beam.rotation.y = Math.sin(t * 2) * 0.5;
+      };
+    }
+
+    // ── the page of Vivi's list is a bookmark in the art-heist book: its corner pokes out of the top ──
+    const heist = books.find(b => b.name === 'art-heist');
+    const pg = kit.page();
+    const tuck = () => { pg.position.set(0.02, 0.07, 0); pg.rotation.set(0, 0, 0); pg.scale.setScalar(0.55); heist.b.add(pg); };
+    if (!pg.collected) tuck();
+
+    // ── the pull: out of the shelf, through the air, open on the table, and back again ──
+    let cur = null, state = 'idle', st = 0, queued = null, showT = 0;
+    const qShelf = new THREE.Quaternion(), qTable = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2));
+    const OUT = V3(-0.22, 0.02, 0), TABLE = V3(TX + 0.15, TY + 0.045, TZ);
+    const pose = (b, k) => {                                                       // k: 0 shelf … 1 table, on an arc
+      const from = b.home.clone().add(OUT), p = from.clone().lerp(TABLE, k); p.y += Math.sin(k * Math.PI) * 0.5;
+      b.b.position.copy(p); b.b.quaternion.slerpQuaternions(qShelf, qTable, k);
+    };
+    live((t, dt) => {
+      books.forEach(b => { b.glow.material.opacity = 0.22 + 0.14 * Math.sin(t * 3 + b.i); });
+      if (state === 'idle') return;
+      st += dt;
+      const b = cur;
+      if (state === 'out') { const k = Math.min(1, st / 0.4); b.b.position.copy(b.home).addScaledVector(OUT, k); b.b.rotation.z = Math.sin(k * Math.PI) * 0.05; if (k >= 1) { state = 'fly'; st = 0; } }
+      else if (state === 'fly') { const k = Math.min(1, st / 0.9); pose(b, k * k * (3 - 2 * k)); if (k >= 1) { state = 'open'; st = 0; b.b.visible = false; P.visible = true; coverM.color.setHex(b.col); coverM2.color.setHex(b.col); scenes[b.name].g.visible = true; if (b.name === 'art-heist' && !pg.collected && pg.visible !== false) { P.add(pg); pg.position.set(0.2, 0.05, 0.14); pg.rotation.set(0, -0.6, 0); pg.scale.setScalar(1); } kit.say(`${b.name}: ${b.blurb}`); } }
+      else if (state === 'open' || state === 'show' || state === 'shut') {
+        let k;
+        if (state === 'open') { k = Math.min(1, st / 0.8); if (k >= 1) { state = 'show'; st = 0; showT = 0; } }
+        else if (state === 'show') { k = 1; showT += dt; if (showT > 16 || queued) { state = 'shut'; st = 0; } }
+        else { k = Math.max(0, 1 - st / 0.6); }
+        lid.rotation.z = -Math.PI * (1 - Math.min(1, k * 1.15));
+        const rise = state === 'open' ? Math.max(0, (k - 0.35) / 0.65) : k;
+        const sp = rise >= 1 ? 1 : rise * (1 + Math.sin(rise * Math.PI) * 0.35);    // a little pop-up overshoot
+        stage.scale.set(1, Math.max(0.001, sp), 1);
+        scenes[b.name].tick(t, st, dt);
+        if (state === 'shut' && k <= 0) {
+          state = 'back'; st = 0; P.visible = false; scenes[b.name].g.visible = false; b.b.visible = true;
+          if (b.name === 'art-heist' && !pg.collected && pg.parent === P) tuck();
+        }
+      } else if (state === 'back') { const k = Math.min(1, st / 0.9); pose(b, 1 - k * k * (3 - 2 * k)); if (k >= 1) { state = 'in'; st = 0; } }
+      else if (state === 'in') { const k = Math.min(1, st / 0.4); b.b.position.copy(b.home).addScaledVector(OUT, 1 - k); b.b.quaternion.identity(); if (k >= 1) { state = 'idle'; cur = null; if (queued) { const q = queued; queued = null; pull(q); } } }
+    });
+    const pull = (b) => {
+      if (state === 'idle') { cur = b; state = 'out'; st = 0; return true; }
+      if (cur === b) { if (state === 'show') { state = 'shut'; st = 0; } return false; }     // tap the open one again: it closes
+      queued = b; return false;
+    };
+    books.forEach(b => tap(b.b, `${b.name} (pull me)`, (sfx) => { pull(b); sfx([[330, 0.06], [494, 0.06], [659, 0.12]], 'triangle', 0.04); }));
+    tap(P, 'pop-up book (tap to close)', (sfx) => { if (state === 'show') { state = 'shut'; st = 0; sfx([[494, 0.06], [330, 0.1]], 'triangle', 0.04); } });
+    // a label on the shelf edge under them
+    const lbl = put(new THREE.PlaneGeometry(0.5, 0.06), texMat(250, 30, (c, w, h) => { c.fillStyle = '#e4b84f'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 20px ${HAND}`; c.textAlign = 'center'; c.fillText('REFERENCE — pull to open ✦', w / 2, 22); }), 3.575, 0.905, -3.73, [0, -Math.PI / 2, 0]);
+    lbl.userData.noInk = true;
+    window.__libPortal = { pull: (name) => pull(books.find(b => b.name === name)) };     // (for the check sheet)
+  }
+
+  // ═════════════ 11. THE SMARTER GAME: the librarian's questions (you have to have looked) ═════════════
+  {
+    const st = kit.K.minis.find(q => q.label === 'guess the book');
+    const blurbGame = st?.run;
+    const hourWord = (h) => ['twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven'][((h % 12) + 12) % 12];
+    const ASK = () => {
+      const now = new Date(), h = now.getHours() + (now.getMinutes() >= 30 ? 1 : 0);
+      return [
+        { q: 'What time does the grandfather clock show, roughly?', choices: [`about ${hourWord(h)} o’clock`, `about ${hourWord(h + 3)} o’clock`, `about ${hourWord(h + 6)} o’clock`, `about ${hourWord(h - 4)} o’clock`], answer: 0, why: 'It keeps real time — your time.' },
+        { q: 'Which repository is chalked first under “New arrivals”?', choices: [NAMES[0], NAMES[3], NAMES[5], 'hello-world'], answer: 0, why: `The chalkboard by the globe starts with ${NAMES[0]}.` },
+        { q: 'What does the sign over the wingback chair ask?', choices: ['no running', 'quiet please', 'mind the cat', 'return by Friday'], answer: 1, why: 'Quiet please — the books are thinking.' },
+        { q: 'How many brass lamps hang off the side walls?', choices: ['two', 'three', 'four', 'six'], answer: 2, why: 'Four: two on each side.' },
+        { q: 'The big book on the lectern is open at…', choices: ['the LICENSE', 'the README', 'the CHANGELOG', 'page 404'], answer: 1, why: 'The README, of course. Nobody reads the LICENSE.' },
+        { q: 'Pull “RL_Tutorial” from the glowing shelf. What is the little cart trying to do?', choices: ['win a race', 'keep a pole upright', 'deliver books', 'push the ladder'], answer: 1, why: 'Balance the pole: +1 reward for every frame it stays up.' },
+        { q: 'Pull “equalizer”. What makes the bars move?', choices: ['a microphone', 'an equation', 'a hamster', 'the wind'], answer: 1, why: 'Equations: the beats are maths you can read.' },
+        { q: 'What is asleep on the middle back shelf?', choices: ['a moth', 'a cat', 'the librarian', 'a laptop'], answer: 1, why: 'The library cat. Do not wake the library cat.' },
+      ];
+    };
+    if (st) kit.games.replace('guess the book', (m) => {
+      const g = m.game;
+      g.open('The librarian’s questions');
+      g.text('A good reader notices things. Four questions about this room — the answers are all around you (some are inside the glowing books).');
+      g.next('begin', () => kit.quiz(g, 'The librarian’s questions', kit.shuffle(ASK()).slice(0, 4).map(r => {
+        const o = kit.shuffle(r.choices.map((c, i) => i));
+        return { q: r.q, choices: o.map(i => r.choices[i]), answer: o.indexOf(r.answer), why: r.why };
+      }), { end: (s, n) => `${s} of ${n}. ${s === n ? 'Library card: upgraded to gold.' : 'Have another browse — and pull a few of the glowing books.'}` }));
+      if (blurbGame) g.next('or: guess the book from its blurb', () => blurbGame(m));
+    }, 'the librarian’s questions');
+  }
+
+  // ═════════════ 12. funny bits ═════════════
+  {
+    // an overdue notice taped to the counter front
+    put(new THREE.PlaneGeometry(0.36, 0.26), texMat(180, 130, (c, w, h) => {
+      c.fillStyle = '#fff6c8'; c.fillRect(0, 0, w, h); c.fillStyle = '#c0392b'; c.textAlign = 'center'; c.font = `700 24px ${SCRIPT}`; c.fillText('OVERDUE', w / 2, 28);
+      c.fillStyle = INKC; c.font = `15px ${HAND}`;
+      ['ghanemja.github.io —', '1,204 commits late.', 'Fine: one (1) star', 'per merged PR.'].forEach((l, i) => c.fillText(l, w / 2, 52 + i * 19));
+    }), 1.05, 0.5, -3.37).userData.noInk = true;
+    // the book cart's sign
+    put(new THREE.PlaneGeometry(0.3, 0.1), texMat(150, 50, (c, w, h) => { c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 18px ${HAND}`; c.textAlign = 'center'; c.fillText('RETURNS', w / 2, 20); c.font = `14px ${HAND}`; c.fillText('pull requests welcome', w / 2, 40); }), -2.2, 0.68, -2.31, [0, 0.25, 0]).userData.noInk = true;
   }
 
   S.flush();

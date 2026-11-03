@@ -49,6 +49,12 @@ export default function dress(kit) {
     return pic;
   };
   const toWorld = (v) => G.localToWorld(v);
+  const ease = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+  // ── the room's big trick: scrub the take. u (0..1) is the playhead; six keyframes at u = i/5 ──
+  const scrub = { u: 0, from: 0, to: 0, t0: -99, dur: 1, vis: 0, lastKey: 0 };
+  const KEYN = ['Insert hook', 'Poke through', 'Yarn over', 'Pull up a loop', 'Yarn over', 'Pull through both'];
+  const actorPos = new THREE.Vector3(-3.04, 0.16, -0.22);
+  const REC = { on: true }, FX = {};
 
   // ════════ 1. lighting trusses along the tops of the side walls, spotlights panning the stage ════════
   const cans = [];
@@ -81,7 +87,7 @@ export default function dress(kit) {
       const k = t - cue, f = k < 4 ? Math.min(1, k / 0.6) : Math.max(0, 1 - (k - 4) / 0.8);
       for (const c of cans) {
         T.set(c.side * 0.8 + Math.sin(t * 0.23 + c.ph) * 1.6, 0, -2.8 + Math.cos(t * 0.17 + c.ph * 1.3) * 1.4);
-        c.aim.copy(T).lerp(stage, f * f * (3 - 2 * f));
+        c.aim.copy(T).lerp(stage, f * f * (3 - 2 * f)).lerp(actorPos, scrub.vis);     // during a take they follow the actor
         c.yoke.lookAt(toWorld(T.copy(c.aim)));
         c.beamM.opacity = 0.07 + f * 0.13;
       }
@@ -109,7 +115,7 @@ export default function dress(kit) {
     H.box(0.012, 0.42, 0.014, M.orange, 0, 0, 0, 0.004);
     H.put(new THREE.ConeGeometry(0.035, 0.05, 3).rotateX(PI), M.orange, 0.01, 0.23, 0);
     live((t) => {
-      const f = (t / 13) % 1;
+      const f = scrub.vis > 0.01 ? scrub.u * 0.96 + 0.02 : (t / 13) % 1;           // scrubbing the room drives this playhead too
       head.position.z = zb - 0.05 - f * (L - 0.1);
       dia.forEach((d, i) => { const near = Math.abs(keys[i] - f) < 0.012; d.material = near ? on : off; d.scale.set(0.5, near ? 1.5 : 1, near ? 1.5 : 1); });
     });
@@ -142,21 +148,32 @@ export default function dress(kit) {
     });
   }
 
-  // ════════ 4. the giant crochet hook leaning in the back left corner ════════
-  {
-    const base = new THREE.Vector3(-3.72, 0, -5.12), top = new THREE.Vector3(-3.84, 2.05, -5.43);
-    const dir = top.clone().sub(base), len = dir.length(); dir.normalize();
-    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), eu = new THREE.Euler().setFromQuaternion(q), rot = [eu.x, eu.y, eu.z];
-    const at = (f) => base.clone().addScaledVector(dir, f * len);
-    const p0 = at(0.5);
-    S(new THREE.CylinderGeometry(0.04, 0.03, len * 0.97, 14), M.alu, p0.x, p0.y, p0.z, rot);
-    const g = at(0.32); S(new THREE.CylinderGeometry(0.07, 0.07, 0.55, 14), M.pink, g.x, g.y, g.z, rot);
-    const th = at(0.5); SB(0.11, 0.18, 0.05, M.pink, th.x, th.y, th.z, 0.02, rot);
-    const tip = at(0.985); S(new THREE.SphereGeometry(0.04, 12, 8), M.alu, tip.x, tip.y, tip.z);
-    S(new THREE.TorusGeometry(0.05, 0.02, 8, 14, PI * 1.25), M.alu, tip.x + 0.02, tip.y - 0.03, tip.z + 0.05, [0.2, 0.5, 2.6]);
-    const e = at(0.02); S(new THREE.SphereGeometry(0.06, 12, 8), M.pink, e.x, e.y + 0.03, e.z);
-    claim(-3.72, -5.12, 0.12);
-  }
+  // ════════ 4. the giant crochet hook in the back left corner: it leans there until the take is scrubbed,
+  //     then it's the star, posing through the keyframes with onion-skin ghosts of its last and next pose ════════
+  const HOOK_POSES = [[-0.15, 0, 0.058], [0.25, 0, 0], [0.5, 0, 0], [0.45, PI, 0], [0.2, PI, -0.2], [-0.05, PI * 2, 0.03]];
+  const makeHook = (mats) => {
+    const hk = new THREE.Group(); hk.position.set(-3.72, 0, -5.12); G.add(hk);        // pivots on its butt end, on the floor
+    const Hk = sub(hk), L = 2.09;
+    const parts = [
+      Hk.put(new THREE.CylinderGeometry(0.03, 0.04, L * 0.97, 14), mats.alu, 0, L * 0.5, 0),
+      Hk.put(new THREE.CylinderGeometry(0.07, 0.07, 0.55, 14), mats.pink, 0, L * 0.32, 0),
+      Hk.box(0.11, 0.18, 0.05, mats.pink, 0, L * 0.5, 0.03, 0.02),
+      Hk.put(new THREE.SphereGeometry(0.04, 12, 8), mats.alu, 0, L * 0.985, 0),
+      Hk.put(new THREE.TorusGeometry(0.05, 0.02, 8, 14, PI * 1.25), mats.alu, 0.02, L * 0.985 - 0.03, 0.03, [0, 0, 2.6]),
+      Hk.put(new THREE.SphereGeometry(0.06, 12, 8), mats.pink, 0, 0.07, 0),
+    ];
+    return { hk, parts };
+  };
+  const HOOK = makeHook(M);
+  const ghostM = (col) => new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.28, depthWrite: false });
+  const GH = [makeHook({ alu: ghostM(0xe8604c), pink: ghostM(0xe8604c) }), makeHook({ alu: ghostM(0x3fae5f), pink: ghostM(0x3fae5f) })];
+  for (const g of GH) { g.hk.visible = false; g.parts.forEach(p => { p.userData.noInk = true; }); }
+  const poseHook = (obj, u) => {
+    const n = HOOK_POSES.length - 1, seg = Math.min(n - 1, Math.floor(u * n)), f = ease(u * n - seg), A = HOOK_POSES[seg], B = HOOK_POSES[seg + 1];
+    obj.rotation.set(A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f);
+  };
+  poseHook(HOOK.hk, 0);
+  claim(-3.72, -5.12, 0.12);
 
   // ════════ 5. the yarn basket, its strand running across the floor up to the hook's swatch ════════
   {
@@ -216,10 +233,21 @@ export default function dress(kit) {
     B.put(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 10), M.dark, -0.2, 0, 0, [0, 0, PI / 2]);
     B.put(new THREE.CylinderGeometry(0.004, 0.004, 0.1, 4), M.dark, 1.2, -0.05, 0).userData.noInk = true;
     const mic = B.put(new THREE.CapsuleGeometry(0.035, 0.18, 4, 10), paint(0x8a8392, { hatch: 0.8 }), 1.2, -0.12, 0, [0, 0, PI / 2]);
-    let t0 = -9;
-    tap(boom, 'dip the boom mic', (sfx) => { t0 = kit.now(); sfx([[220, 0.08], [0, 0.1], [880, 0.05], [660, 0.05]], 'sine', 0.05); });
+    let t0 = -9, taps = [], big = -99;
+    tap(boom, 'dip the boom mic', (sfx) => {
+      const now = kit.now(); taps = taps.filter(q => now - q < 5); taps.push(now);
+      if (taps.length >= 5 && now - big > 6) {                    // the secret: dip it five times and it's in the shot
+        big = now; taps = []; REC.on = false; FX.clap?.();
+        sfx([[0, 0.3], [3000, 0.02], [1200, 0.06], [0, 0.3], [330, 0.2], [262, 0.4]], 'square', 0.05);
+        kit.say('BOOM IN SHOT! Cut, cut, cut. …Okay everybody, take five.');
+        setTimeout(() => { REC.on = true; }, 5000);
+        return;
+      }
+      t0 = now; sfx([[220, 0.08], [0, 0.1], [880, 0.05], [660, 0.05]], 'sine', 0.05);
+    });
     live((t) => {
-      const k = t - t0, dip = k < 2.2 ? Math.sin(Math.min(1, k / 2.2) * PI) * 0.3 : 0;
+      const kb = t - big, k = t - t0;
+      const dip = kb < 3.5 ? Math.sin(Math.min(1, kb / 3.5) * PI) * 0.62 : k < 2.2 ? Math.sin(Math.min(1, k / 2.2) * PI) * 0.3 : 0;
       tiltG.rotation.z = 0.32 + Math.sin(t * 0.9) * 0.02 - dip;
       boom.rotation.y = 0.55 + Math.sin(t * 0.4) * 0.06;
     });
@@ -362,6 +390,7 @@ export default function dress(kit) {
     const stripes = sub(hinge).box(0.08, 0.016, 0.036, M.dark, 0.11, 0.008, 0, 0.004);
     const clap = new THREE.Group(); clap.position.set(cx, cy, cz); G.add(clap); clap.add(hinge); hinge.position.sub(clap.position);
     let t0 = -9;
+    FX.clap = () => { t0 = kit.now(); };
     tap(clap, 'call action!', (sfx) => { t0 = kit.now(); sfx([[0, 0.35], [3000, 0.02], [1200, 0.06]], 'square', 0.06); });
     live((t) => { const k = t - t0; hinge.rotation.z = k < 0.35 ? Math.sin(k / 0.35 * PI / 2) * 0.7 : k < 0.45 ? 0.7 * (1 - (k - 0.35) / 0.1) : 0; });
     claim(x, z, 0.32);
@@ -373,7 +402,7 @@ export default function dress(kit) {
     c.fillStyle = 'rgba(255,255,255,0.05)'; for (let i = 0; i < 40; i++) c.fillRect(Math.random() * w, Math.random() * h, 40, 3);
     font(c, 38, SCRIPT); c.fillStyle = '#f6eedb'; c.fillText('shot list', 20, 46);
     font(c, 22, HAND, 400);
-    ['1  wide: the swatch', '2  close: insert hook  ✓', '3  over the shoulder: yarn over  ✓', '4  close: pull through', '5  wide: one new stitch'].forEach((s, i) => c.fillText(s, 24, 90 + i * 32));
+    ['1  wide: the swatch', '2  close: insert hook  ✓', '3  over the shoulder: yarn over  ✓', '4  close: pull through', '5  the hook’s good side (it has two)'].forEach((s, i) => c.fillText(s, 24, 90 + i * 32));
     c.strokeStyle = '#f0862a'; c.lineWidth = 3; c.beginPath(); c.ellipse(150, 214, 140, 16, 0, 0, 7); c.stroke();
   }, -2.88, 1.5, BACK + 0.012, 'back', { board: 0x8a6448, thick: 0.025 });
   SB(1.2, 0.03, 0.05, M.wood, -2.88, 1.045, BACK + 0.04, 0.008);
@@ -386,9 +415,8 @@ export default function dress(kit) {
     const txt = kit.flat(0.3, 0.14, texMat(128, 60, (c, w, h) => { font(c, 44); c.fillStyle = '#ff6a5a'; c.textBaseline = 'middle'; c.fillText('REC', 8, h / 2 + 2); }), x + 0.07, y, z + 0.027);
     txt.renderOrder = 2;
     const rec = new THREE.Group(); rec.position.set(x, y, z); G.add(rec); rec.add(dot); dot.position.sub(rec.position);
-    let on = true;
-    tap(rec, 'toggle recording', (sfx) => { on = !on; sfx(on ? [[880, 0.08], [1320, 0.12]] : [[660, 0.08], [440, 0.12]], 'sine', 0.05); });
-    live((t) => { const b = on && Math.sin(t * PI) > -0.2; lit.emissiveIntensity = b ? 1 : 0; lit.color.setHex(b ? 0xff5a4a : 0x5a3a40); });
+    tap(rec, 'toggle recording', (sfx) => { REC.on = !REC.on; sfx(REC.on ? [[880, 0.08], [1320, 0.12]] : [[660, 0.08], [440, 0.12]], 'sine', 0.05); });
+    live((t) => { const b = REC.on && Math.sin(t * PI) > -0.2; lit.emissiveIntensity = b ? 1 : 0; lit.color.setHex(b ? 0xff5a4a : 0x5a3a40); });
     // a "quiet on set" card under it
     poster(0.5, 0.2, 200, (c, w, h) => { c.fillStyle = '#f6eedb'; c.fillRect(0, 0, w, h); font(c, 34, SCRIPT); c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('quiet on set', w / 2, h / 2 + 2); }, x, 1.9, BACK + 0.012, 'back', { board: 0x2a2230, thick: 0.012 });
   }
@@ -400,7 +428,7 @@ export default function dress(kit) {
     for (const y of [0.03, 0.43]) SB(0.52, 0.03, 0.64, M.alu, x, y, z, 0.008);
     for (const dz of [-0.31, 0.31]) SB(0.52, 0.42, 0.025, M.alu, x, 0.23, z + dz, 0.006);
     SB(0.08, 0.03, 0.2, M.alu, x - 0.26, 0.3, z, 0.008);
-    const st = kit.flat(0.22, 0.14, texMat(128, 80, (c, w, h) => { c.fillStyle = '#f0862a'; c.beginPath(); c.roundRect(2, 2, w - 4, h - 4, 14); c.fill(); font(c, 30); c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('FRAGILE', w / 2, h / 2 + 2); }), x - 0.252, 0.2, z + 0.1, [0, -PI / 2, 0]);
+    const st = kit.flat(0.22, 0.14, texMat(128, 80, (c, w, h) => { c.fillStyle = '#f0862a'; c.beginPath(); c.roundRect(2, 2, w - 4, h - 4, 14); c.fill(); font(c, 30); c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('TALENT ★', w / 2, h / 2 + 2); }), x - 0.252, 0.2, z + 0.1, [0, -PI / 2, 0]);
     st.renderOrder = 2;
     SB(0.3, 0.12, 0.24, M.blueL, x, 0.5, z - 0.12, 0.02, [0, 0.2, 0]);
     claim(x, z, 0.32);
@@ -410,6 +438,91 @@ export default function dress(kit) {
     for (const dz of [-0.13, 0.13]) rod([x0, 0.035, za + dz], [x1, 0.035, za + dz], 0.016, M.alu, 8);
     for (let k = 0; k <= 8; k++) SB(0.06, 0.02, 0.38, M.wood, x0 + 0.05 + k * (x1 - x0 - 0.1) / 8, 0.01, za, 0.004);
   }
+
+  // ════════ 14. THE TRICK: the dolly track is the timeline. Tap the playhead to play the take, or a
+  //     keyframe diamond to scrub to it: the yarn-ball actor hits its marks, the giant hook poses,
+  //     the spotlights follow, the wall playhead moves, and onion-skin ghosts show the last and next key. ════════
+  {
+    const KX = (i) => -2.85 + (i / 5) * 1.8, tz = 0.12;
+    // the actor: a big ball of yarn, blocking its moves between six marks
+    const marks = [[-3.04, -0.22], [-2.4, -1.5], [-0.8, -3.3], [1.76, -3.7], [1.2, -1.6], [0.4, -0.58]];
+    const path = new THREE.CatmullRomCurve3(marks.map(([x, z]) => new THREE.Vector3(x, 0.16, z)), false, 'centripetal');
+    const yarn = paint(0xffffff, { hatch: 0.4, map: canvasTex(128, 64, (c, w, h) => { c.fillStyle = '#f0862a'; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(42,34,48,0.35)'; c.lineWidth = 2.5; for (let k = -64; k < 192; k += 8) { c.beginPath(); c.moveTo(k, 0); c.lineTo(k + 50, h); c.stroke(); } c.strokeStyle = 'rgba(255,240,220,0.5)'; for (let k = 0; k < w; k += 16) { c.beginPath(); c.moveTo(k, 0); c.lineTo(k - 30, h); c.stroke(); } }) });
+    const actor = new THREE.Group(); actor.position.copy(actorPos); G.add(actor);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 14), yarn); actor.add(ball);
+    const tail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.1, -0.08, 0.1), new THREE.Vector3(0.2, -0.15, 0.16), new THREE.Vector3(0.32, -0.155, 0.1)]), 12, 0.008, 4), paint(0xf0862a));
+    tail.userData.noInk = true; actor.add(tail);
+    kit.g.add(shadow(0.001));
+    const ghostA = [0xe8604c, 0x3fae5f].map(col => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 10), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.3, depthWrite: false })); m.userData.noInk = true; m.visible = false; G.add(m); return m; });
+    // the motion path, dotted on the floor while you scrub
+    const dots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.02, 6, 4), new THREE.MeshBasicMaterial({ color: 0xf0862a }), 60);
+    dots.userData.noInk = true; dots.visible = false;
+    { const M4 = new THREE.Matrix4(); for (let i = 0; i < 60; i++) { const p = path.getPoint(i / 59); M4.makeTranslation(p.x, 0.02, p.z); dots.setMatrixAt(i, M4); } }
+    G.add(dots);
+    for (let i = 0; i < 6; i++) { const [x, z] = marks[i]; const n = kit.flat(0.16, 0.08, texMat(64, 32, (c, w, h) => { c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h); c.font = `700 22px ${HAND}`; c.fillStyle = '#f6eedb'; c.textAlign = 'center'; c.fillText(`key ${i + 1}`, w / 2, 23); }), x, 0.012, z + 0.24, [-PI / 2, 0, 0]); n.renderOrder = 1; }
+    // the playhead on the track, and a keyframe diamond on the sleepers for each key
+    const ph = new THREE.Group(); ph.position.set(KX(0), 0, tz); G.add(ph);
+    const P = sub(ph);
+    P.box(0.16, 0.05, 0.34, M.dark, 0, 0.07, 0, 0.012);
+    P.box(0.022, 0.62, 0.022, M.orange, 0, 0.4, 0, 0.006);
+    P.put(new THREE.ConeGeometry(0.07, 0.1, 3).rotateX(PI), M.orange, 0, 0.75, 0);
+    P.flat(0.24, 0.08, texMat(110, 36, (c, w, h) => { c.fillStyle = '#f0862a'; c.fillRect(0, 0, w, h); c.font = `700 22px ${HAND}`; c.fillStyle = '#2a2230'; c.textAlign = 'center'; c.fillText('▶ play take', w / 2, 25); }), 0, 0.55, 0.013).renderOrder = 2;
+    const off = paint(0x2f5ea8, { hatch: 0 }), on = paint(0xf0862a, { hatch: 0, emissive: 0x7a3a00 });
+    const dia = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new THREE.Group(); d.position.set(KX(i), 0.09, tz + 0.27); G.add(d);
+      const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), off); m.scale.set(1, 1, 0.5); d.add(m);
+      dia.push(m);
+      tap(d, `keyframe ${i + 1}: ${KEYN[i].toLowerCase()}`, (sfx) => { goTo(i / 5, 0.9); sfx([[523 + i * 60, 0.06], [784 + i * 60, 0.12]], 'triangle', 0.05); });
+    }
+    let firstTake = true;
+    const goTo = (u, dur) => { scrub.from = scrub.u; scrub.to = u; scrub.dur = dur; scrub.t0 = kit.now(); };
+    tap(ph, 'play the take', (sfx) => {
+      const from = scrub.u > 0.98 ? 0 : scrub.u;
+      scrub.u = from; goTo(1, 10 * (1 - from) + 0.01); scrub.lastKey = Math.round(from * 5) - 1;
+      REC.on = true; FX.clap?.();
+      sfx([[0, 0.3], [3000, 0.02], [1200, 0.06], [0, 0.2], [392, 0.1], [523, 0.15]], 'square', 0.05);
+      if (firstTake) { firstTake = false; setTimeout(() => kit.say('Onion skin on: the red ghost is the last key, the green one is the next. The room is the timeline now.'), 1200); }
+    });
+    // Vivi's page: the actor has been standing on it all along, on its first mark
+    const pg = kit.page();
+    if (!pg.collected) { pg.position.set(-3.08, 0.004, -0.14); pg.rotation.set(-PI / 2, 0, 0.5); G.add(pg); }
+    const prev = new THREE.Vector3(), ax = new THREE.Vector3(), q = new THREE.Quaternion();
+    live((t) => {
+      // drive u
+      const k = (t - scrub.t0) / scrub.dur;
+      if (k <= 1) scrub.u = scrub.from + (scrub.to - scrub.from) * Math.max(0, k);
+      else if (scrub.u > 0 && t - scrub.t0 - scrub.dur > 12) goTo(0, 1.6);            // left alone, the take rewinds
+      const moving = k <= 1;
+      scrub.vis += ((moving || scrub.u > 0.001 ? 1 : 0) - scrub.vis) * 0.08;
+      // keys crossed during a take get announced
+      const key = Math.floor(scrub.u * 5 + 1e-4);
+      if (moving && scrub.to === 1 && key !== scrub.lastKey && scrub.dur > 2) { scrub.lastKey = key; kit.say(`Key ${key + 1}: ${KEYN[key]}`); }
+      // the actor, with per-key easing, rolling as it goes
+      const n = 5, seg = Math.min(n - 1, Math.floor(scrub.u * n)), f = ease(scrub.u * n - seg), ue = (seg + f) / n;
+      prev.copy(actor.position); path.getPoint(ue, actor.position); actorPos.copy(actor.position);
+      ax.set(actor.position.z - prev.z, 0, prev.x - actor.position.x); const dist = ax.length();
+      if (dist > 1e-5) { q.setFromAxisAngle(ax.normalize(), -dist / 0.16); ball.quaternion.premultiply(q); }
+      // onion skin: the key behind and the key ahead
+      const showG = scrub.vis > 0.05 && scrub.u > 0.001;
+      ghostA[0].visible = ghostA[1].visible = GH[0].hk.visible = GH[1].hk.visible = dots.visible = showG;
+      const kPrev = Math.min(4, Math.floor(scrub.u * n + 1e-4)), kNext = Math.min(5, kPrev + 1);
+      path.getPoint(kPrev / n, ghostA[0].position); path.getPoint(kNext / n, ghostA[1].position);
+      for (const g of ghostA) g.material.opacity = 0.3 * scrub.vis;
+      poseHook(HOOK.hk, ue); poseHook(GH[0].hk, kPrev / n); poseHook(GH[1].hk, kNext / n);
+      ph.position.x = KX(0) + scrub.u * 1.8;
+      dia.forEach((d, i) => { const near = Math.abs(scrub.u - i / 5) < 0.02 && scrub.vis > 0.05; d.material = near ? on : off; d.rotation.y = near ? t * 3 : 0; });
+    });
+  }
+
+  // ════════ 15. the continuity check: a game you win by looking hard at the set ════════
+  kit.games.add(1.4, -0.95, 'continuity check', (m) => kit.quiz(m.game, 'Continuity check', [
+    { q: 'The script supervisor needs the biggest hook on the hook rack (right wall). What colour is its handle?', choices: ['pink', 'purple', 'teal', 'gold'], answer: 2, why: 'Teal: the fat one on the far right of the rack.' },
+    { q: 'There are two clapperboards on this set: one leaning by the back wall, one on the director’s chair. Which take is it?', choices: ['take 3', 'take 4', 'both: one says 3, one says 4'], answer: 2, why: 'One says TAKE 3 and the other TAKE 4. A continuity error! Somebody’s getting a note.' },
+    { q: 'The storyboard on the left wall: what is step 2?', choices: ['Yarn over', 'Poke through', 'Pull through', 'Insert hook'], answer: 1, why: '“Poke through”. The wall timeline skips it, which is the other continuity error in here.' },
+    { q: 'Follow the blue yarn strand out of the basket. Where does it end up?', choices: ['the hook’s swatch on its plinth', 'the camera', 'the boom mic', 'the director’s chair'], answer: 0, why: 'Up the plinth and onto the swatch: the hook’s working yarn.' },
+    { q: 'Count the spotlights hanging on the two trusses.', choices: ['4', '6', '8', '12'], answer: 1, why: 'Six: three each side. Tap one and they all find the hook.' },
+  ], { intro: 'A script supervisor’s job is noticing things. Every answer is somewhere on this set: go and look before you pick.', end: (s, n) => (s === n ? 'Nothing gets past you. That’s a wrap!' : `${s} of ${n}. Have another look around the set!`) }));
 
   bake();
 }

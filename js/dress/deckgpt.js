@@ -41,7 +41,11 @@ function bag(THREE, rb) {
 export default function dress(kit) {
   const { THREE, g, put, paint, tap, live, free, claim, rb, canvasTex, HAND, SCRIPT, INKC, D, PAL, kit: sub, now, shadow } = kit;
   const S = bag(THREE, rb), L = bag(THREE, rb);
-  const warn = (what, x, z, r) => { if (!free(x, z, r)) (window.__dressWarn ??= []).push(`deckgpt: ${what} at ${x},${z}`); };
+  const { fx, say, onExit, games, shuffle } = kit;
+  const showAll = (o, v) => o.traverse(q => { q.visible = v; });      // hidden things mustn't catch taps
+  const CHANGES = [];                  // what the lights-out puzzle can quietly change: { what, why, on, off }
+  let baseFilter = '';                 // the filter the current slide wants
+  const tapsWithin = (arr, n, secs) => { arr.push(now()); while (arr.length && now() - arr[0] > secs) arr.shift(); if (arr.length >= n) { arr.length = 0; return true; } return false; };
   const gold = paint(PAL.gold), red = paint(0xb03a30), plum = paint(0x6b2730), dark = paint(0x2a2230, { hatch: 0 }), walnut = paint(0x5a3a2a), cream = paint(0xf6eedb);
   const opaque = (w, h, draw) => paint(0xffffff, { map: canvasTex(w, h, draw), hatch: 0, unique: true });
   const plane = (w, h, mat, x, y, z, rot) => { const m = put(new THREE.PlaneGeometry(w, h), mat, x, y, z, rot); m.userData.noInk = true; return m; };
@@ -57,7 +61,6 @@ export default function dress(kit) {
   // ══ THE CINEMA ORGAN, back-left: console, bench and a wall of pipes (tap: play it) ══
   {
     const x = -3.15, z = -5.02;
-    warn('organ', x, z + 0.3, 0.25);
     claim(x, z, 0.32); claim(x - 0.3, z, 0.32); claim(x + 0.3, z, 0.32); claim(x, z + 0.58, 0.25);
     const O = S.at(x, 0, z, 0);
     O.box(1.0, 0.62, 0.5, walnut, 0, 0.31, 0, 0.03);                                 // the body
@@ -115,8 +118,19 @@ export default function dress(kit) {
       pipeM.emissive.setRGB(e, e * 0.75, e * 0.3); pipeM.emissiveIntensity = 1;
       keys.forEach((k, i) => { k.position.y = 0.705 - (on && Math.floor(s * 3) % 3 === i ? 0.012 : 0); });
     });
+    const otaps = []; let st0 = -9;
+    live((t) => {
+      const s = since(st0);
+      if (s < 3) { fx.filter(`saturate(${1.6 + Math.sin(s * 20) * 0.5}) contrast(1.2) brightness(${1 + Math.max(0, 0.5 - s) })`); chase.forEach((b, i) => { b.material = (i + Math.floor(t * 30)) % 2 ? bulbsDim : bulbsOn; }); }
+      else if (st0 > 0) { st0 = -9; fx.filter(baseFilter); }
+    });
+    CHANGES.push({ what: 'The organ pipes turned silver', why: 'Gold pipes, then silver ones: a very expensive continuity error.', on: () => pipeM.color.set(0xc9ccd6), off: () => pipeM.color.set(PAL.gold) });
     tap(organ, 'play the mighty organ', (sfx) => {
       t0 = now();
+      if (tapsWithin(otaps, 5, 4)) {
+        st0 = now(); say('♪ BWAAAAMMM. The DeckGPT logo sting. Please silence your phones.');
+        sfx([[65, 2.5], [98, 2.2], [131, 2]], 'sawtooth', 0.25); return;
+      }
       sfx([[262, 0.18], [330, 0.18], [392, 0.18], [523, 0.5], [392, 0.15], [523, 0.8]], 'triangle', 0.6);
       sfx([[131, 1.5], [196, 0.8]], 'sine', 0.4);
     });
@@ -127,8 +141,8 @@ export default function dress(kit) {
   const chase = [];
   {
     const posters = [
-      ['SCOPE', 'who is it for?', '#2a3a5e', '#3a4c78', '#f2d27a', 'stage 1'],
-      ['THE STORY', 'hook · problem · insight · ask', '#7a1f2c', '#912a38', '#f6eedb', 'stage 2'],
+      ['SCOPE', 'who is it for? (not: everyone)', '#2a3a5e', '#3a4c78', '#f2d27a', 'stage 1'],
+      ['THE STORY', 'rated PG: mild bullet points', '#7a1f2c', '#912a38', '#f6eedb', 'stage 2'],
       ['VISUALS', 'in glorious house style', '#1f5a52', '#2b6e64', '#f2d27a', 'stage 3'],
     ];
     posters.forEach(([title, tag, bg, fg, ink, st], i) => {
@@ -167,6 +181,8 @@ export default function dress(kit) {
     const ex = new THREE.MeshBasicMaterial({ map: canvasTex(128, 48, (c, w, h) => { c.fillStyle = '#1f6a3a'; c.fillRect(0, 0, w, h); c.fillStyle = '#c9ffd6'; c.font = `700 34px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('EXIT →', w / 2, h / 2 + 2); }) });
     S.box(0.06, 0.2, 0.46, dark, LW + 0.02, 2.15, -0.45, 0.01);
     plane(0.4, 0.15, ex, LW + 0.055, 2.15, -0.45, [0, Math.PI / 2, 0]);
+    const exMap = ex.map, entMap = canvasTex(128, 48, (c, w, h) => { c.fillStyle = '#1f6a3a'; c.fillRect(0, 0, w, h); c.fillStyle = '#c9ffd6'; c.font = `700 26px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('ENTRANCE →', w / 2, h / 2 + 2); });
+    CHANGES.push({ what: 'The EXIT sign says ENTRANCE', why: 'Same door, more optimistic sign.', on: () => { ex.map = entMap; ex.needsUpdate = true; }, off: () => { ex.map = exMap; ex.needsUpdate = true; } });
   }
   live((t) => { const k = Math.floor(t * 5); chase.forEach((b, i) => { b.material = (i + k) % 4 === 0 ? bulbsDim : bulbsOn; }); });
 
@@ -174,7 +190,7 @@ export default function dress(kit) {
   {
     const posts = [[-3.5, -2.05], [-2.7, -2.15], [-1.9, -2.05]];
     posts.forEach(([x, z], i) => {
-      warn('post' + i, x, z, 0.14); claim(x, z, 0.12);
+      claim(x, z, 0.12);
       S.put(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 14), gold, x, 0.02, z);
       S.put(new THREE.CylinderGeometry(0.025, 0.03, 0.82, 8), gold, x, 0.43, z);
       S.put(new THREE.SphereGeometry(0.05, 10, 8), gold, x, 0.88, z);
@@ -205,7 +221,7 @@ export default function dress(kit) {
   // ══ a giant film reel on its stand by the left wall (tap: spin it) ══
   {
     const x = -3.62, z = -3.62;
-    warn('reel', x, z, 0.3); claim(x, z, 0.3);
+    claim(x, z, 0.3);
     S.box(0.36, 0.06, 0.7, walnut, x, 0.03, z, 0.02);
     for (const s of [-1, 1]) S.box(0.05, 0.6, 0.06, walnut, x + s * 0.11, 0.33, z, 0.015);
     S.put(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8).rotateZ(Math.PI / 2), gold, x, 0.6, z);
@@ -226,25 +242,35 @@ export default function dress(kit) {
     const tail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(x, 0.6 - 0.36, z + 0.05), new THREE.Vector3(x + 0.12, 0.12, z + 0.3), new THREE.Vector3(x + 0.3, 0.015, z + 0.45), new THREE.Vector3(x + 0.6, 0.015, z + 0.4)]), 16, 0.012, 4), paint(0x3a3040)); tail.scale.set(1, 1, 1); tail.userData.noInk = true; g.add(tail);
     let t0 = -9;
     live((t, dt) => { const s = since(t0); reel.rotation.x -= dt * (0.25 + (s < 4 ? 8 * Math.exp(-s * 0.9) : 0)); });
+    CHANGES.push({ what: 'The giant film reel vanished', why: 'The reel by the left wall: gone. Someone’s taken it to the projection booth.', on: () => showAll(reel, false), off: () => showAll(reel, true) });
     tap(reel, 'spin the film reel', (sfx) => { t0 = now(); sfx(Array.from({ length: 10 }, (_, i) => [900 + (i % 2) * 300, 0.035]), 'square', 0.15); });
   }
 
   // ══ a cardboard standee: "coming soon" (tap: wobble it) ══
   {
     const x = -1.95, z = -3.15;
-    warn('standee', x, z, 0.3); claim(x, z, 0.28);
+    claim(x, z, 0.28);
     const sm = opaque(220, 380, (c, w, h) => {
       deco(c, w, h, '#2a2230', '#3a3048');
       c.fillStyle = '#f2d27a'; c.textAlign = 'center';
       c.font = `400 22px ${HAND}`; c.fillText('COMING SOON', w / 2, 36);
       c.font = `700 58px ${SCRIPT}`; c.fillText('Our Q3', w / 2, 100); c.fillText('Plan', w / 2, 150);
       for (let k = 0; k < 3; k++) { const y = 186 + k * 52; c.fillStyle = '#fbf8f1'; c.fillRect(34 + k * 14, y, 124, 40); c.fillStyle = ['#e8604c', '#7fb3a8', '#e4b84f'][k]; c.fillRect(40 + k * 14, y + 6, 70, 8); }
-      c.fillStyle = '#f2d27a'; c.font = `400 20px ${HAND}`; c.fillText('12 slides · one prompt', w / 2, 352);
+      c.fillStyle = '#f2d27a'; c.font = `400 17px ${HAND}`; c.fillText('12 slides · 1 prompt · 0 all-nighters', w / 2, 352);
+    });
+    const sm4 = opaque(220, 380, (c, w, h) => {
+      deco(c, w, h, '#2a2230', '#3a3048');
+      c.fillStyle = '#f2d27a'; c.textAlign = 'center';
+      c.font = `400 22px ${HAND}`; c.fillText('COMING SOON', w / 2, 36);
+      c.font = `700 58px ${SCRIPT}`; c.fillText('Our Q4', w / 2, 100); c.fillText('Plan', w / 2, 150);
+      for (let k = 0; k < 3; k++) { const y = 186 + k * 52; c.fillStyle = '#fbf8f1'; c.fillRect(34 + k * 14, y, 124, 40); c.fillStyle = ['#e8604c', '#7fb3a8', '#e4b84f'][k]; c.fillRect(40 + k * 14, y + 6, 70, 8); }
+      c.fillStyle = '#f2d27a'; c.font = `400 17px ${HAND}`; c.fillText('(we slipped a quarter)', w / 2, 352);
     });
     const st = new THREE.Group(); st.position.set(x, 0, z); st.rotation.y = 0.5; g.add(st);
     const SK = sub(st);
     SK.box(0.66, 1.18, 0.025, paint(0xc8a47c), 0, 0.62, 0, 0.01);
     const face = SK.put(new THREE.PlaneGeometry(0.62, 1.1), sm, 0, 0.62, 0.014); face.userData.noInk = true;
+    CHANGES.push({ what: 'The standee says Q4 now', why: '“Our Q3 Plan” became “Our Q4 Plan”. Classic schedule slip.', on: () => { face.material = sm4; }, off: () => { face.material = sm; } });
     SK.box(0.04, 0.7, 0.025, paint(0xc8a47c), 0, 0.33, -0.2, 0.01, [0.55, 0, 0]);
     let t0 = -9;
     live(() => { const s = since(t0); const k = s < 2.2 ? Math.sin(s * 10) * Math.exp(-s * 1.8) : 0; st.rotation.x = k * 0.18; st.rotation.z = k * 0.08; });
@@ -255,7 +281,7 @@ export default function dress(kit) {
   // ══ RIGHT SIDE: the box office (tap: get a ticket) ══
   {
     const x = 3.52, z = -3.12, ry = -Math.PI / 2;
-    warn('kiosk', x, z, 0.36); claim(x, z, 0.4); claim(x, z - 0.3, 0.32); claim(x, z + 0.3, 0.32);
+    claim(x, z, 0.4); claim(x, z - 0.3, 0.32); claim(x, z + 0.3, 0.32);
     const B = S.at(x, 0, z, ry);
     B.box(0.92, 0.95, 0.56, red, 0, 0.475, 0, 0.03);
     B.box(0.98, 0.06, 0.64, gold, 0, 0.98, 0.02, 0.015);
@@ -270,11 +296,14 @@ export default function dress(kit) {
     glass.position.set(0, 1.42, 0.27); kio.add(glass);
     const signM = new THREE.MeshBasicMaterial({ map: canvasTex(256, 64, (c, w, h) => { c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffd98a'; c.font = `700 44px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Box Office', w / 2, h / 2 + 2); }) });
     const sign = sub(kio).put(new THREE.PlaneGeometry(0.8, 0.2), signM, 0, 1.86, 0.335); sign.userData.noInk = true;
+    const boMap = signM.map, offish = canvasTex(256, 64, (c, w, h) => { c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffd98a'; c.font = `700 44px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Box Offish', w / 2, h / 2 + 2); });
+    CHANGES.push({ what: 'The box office sign is misspelt', why: '“Box Office” became “Box Offish”. It’s having a day.', on: () => { signM.map = offish; signM.needsUpdate = true; }, off: () => { signM.map = boMap; signM.needsUpdate = true; } });
+    const ttaps = [];
     const frontM = opaque(256, 160, (c, w, h) => {
       c.fillStyle = '#b03a30'; c.fillRect(0, 0, w, h);
       c.strokeStyle = '#e8c46a'; c.lineWidth = 6; c.strokeRect(14, 14, w - 28, h - 28);
       c.fillStyle = '#f2d27a'; c.font = `700 46px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('Tickets', w / 2, 72);
-      c.font = `400 22px ${HAND}`; c.fillText('tonight: your deck', w / 2, 108); c.fillText('admit one · 4 stages', w / 2, 134);
+      c.font = `400 22px ${HAND}`; c.fillText('admit one · 4 stages', w / 2, 108); c.font = `400 17px ${HAND}`; c.fillText('no refunds after Scope', w / 2, 134);
     });
     sub(kio).put(new THREE.PlaneGeometry(0.62, 0.38), frontM, 0, 0.58, 0.285).userData.noInk = true;
     // inside the window: the ticket roll
@@ -299,14 +328,14 @@ export default function dress(kit) {
       mach.position.y = 1.01 + (s < 0.3 ? Math.sin(s / 0.3 * Math.PI) * 0.02 : 0);
       signM.color.setScalar(s < 1.2 ? (Math.floor(s * 8) % 2 ? 1 : 0.5) : 0.85 + 0.15 * Math.sin(t * 2));
     });
-    tap(mach, 'buy a ticket', (sfx) => { t0 = now(); sfx([[1200, 0.04], [1000, 0.04], [1200, 0.04], [1000, 0.04], [1568, 0.4]], 'square', 0.2); });
+    tap(mach, 'buy a ticket', (sfx) => { t0 = now(); if (tapsWithin(ttaps, 5, 6)) say('Five tickets! You may now sit in five seats at once. Please don’t.'); sfx([[1200, 0.04], [1000, 0.04], [1200, 0.04], [1000, 0.04], [1568, 0.4]], 'square', 0.2); });
     g.add(shadow(0.6).translateX(x).translateZ(z));
   }
 
   // ══ a stack of film cans in the back-right corner (tap: pop the lid) ══
   {
     const x = 3.62, z = -4.12;
-    warn('cans', x, z, 0.24); claim(x, z, 0.24);
+    claim(x, z, 0.24);
     const canM = paint(0x8a8f9a), lab = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8];
     for (let i = 0; i < 4; i++) {
       const dx = Math.sin(i * 2.3) * 0.03, dz = Math.cos(i * 1.7) * 0.03;
@@ -319,8 +348,16 @@ export default function dress(kit) {
     LK.put(new THREE.CylinderGeometry(0.04, 0.04, 0.012, 10).translate(0.22, 0.025, 0), paint(0xe8604c));
     const inside = S.put(new THREE.CylinderGeometry(0.18, 0.18, 0.012, 20), paint(0x3a3040), x, 0.262, z);
     let t0 = -9;
+    // Vivi's lost page is rolled up in this can: open it and it stands up out of the film
+    const pg = kit.page(); let pgState = pg.collected ? 2 : 0;          // 0 hidden, 1 out, 2 gone
+    if (!pg.collected) {
+      pg.position.set(x, 0.268, z); pg.rotation.y = -0.5; pg.scale.setScalar(0.9); g.add(pg); showAll(pg, false);
+      const poke = pg.userData.toy.poke; pg.userData.toy.poke = (sfx) => { pgState = 2; poke(sfx); say('A page of Vivi’s guest list! It really was in the can.'); };
+    }
     live(() => {
       const s = since(t0);
+      if (pgState === 0 && s > 0.2 && s < 1) { pgState = 1; showAll(pg, true); say('Something’s rolled up inside the film can…'); }
+      if (pgState === 1) { lid.rotation.z = 1.9; return; }                // it stays open while the page stands in it
       const open = s < 0.25 ? s / 0.25 : s < 1.4 ? 1 : s < 1.8 ? 1 - (s - 1.4) / 0.4 : 0;
       lid.rotation.z = open * 1.9 + (s > 1.8 && s < 2.4 ? Math.abs(Math.sin((s - 1.8) * 20)) * 0.12 * (2.4 - s) : 0);
     });
@@ -342,8 +379,8 @@ export default function dress(kit) {
       S.box(0.04, 0.98, 0.72, gold, RW, y, z, 0.02);
       plane(0.6, 0.84, pm, RW - 0.025, y, z, [0, -Math.PI / 2, 0]);
     };
-    one(-1.3, 1.65, 'THE DECK', 'export it · present it', '#4a2a5e', '#5c3874', '#f2d27a');
-    one(-4.72, 1.6, 'ENCORE!', 'start from a brief', '#7a4a1f', '#8e5a2a', '#f6eedb');
+    one(-1.3, 1.65, 'THE DECK', 'present it · pretend it was easy', '#4a2a5e', '#5c3874', '#f2d27a');
+    one(-4.72, 1.6, 'ENCORE!', 'that’s a wrap: it’s in the can!', '#7a4a1f', '#8e5a2a', '#f6eedb');
   }
 
   // ══ comedy & tragedy masks high on the back wall, right (tap: they swap moods) ══
@@ -370,6 +407,7 @@ export default function dress(kit) {
     });
     let t0 = -9, sw = false;
     live((t) => mm.forEach(({ pivot, i }) => { const s = since(t0); pivot.rotation.y = s < 0.6 ? s / 0.6 * Math.PI * 2 * (i ? -1 : 1) : 0; pivot.rotation.z = Math.sin(t * 1.1 + i * 2) * 0.05; }));
+    CHANGES.push({ what: 'The masks swapped faces', why: 'Comedy went glum and tragedy cheered up, up on the back wall.', on: () => mm.forEach(({ mat, i }) => { mat.map = (sw ? T : T2)[i]; mat.needsUpdate = true; }), off: () => mm.forEach(({ mat, i }) => { mat.map = (sw ? T2 : T)[i]; mat.needsUpdate = true; }) });
     tap(masks, 'swap the masks', (sfx) => {
       t0 = now(); sw = !sw;
       setTimeout(() => mm.forEach(({ mat, i }) => { mat.map = (sw ? T2 : T)[i]; mat.needsUpdate = true; }), 300);
@@ -380,12 +418,12 @@ export default function dress(kit) {
   // ══ the sandwich board by the door: tonight's show (tap: flip the card) ══
   {
     const x = 3.52, z = -0.38;
-    warn('aframe', x, z, 0.22); claim(x, z, 0.22);
+    claim(x, z, 0.22);
     const af = new THREE.Group(); af.position.set(x, 0, z); af.rotation.y = -0.6; g.add(af);
     const AK = sub(af);
     for (const s of [-1, 1]) AK.box(0.5, 0.9, 0.03, walnut, 0, 0.44, s * 0.13, 0.01, [-s * 0.15, 0, 0]);
     AK.box(0.52, 0.05, 0.15, gold, 0, 0.9, 0, 0.015);
-    const faces = ['NOW SHOWING|your deck|in four stages', 'TONIGHT|Scope · Story|Visuals · Deck'].map(txt => opaque(160, 240, (c, w, h) => {
+    const faces = ['NOW SHOWING|your deck|in four stages', 'TONIGHT|Scope · Story|Visuals · Deck', 'COMING SOON|the sequel|final_v2_FINAL.pptx'].map(txt => opaque(160, 240, (c, w, h) => {
       c.fillStyle = '#2a2230'; c.fillRect(0, 0, w, h);
       c.strokeStyle = '#e8c46a'; c.lineWidth = 4; c.strokeRect(8, 8, w - 16, h - 16);
       const [a, b, d] = txt.split('|');
@@ -398,7 +436,7 @@ export default function dress(kit) {
     const cm = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.62).translate(0, -0.33, 0.006), faces[0]); cm.userData.noInk = true; card.add(cm);
     let t0 = -9, n = 0;
     live(() => { const s = since(t0); card.rotation.x = -0.15 - (s < 0.5 ? Math.sin(s / 0.5 * Math.PI) * 1.6 : 0); });
-    tap(af, 'flip the sign', (sfx) => { t0 = now(); setTimeout(() => { n ^= 1; cm.material = faces[n]; }, 250); sfx([[500, 0.05], [650, 0.08]], 'sine', 0.4); });
+    tap(af, 'flip the sign', (sfx) => { t0 = now(); setTimeout(() => { n = (n + 1) % faces.length; cm.material = faces[n]; }, 250); sfx([[500, 0.05], [650, 0.08]], 'sine', 0.4); });
     g.add(shadow(0.32).translateX(x).translateZ(z));
   }
 
@@ -431,6 +469,188 @@ export default function dress(kit) {
       motes.instanceMatrix.needsUpdate = true;
     });
   }
+
+  // ══ THE SIGNATURE TRICK: the whole room is a slide deck, and the clicker on the podium runs it ══
+  {
+    const px = -2.2, pz = -4.35;
+    claim(px, pz, 0.25);
+    S.box(0.42, 0.92, 0.32, walnut, px, 0.46, pz, 0.03);
+    S.box(0.52, 0.05, 0.4, gold, px, 0.94, pz, 0.015, [-0.12, 0, 0]);
+    S.box(0.46, 0.06, 0.36, walnut, px, 0.03, pz, 0.015);
+    const ctr = opaque(256, 160, () => {});
+    const drawCtr = (n) => {
+      const c = ctr.map.image.getContext('2d'), w = 256, h = 160;
+      c.fillStyle = '#b03a30'; c.fillRect(0, 0, w, h); c.strokeStyle = '#e8c46a'; c.lineWidth = 6; c.strokeRect(10, 10, w - 20, h - 20);
+      c.fillStyle = '#f2d27a'; c.textAlign = 'center'; c.font = `700 40px ${SCRIPT}`; c.fillText('DeckGPT', w / 2, 56);
+      c.font = `400 24px ${HAND}`; c.fillStyle = '#f6eedb'; c.fillText(n ? `slide ${n} of 5` : 'click to present ▶', w / 2, 100);
+      c.font = `400 16px ${HAND}`; c.fillText('the room is the deck', w / 2, 130);
+      ctr.map.needsUpdate = true;
+    };
+    drawCtr(0);
+    plane(0.36, 0.23, ctr, px, 0.62, pz + 0.163);
+    // the clicker: a big presenter's remote, its button on a spring
+    const clk = new THREE.Group(); clk.position.set(px, 0.98, pz + 0.02); clk.rotation.set(-0.12, 0.35, 0); g.add(clk);
+    const CK = sub(clk);
+    CK.box(0.12, 0.05, 0.26, dark, 0, 0.025, 0, 0.02);
+    CK.put(new THREE.CylinderGeometry(0.008, 0.008, 0.08, 5).rotateX(Math.PI / 2), paint(0x9a9aa8), 0, 0.04, -0.16);
+    CK.put(new THREE.SphereGeometry(0.012, 6, 5), paint(0xe8604c), 0, 0.04, -0.2);
+    const btn = new THREE.Group(); btn.position.set(0, 0.05, 0.04); clk.add(btn);
+    sub(btn).put(new THREE.CylinderGeometry(0.035, 0.035, 0.025, 14).translate(0, 0.012, 0), paint(0xe8604c));
+    sub(btn).put(new THREE.ConeGeometry(0.018, 0.02, 3).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, 0.028, 0), paint(0xf6eedb));
+    CK.put(new THREE.CylinderGeometry(0.022, 0.022, 0.02, 10).translate(0, 0.06, -0.07), paint(0x6f7d92));
+
+    // slide 1: the title, in giant letters
+    const letters = [];
+    'Q3PLAN'.split('').forEach((ch, i) => {
+      const lg = new THREE.Group(); lg.position.set(-1.2 + i * 0.46 + (i > 1 ? 0.3 : 0), 3.4, -3.3); g.add(lg);
+      sub(lg).box(0.38, 0.46, 0.08, gold, 0, 0, 0, 0.03);
+      const lm = opaque(96, 112, (c, w, h) => { c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h); c.fillStyle = '#b03a30'; c.font = `700 92px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(ch, w / 2, h / 2 + 6); });
+      sub(lg).put(new THREE.PlaneGeometry(0.34, 0.42), lm, 0, 0, 0.042).userData.noInk = true;
+      showAll(lg, false); letters.push(lg);
+    });
+    // slide 2: a bar chart grows out of the floor in front of the screen
+    const bars = [0.45, 0.7, 0.55, 1.05, 1.5].map((h, i) => {
+      const b = put(rb(0.36, h, 0.36, 0.03).translate(0, h / 2, 0), paint([0x7fb3a8, 0xe4b84f, 0x8f7ae8, 0xe8604c, 0xb03a30][i]), -1.2 + i * 0.6, 0, -4.75);
+      b.scale.y = 0.001; b.visible = false; return b;
+    });
+    const arrow = put(new THREE.ConeGeometry(0.14, 0.3, 12).rotateZ(-0.9), paint(0xb03a30), 1.55, 1.75, -4.75); arrow.visible = false;
+    // slide 3: a picture: cardboard clip-art mountains and a sun rise behind the seats
+    const cut = (w, h, draw) => { const m = paint(0xffffff, { map: canvasTex(w, h, draw), hatch: 0, unique: true, side: THREE.DoubleSide }); m.alphaTest = 0.5; m.transparent = true; return m; };
+    const pic = new THREE.Group(); pic.position.set(0.2, -1.6, -4.55); g.add(pic);
+    const mount = cut(256, 128, (c, w, h) => {
+      c.fillStyle = '#7a8fb0'; c.beginPath(); c.moveTo(0, h); c.lineTo(w * 0.3, h * 0.15); c.lineTo(w * 0.55, h); c.fill();
+      c.fillStyle = '#5f7a9e'; c.beginPath(); c.moveTo(w * 0.35, h); c.lineTo(w * 0.68, h * 0.05); c.lineTo(w, h); c.fill();
+      c.fillStyle = '#f6f6f6'; for (const [x0, y0] of [[0.3, 0.15], [0.68, 0.05]]) { c.beginPath(); c.moveTo(w * x0, h * y0); c.lineTo(w * x0 - 18, h * y0 + 30); c.lineTo(w * x0 + 18, h * y0 + 30); c.fill(); }
+      c.strokeStyle = '#2a2230'; c.lineWidth = 3; c.strokeRect(1, 1, 0, 0);
+    });
+    const mm2 = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), mount); mm2.position.set(0, 0.65, 0); mm2.userData.noInk = true; pic.add(mm2);
+    const sun = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), cut(128, 128, (c, w, h) => {
+      c.fillStyle = '#f2c84a'; c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 2, 0, 7); c.fill();
+      c.fillStyle = '#2a2230'; c.beginPath(); c.arc(w * 0.38, h * 0.42, 6, 0, 7); c.arc(w * 0.62, h * 0.42, 6, 0, 7); c.fill();
+      c.strokeStyle = '#2a2230'; c.lineWidth = 5; c.beginPath(); c.arc(w / 2, h * 0.55, 22, 0.3, Math.PI - 0.3); c.stroke();
+    }));
+    sun.position.set(0.9, 1.55, -0.02); sun.userData.noInk = true; pic.add(sun);
+    showAll(pic, false);
+    // slide 4: Q&A: question-mark balloons float up out of the seats
+    const qTex = canvasTex(64, 64, (c, w, h) => { c.fillStyle = '#fbf6ea'; c.font = `700 52px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('?', w / 2, h / 2 + 4); });
+    const balloons = [];
+    for (let i = 0; i < 8; i++) {
+      const bg = new THREE.Group(); bg.position.set(-0.75 + (i % 4) * 0.7, 0.9, -3.7 + Math.floor(i / 4) * 0.8); g.add(bg);
+      const col = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8][i % 4];
+      const bb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10).scale(1, 1.15, 1), paint(col)); bb.position.y = 0.45; bg.add(bb);
+      const q = new THREE.Sprite(new THREE.SpriteMaterial({ map: qTex, depthWrite: false })); q.scale.set(0.16, 0.16, 1); q.position.set(0, 0.46, 0.14); bg.add(q);
+      const str = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.3, 3).translate(0, 0.15, 0), paint(0x2a2230, { hatch: 0 })); str.userData.noInk = true; bg.add(str);
+      showAll(bg, false); balloons.push(bg);
+    }
+    // slide 5: thank you! confetti over everything
+    const NC = 140, conf = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.09, 0.06), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), NC);
+    conf.userData.noInk = true; conf.frustumCulled = false; conf.visible = false; g.add(conf);
+    const cseed = Array.from({ length: NC }, (_, i) => [Math.sin(i * 12.9) * 3.6, Math.sin(i * 4.1) * 2.5 - 2.6, (i * 0.137) % 1, i]);
+    const CC = [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0xf2d27a].map(h => new THREE.Color(h));
+    cseed.forEach((c, i) => conf.setColorAt(i, CC[i % CC.length]));
+    const CM = new THREE.Matrix4(), CQ = new THREE.Quaternion(), CE = new THREE.Euler(), CV = new THREE.Vector3(), C1 = new THREE.Vector3(1, 1, 1);
+
+    let slide = 0, sT = -9, bT = -9;
+    const LINES = [
+      'Lights up. That was a five-slide deck in a five-click room.',
+      'Slide 1 of 5 · The title. Giant letters, confident font, no idea yet what slide 2 is.',
+      'Slide 2 · The chart. Up and to the right, as is tradition.',
+      'Slide 3 · A picture. A mountain, for “vision”.',
+      'Slide 4 · Q&A. The seats have questions.',
+      'Slide 5 · Thank you! DeckGPT builds that arc for you: Scope, Story, Visuals, Deck.',
+    ];
+    const go = (n) => {
+      slide = n; sT = now(); drawCtr(n); say(LINES[n]);
+      baseFilter = n === 3 ? 'sepia(0.55) saturate(1.2)' : '';
+      fx.filter('brightness(1.8) blur(3px)');                           // the transition: a quick dissolve
+      setTimeout(() => fx.filter(baseFilter), 220);
+      if (n === 4) for (let k = 0; k < 14; k++) setTimeout(() => kit.sfx([[300 + Math.random() * 900, 0.03], [200 + Math.random() * 600, 0.03]], 'square', 0.05), k * 110 + Math.random() * 60);
+      if (n === 5) kit.sfx([[523, 0.1], [659, 0.1], [784, 0.1], [1047, 0.4]], 'triangle', 0.2);
+    };
+    onExit(() => { if (slide) { slide = 0; sT = -9; drawCtr(0); baseFilter = ''; } });
+    live((t) => {
+      const s = since(sT);
+      btn.position.y = 0.05 - (since(bT) < 0.2 ? 0.012 : 0);
+      // title letters drop in with a bounce, and fly off when the slide changes
+      letters.forEach((lg, i) => {
+        const on = slide === 1, u = s - i * 0.12;
+        if (on) { const k = Math.max(0, Math.min(1, u / 0.5)); const y = 1.75 + (1 - k) * 1.7; const bnc = u > 0.5 && u < 1.1 ? Math.sin((u - 0.5) / 0.6 * Math.PI * 2) * 0.08 * (1.1 - u) : 0; lg.position.y = y + bnc; lg.rotation.z = (1 - k) * (i % 2 ? 0.4 : -0.4); if (!lg.visible && u > 0) showAll(lg, true); }
+        else if (lg.visible) { lg.position.y += 0.08; if (lg.position.y > 3.3) showAll(lg, false); }
+      });
+      bars.forEach((b, i) => { const want = slide === 2 ? Math.max(0.001, Math.min(1, (s - i * 0.15) / 0.6)) : Math.max(0.001, b.scale.y - 0.06); b.scale.y = want; b.visible = want > 0.002; });
+      arrow.visible = slide === 2 && s > 1.2; arrow.position.y = 1.75 + Math.sin(t * 4) * 0.04;
+      const py = slide === 3 ? Math.min(0, -1.6 + s * 2.2) : Math.max(-1.6, pic.position.y - 0.08);
+      pic.position.y = py; if (pic.visible !== py > -1.59) showAll(pic, py > -1.59);
+      sun.rotation.z = Math.sin(t) * 0.1;
+      balloons.forEach((bg, i) => {
+        const on = slide === 4, u = Math.max(0, s - i * 0.18);
+        if (on) { if (!bg.visible) showAll(bg, true); bg.position.y = 0.6 + Math.min(1.3, u * 0.9) + Math.sin(t * 2 + i) * 0.04; bg.rotation.z = Math.sin(t * 1.5 + i) * 0.1; }
+        else if (bg.visible) { bg.position.y += 0.05; if (bg.position.y > 2.8) { showAll(bg, false); bg.position.y = 0.6; } }
+      });
+      conf.visible = slide === 5 && s < 12;
+      if (conf.visible) {
+        cseed.forEach(([cx, cz, ph, i]) => {
+          const y = 2.7 - ((s * 0.45 + ph) % 1) * 2.7;
+          CE.set(s * 3 + i, s * 2 + i * 0.7, 0); CQ.setFromEuler(CE);
+          CM.compose(CV.set(cx + Math.sin(s * 2 + i) * 0.15, y, cz), CQ, C1); conf.setMatrixAt(i, CM);
+        });
+        conf.instanceMatrix.needsUpdate = true;
+      }
+    });
+    tap(clk, 'click to the next slide', (sfx) => { bT = now(); sfx([[1500, 0.02], [900, 0.03]], 'square', 0.2); go((slide + 1) % 6); });
+  }
+
+  // ══ THE SMARTER GAME: lights out, and something in the room changes. What? ══
+  // (the panel steps aside while you look, so the camera is yours: walk about, look around)
+  let runId = 0, curChange = null;
+  const undoChange = () => { curChange?.off(); curChange = null; };
+  onExit(() => { runId++; undoChange(); });
+  games.replace('toss some popcorn', (m) => {
+    const G = m.game, N = 3, id = ++runId;
+    let round = 0, score = 0, picks = shuffle(CHANGES).slice(0, N), stepping = false;
+    const alive = () => id === runId && kit.player();
+    const onClose = () => { if (!stepping) { runId++; undoChange(); fx.filter(baseFilter); } };
+    const panel = () => { G.open('Spot what changed', { onClose }); G.score(`round ${round + 1} of ${N} · ★ ${score}`); G.note(''); };
+    const intro = () => {
+      panel();
+      G.text(round ? 'Back to normal. Same again: have a look round, then the lights go out…' : 'Continuity check! When you’re ready, this panel steps aside: have a good look round the picture palace. Then the lights go out, and when they come back one thing will be different.');
+      G.choices([], () => {}); G.next('ready: let me look', look);
+    };
+    const look = () => {
+      stepping = true; G.close(); stepping = false;
+      say('Memorise the room… lights out in 6 seconds.');
+      setTimeout(() => {
+        if (!alive()) return;
+        fx.filter('brightness(0.04)'); kit.sfx([[110, 0.5]], 'sine', 0.1); say('…shh…');
+        setTimeout(() => {
+          if (!alive()) return;
+          curChange = picks[round]; curChange.on(); fx.filter(baseFilter);
+          say('Lights up! Look around: what’s different?');
+          setTimeout(() => { if (alive()) ask(); }, 6000);
+        }, 1400);
+      }, 6000);
+    };
+    const ask = () => {
+      panel(); G.text('So: what changed?');
+      const cur = curChange, opts = shuffle([cur, ...shuffle(CHANGES.filter(c => c !== cur)).slice(0, 3)]);
+      G.choices(opts.map(o => o.what), (i) => {
+        const ok = opts[i] === cur; if (ok) score++;
+        G.lock(i, opts.indexOf(cur));
+        if (ok) G.good(`Sharp eyes! ${cur.why}`); else G.bad(`It was: ${cur.what.toLowerCase()}. ${cur.why}`);
+        G.score(`round ${round + 1} of ${N} · ★ ${score}`);
+        G.next(round + 1 < N ? 'put it back · next round →' : 'how did I do?', () => { undoChange(); round++; round < N ? intro() : finish(); });
+      });
+    };
+    const finish = () => {
+      G.score(`★ ${score} of ${N}`); G.note('');
+      G.text(`${score} of ${N}. ${score === N ? 'A continuity editor’s eye: nothing gets past you.' : 'Continuity is hard. That’s why DeckGPT keeps every slide in your house style.'}`);
+      if (score >= 2) G.cheer();
+      G.choices([], () => {});
+      G.next('play again', () => { round = 0; score = 0; picks = shuffle(CHANGES).slice(0, N); intro(); });
+      G.next('done', () => G.close());
+    };
+    intro();
+  }, 'spot what changed');
 
   S.flush(g); L.flush(g, true);
 }

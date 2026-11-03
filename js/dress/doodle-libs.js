@@ -30,6 +30,8 @@ function baker(THREE) {
 export default function dress(K) {
   const { THREE, g: G, paint, tap, live, free, claim, rb, canvasTex, texMat, HAND, SCRIPT, INKC, now } = K;
   const B = baker(THREE);
+  const HOOK = {};                           // props round two reaches into
+  const { shuffle, anyOf } = K;
   const grp = (x = 0, y = 0, z = 0, parent = G) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
   const mesh = (geo, mat, parent, x = 0, y = 0, z = 0, rot) => {
     const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
@@ -106,7 +108,10 @@ export default function dress(K) {
   sheet.userData.noInk = true;
   const bellArm = mesh(new THREE.SphereGeometry(0.015, 8, 6), paint(0xf6c445), TW, 0.2, 0.19, -0.04);
   let tType = -99;
+  const TYPED = ['The typewriter types: “Once upon a time, a SOCK began to MOONWALK.”', 'The typewriter types: “It was a dark and stormy PICKLE.”', 'The typewriter types: “To be or not to ______.” (it couldn’t decide)', 'The typewriter types: “All work and no doodles makes Jack a dull stick figure.”'];
+  let typed = 0;
   tap(TW, 'type a word', (sfx) => {
+    K.say(TYPED[typed++ % TYPED.length]);
     tType = now();
     const n = []; for (let i = 0; i < 8; i++) n.push([1800 + (i % 3) * 200, 0.05], [60, 0.06]);
     n.push([2637, 0.35]);
@@ -310,7 +315,9 @@ export default function dress(K) {
       return [sh, s];
     });
     let tBot = -99;
-    tap(RB, 'say hi to the robot', (sfx) => { tBot = now(); sfx([[880, 0.08], [660, 0.08], [990, 0.08], [520, 0.1], [1320, 0.18]], 'square', 0.03); });
+    const BOT = ['Beep. I would have said PICKLES.', 'Beep boop. Are YOU human? Prove it: fill in a blank without saying pickles.', 'Beep. I asked myself three times. I said moonwalk all three times.', 'Boop. My favourite noun is “pickle”. My favourite verb is “to pickle”.'];
+    let bots = 0;
+    tap(RB, 'say hi to the robot', (sfx) => { tBot = now(); K.say(BOT[bots++ % BOT.length]); sfx([[880, 0.08], [660, 0.08], [990, 0.08], [520, 0.1], [1320, 0.18]], 'square', 0.03); });
     live((t) => {
       const k = t - tBot, on = k >= 0 && k < 2.2;
       head.rotation.y = on ? smooth(k / 0.9) * Math.PI * 2 : Math.sin(t * 0.5) * 0.35;
@@ -425,8 +432,10 @@ export default function dress(K) {
     });
     burst.position.z = 0.01; burst.renderOrder = 2; KB.add(burst);
     const stars = [0, 1, 2, 3, 4, 5].map(() => { const s = new THREE.Sprite(puffMat(0xffe24a)); s.scale.setScalar(0.1); G.add(s); return s; });
-    let tBoom = -99;
-    tap(KB, 'set off the KA-BOOM', (sfx) => { tBoom = now(); sfx([[110, 0.1], [70, 0.4], [55, 0.5]], 'square', 0.06); });
+    let tBoom = -99, booms = 0, tBig = -99;
+    const G0 = G.position.clone();
+    live((t) => { const k = t - tBig; G.position.set(G0.x + (k >= 0 && k < 0.9 ? Math.sin(k * 70) * 0.03 * (1 - k / 0.9) : 0), G0.y + (k >= 0 && k < 0.9 ? Math.abs(Math.sin(k * 50)) * 0.02 * (1 - k / 0.9) : 0), G0.z); });
+    tap(KB, 'set off the KA-BOOM', (sfx) => { tBoom = now(); if (++booms % 5 === 0) { tBig = now(); K.say(booms === 5 ? 'Okay, okay, that was a VERY big KA-BOOM. (You can stop now.)' : 'KA-BOOM ×' + booms + '. The neighbours have complained.'); sfx([[60, 0.6], [45, 0.8]], 'sawtooth', 0.08); } sfx([[110, 0.1], [70, 0.4], [55, 0.5]], 'square', 0.06); });
     live((t) => {
       const k = t - tBoom, on = k >= 0 && k < 1.2;
       const pop = on ? (k < 0.12 ? 1 + k / 0.12 * 0.45 : 1 + 0.45 * Math.exp(-(k - 0.12) * 6) * Math.cos((k - 0.12) * 20)) : 1 + Math.sin(t * 2) * 0.015;
@@ -486,7 +495,7 @@ export default function dress(K) {
   }, 320, 248, G, 3.975, 1.55, -1.15, [0, -HPI, 0]);
   {
     const notes = [];
-    const NOTE = [['banana', '#ffe26a'], ['tickle', '#ffb0c8'], ['sparkly', '#b8f0b0'], ['lava', '#ffd27a'], ['moonwalk', '#bfe0f0'], ['DOUGH', '#ffe26a']];
+    const NOTE = [['BANANA', '#ffe26a'], ['TICKLES', '#ffb0c8'], ['PICKLES', '#b8f0b0'], ['MOONWALK', '#ffd27a'], ['pickles (again)', '#bfe0f0'], ['pickles?!', '#ffe26a']];
     NOTE.forEach(([w, col], i) => {
       const z = -4.3 + (i % 3) * 0.26, y = 1.85 - Math.floor(i / 3) * 0.28;
       const N = grp(3.965, y, z);                                 // stuck on along its top edge
@@ -501,7 +510,7 @@ export default function dress(K) {
       notes.push([N, i]);
     });
     live((t) => { for (const [N, i] of notes) N.rotation.z = -(0.04 + 0.06 * Math.max(0, Math.sin(t * 0.9 + i * 1.7))); });
-    decal(0.5, 0.12, (c, w, h) => { c.font = `700 34px ${SCRIPT}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('word bank', w / 2, h / 2); }, 200, 48, G, 3.975, 2.08, -4.04, [0, -HPI, 0]);
+    decal(0.5, 0.12, (c, w, h) => { c.font = `700 34px ${SCRIPT}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('the robot’s favourite words', w / 2, h / 2); }, 400, 48, G, 3.975, 2.08, -4.04, [0, -HPI, 0]);
     // pennants spelling it out along the top of the east wall
     const word = 'DOODLE LIBS'.replace(' ', ''), cols = ['#e8466b', '#2a78d6', '#f6c445', '#3fae5a', '#8f7ae8'];
     const pz0 = -4.8, pz1 = -0.6, py = 2.5;
@@ -549,7 +558,7 @@ export default function dress(K) {
     const pg = new THREE.BufferGeometry();
     const v = [0, 0, 0.2, -0.13, 0.01, -0.1, 0, 0, -0.1, 0, 0, 0.2, 0, 0, -0.1, 0.13, 0.01, -0.1, 0, 0, 0.2, 0, -0.045, -0.1, 0, 0, -0.1];
     pg.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); pg.computeVertexNormals();
-    const plane = grp(0, 2.2, -2.6);
+    const plane = grp(0, 2.2, -2.6); HOOK.plane = plane; plane.scale.setScalar(1.5);
     mesh(pg, paint(0xfffdf6, { side: THREE.DoubleSide, hatch: 0.2 }), plane);
     live((t) => {
       const a = t * 0.45;
@@ -843,6 +852,131 @@ export default function dress(K) {
       }
     }
   }
+
+  // ═══ round 2: FILL IN THE BLANK FOR REAL ═══
+  // Stand on the sentence written across the floor, "The ___ began to DANCE!", pick a noun and
+  // a verb, and that word pops into the room as a doodle and does it, the way Doodle Libs does.
+  const { games, quiz, say, page } = K;
+  const face = (c, x, y, s = 1) => {
+    c.fillStyle = '#fff'; inkLine(c, 3);
+    for (const d of [-1, 1]) { c.beginPath(); c.arc(x + d * 13 * s, y, 8 * s, 0, 7); c.fill(); c.stroke(); c.fillStyle = INKC; c.beginPath(); c.arc(x + d * 13 * s + 2, y + 1, 3.5 * s, 0, 7); c.fill(); c.fillStyle = '#fff'; }
+    c.beginPath(); c.arc(x, y + 12 * s, 9 * s, 0.2, Math.PI - 0.2); c.stroke();
+  };
+  const NOUNS = {
+    pickle: (c, w, h) => { c.fillStyle = '#7fae3a'; c.beginPath(); c.ellipse(w / 2, h / 2, w * 0.28, h * 0.44, 0.15, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#5f8e2a'; for (let i = 0; i < 9; i++) { c.beginPath(); c.arc(w / 2 + Math.sin(i * 2.3) * 28, h * 0.18 + i * 24, 5, 0, 7); c.fill(); } face(c, w / 2, h * 0.38); },
+    piano: (c, w, h) => { c.fillStyle = '#2a2230'; c.fillRect(w * 0.12, h * 0.18, w * 0.76, h * 0.62); c.strokeRect(w * 0.12, h * 0.18, w * 0.76, h * 0.62); c.fillStyle = '#fff'; c.fillRect(w * 0.14, h * 0.55, w * 0.72, h * 0.14); for (let i = 0; i < 9; i++) { c.fillStyle = INKC; c.fillRect(w * 0.17 + i * w * 0.075, h * 0.55, 6, h * 0.08); } c.fillStyle = '#2a2230'; c.fillRect(w * 0.16, h * 0.8, 10, h * 0.16); c.fillRect(w * 0.8, h * 0.8, 10, h * 0.16); face(c, w / 2, h * 0.34); },
+    cactus: (c, w, h) => { c.fillStyle = '#4f9f5a'; c.beginPath(); c.roundRect(w * 0.38, h * 0.08, w * 0.24, h * 0.7, 30); c.fill(); c.stroke(); c.beginPath(); c.roundRect(w * 0.14, h * 0.3, w * 0.18, h * 0.3, 18); c.fill(); c.stroke(); c.beginPath(); c.roundRect(w * 0.68, h * 0.22, w * 0.18, h * 0.3, 18); c.fill(); c.stroke(); c.fillStyle = '#d58b63'; c.beginPath(); c.moveTo(w * 0.28, h * 0.74); c.lineTo(w * 0.72, h * 0.74); c.lineTo(w * 0.64, h * 0.98); c.lineTo(w * 0.36, h * 0.98); c.closePath(); c.fill(); c.stroke(); face(c, w / 2, h * 0.3, 0.8); },
+    teapot: (c, w, h) => { c.fillStyle = '#7fd8f0'; c.beginPath(); c.ellipse(w / 2, h * 0.6, w * 0.32, h * 0.3, 0, 0, 7); c.fill(); c.stroke(); c.beginPath(); c.moveTo(w * 0.8, h * 0.6); c.quadraticCurveTo(w * 0.98, h * 0.45, w * 0.96, h * 0.32); c.stroke(); c.beginPath(); c.arc(w * 0.16, h * 0.58, 22, Math.PI * 0.5, Math.PI * 1.5); c.stroke(); c.fillStyle = '#e8466b'; c.beginPath(); c.ellipse(w / 2, h * 0.3, w * 0.16, h * 0.05, 0, 0, 7); c.fill(); c.stroke(); face(c, w / 2, h * 0.56); },
+    toaster: (c, w, h) => { c.fillStyle = '#e8c89a'; c.fillRect(w * 0.3, h * 0.12, w * 0.4, h * 0.3); c.strokeRect(w * 0.3, h * 0.12, w * 0.4, h * 0.3); c.fillStyle = '#c8ccd6'; c.beginPath(); c.roundRect(w * 0.12, h * 0.32, w * 0.76, h * 0.6, 26); c.fill(); c.stroke(); face(c, w / 2, h * 0.58); },
+    banana: (c, w, h) => { c.fillStyle = '#ffe24a'; c.beginPath(); c.moveTo(w * 0.2, h * 0.1); c.quadraticCurveTo(w * 0.1, h * 0.7, w * 0.75, h * 0.92); c.quadraticCurveTo(w * 0.4, h * 0.6, w * 0.34, h * 0.1); c.closePath(); c.fill(); c.stroke(); c.fillStyle = '#6b4a34'; c.fillRect(w * 0.2, h * 0.04, 16, 16); face(c, w * 0.36, h * 0.55, 0.8); },
+    sock: (c, w, h) => { c.fillStyle = '#fff'; c.beginPath(); c.moveTo(w * 0.3, h * 0.05); c.lineTo(w * 0.62, h * 0.05); c.lineTo(w * 0.62, h * 0.62); c.quadraticCurveTo(w * 0.95, h * 0.7, w * 0.88, h * 0.9); c.lineTo(w * 0.4, h * 0.92); c.quadraticCurveTo(w * 0.26, h * 0.8, w * 0.3, h * 0.62); c.closePath(); c.fill(); c.stroke(); c.fillStyle = '#e8466b'; for (let y = 0.12; y < 0.6; y += 0.14) c.fillRect(w * 0.3 + 3, h * y, w * 0.32 - 6, h * 0.06); face(c, w * 0.47, h * 0.72, 0.8); },
+    umbrella: (c, w, h) => { c.fillStyle = '#e8463a'; c.beginPath(); c.moveTo(w * 0.06, h * 0.42); c.quadraticCurveTo(w / 2, -h * 0.1, w * 0.94, h * 0.42); for (let i = 4; i >= 0; i--) c.quadraticCurveTo(w * (0.15 + i * 0.19), h * 0.34, w * (0.06 + i * 0.19), h * 0.42); c.fill(); c.stroke(); c.beginPath(); c.moveTo(w / 2, h * 0.4); c.lineTo(w / 2, h * 0.88); c.arc(w * 0.44, h * 0.88, w * 0.06, 0, Math.PI); c.stroke(); face(c, w / 2, h * 0.24, 0.8); },
+  };
+  const VERBS = ['dance', 'fly', 'spin', 'bounce', 'explode', 'sing', 'grow', 'moonwalk'];
+  const PX = 1.2, PZ = -3.55;                                  // where the doodles appear: on the big blank
+  const DG = grp(PX, 0, PZ); DG.visible = false;                // pivots at its feet
+  const dMats = Object.fromEntries(Object.entries(NOUNS).map(([n, draw]) => { const m = paint(0xffffff, { map: canvasTex(200, 260, (c, w, h) => { inkLine(c, 6); draw(c, w, h); }), hatch: 0, side: THREE.DoubleSide, unique: true }); m.alphaTest = 0.5; return [n, m]; }));
+  const doodle = mesh(new THREE.PlaneGeometry(0.8, 1.04).translate(0, 0.52, 0), dMats.pickle, DG); doodle.userData.noInk = true;
+  const bits = [0, 1, 2, 3, 4, 5, 6, 7].map(() => { const s = new THREE.Sprite(puffMat(0xffe24a)); s.scale.setScalar(0.12); G.add(s); return s; });
+  const notesD = [0, 1, 2].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(64, 64, (c, w, h) => { c.fillStyle = INKC; c.font = `700 52px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('♪', w / 2, h / 2); }), transparent: true, depthWrite: false, opacity: 0 })); s.scale.setScalar(0.16); G.add(s); return s; });
+  let act = null, tAct = -99;
+  const perform = (noun, verb) => { doodle.material = dMats[noun]; act = verb; tAct = now(); DG.visible = true; };
+  live((t) => {
+    const k = t - tAct, LEN = 7;
+    if (!act || k > LEN + 0.4) { if (act && k > LEN + 0.4) { DG.visible = false; act = null; } bits.forEach(s => { s.material.opacity = 0; }); notesD.forEach(s => { s.material.opacity = 0; }); return; }
+    const pop = smooth(k / 0.3) * (1 - smooth((k - LEN) / 0.4));          // pops in, pops out
+    let x = PX, y = 0, z = PZ, ry = 0, rz = 0, sx = 1, sy = 1;
+    const kk = Math.max(0, k - 0.4);
+    if (act === 'dance') { rz = Math.sin(kk * 8) * 0.3; y = Math.abs(Math.sin(kk * 8)) * 0.12; x += Math.sin(kk * 2) * 0.25; }
+    else if (act === 'fly') { const a = kk * 1.2; const up = smooth(kk / 1.2) * (1 - smooth((kk - LEN + 1.8) / 1.2)); y = up * 1.5; x += Math.sin(a) * 1.2 * up; z += (Math.cos(a) - 1) * 0.8 * up; rz = Math.sin(kk * 10) * 0.15; ry = -a * up; }
+    else if (act === 'spin') ry = kk * 12 * Math.min(1, kk);
+    else if (act === 'bounce') { const b = Math.abs(Math.sin(kk * 5)); y = b * 0.6; sy = b < 0.15 ? 0.75 : 1.05; sx = b < 0.15 ? 1.2 : 0.97; }
+    else if (act === 'explode') { const boom = kk > 1 && kk < 3.5; sx = sy = boom ? 0.001 : kk < 1 ? 1 + kk * 0.3 : smooth((kk - 3.5) / 0.4); rz = kk < 1 ? Math.sin(kk * 60) * 0.08 : 0; }
+    else if (act === 'sing') { sy = 1 + Math.sin(kk * 9) * 0.06; rz = Math.sin(kk * 2) * 0.1; }
+    else if (act === 'grow') { sx = sy = 1 + smooth(kk / 2) * 1.7 * (1 - smooth((kk - LEN + 1.5) / 1)); }
+    else if (act === 'moonwalk') { x += -((kk * 0.4) % 2.4) + 1.2; rz = -0.12; y = Math.abs(Math.sin(kk * 6)) * 0.02; }
+    DG.position.set(x, y, z); DG.rotation.set(0, ry, rz); DG.scale.set(sx * pop, sy * pop, pop);
+    bits.forEach((s, i) => {
+      const e = act === 'explode' ? kk - 1 : -1;
+      if (e < 0 || e > 1.6) { s.material.opacity = 0; return; }
+      const a = i / 8 * Math.PI * 2;
+      s.position.set(PX + Math.cos(a) * e * 1.1, 0.4 + Math.sin(a) * e * 0.9 + 0.3, PZ + Math.sin(a * 3) * 0.2);
+      s.material.opacity = 1 - e / 1.6; s.scale.setScalar(0.12 + e * 0.1);
+    });
+    notesD.forEach((s, i) => {
+      if (act !== 'sing') { s.material.opacity = 0; return; }
+      const u = (kk * 0.6 + i / 3) % 1;
+      s.position.set(PX + 0.3 + Math.sin(u * 6 + i) * 0.15, 0.8 + u * 0.9, PZ + 0.1); s.material.opacity = Math.sin(u * Math.PI);
+    });
+  });
+  const AN = { pickle: 'a pickle', piano: 'a piano', cactus: 'a cactus', teapot: 'a teapot', toaster: 'a toaster', banana: 'a banana', sock: 'a sock', umbrella: 'an umbrella' };
+  const VERBED = { dance: 'dance', fly: 'fly', spin: 'spin', bounce: 'bounce', explode: 'explode', sing: 'sing', grow: 'grow', moonwalk: 'moonwalk' };
+  games.add(1.1, -2.5, 'fill in the blank', (m) => {
+    const g = m.game.open('Fill in the blank');
+    const ask = () => {
+      g.note(''); g.score('1 of 2: a noun');
+      g.text('The ______ began to ______!   First, a NOUN (a thing):');
+      const ns = shuffle(Object.keys(NOUNS)).slice(0, 4);
+      g.choices([...ns.map(n => n), '🎲 surprise me'], (i) => {
+        const noun = i < ns.length ? ns[i] : anyOf(Object.keys(NOUNS));
+        g.score('2 of 2: a verb'); g.text(`The ${noun.toUpperCase()} began to ______!   Now a VERB (something to do):`);
+        const vs = shuffle(VERBS).slice(0, 4);
+        g.choices([...vs, '🎲 surprise me'], (j) => {
+          const verb = j < vs.length ? vs[j] : anyOf(VERBS);
+          K.sfx([[523, 0.08], [784, 0.12]], 'triangle', 0.06);
+          g.close();                                            // get out of the way and watch it happen
+          perform(noun, VERBED[verb]);
+          say(`The ${noun.toUpperCase()} began to ${verb.toUpperCase()}! (Doodle Libs turns about 1,900 words into cartoons. Press E for another.)`);
+        });
+      });
+    };
+    ask();
+  });
+  // the human-or-AI game becomes a detective job: the AI reuses its favourite words, and the
+  // robot has stuck them on the wall behind it
+  const LINES = [
+    ['“A game of baseball is played by two teams on a MAGNETIC field. Each team has nine MAGNETS.”', 0, 'A human, a player from India. MAGNETIC isn’t on the robot’s wall.'],
+    ['“In golf, a golfer TICKLES a number of PICKLES and swings a BANANA at the ball.”', 1, 'The AI: TICKLES, PICKLES, BANANA, all on the robot’s wall. It really likes pickles.'],
+    ['“Scuba diving is a sport where people swim under LAVA, using a tank of compressed DOUGH.”', 0, 'A human, a player from the US. No LAVA or DOUGH on the robot’s wall.'],
+    ['“Penguins cannot MOONWALK, but they can swim very well.”', 1, 'The AI. MOONWALK is on its wall: asked three times, it gave the same answer every time.'],
+  ];
+  games.replace('human or AI?', (m) => quiz(m.game, 'Human or AI?', shuffle(LINES).map(([q, a, why]) => ({ q: `${q} Who filled in the blanks?`, choices: ['a human', 'the AI'], answer: a, why })), {
+    intro: 'Real answers from a humour study, and the AI’s answers to the same blanks. Detective tip: the AI is predictable and keeps reusing its favourite words. The robot has stuck its favourites on the wall behind it. Check the wall!',
+    end: (s, n) => `${s} of ${n}. ${s === n ? 'You read the robot like a book.' : 'Have another look at the robot’s wall.'} Walk up to the screen to play the full Turing test.`,
+  }));
+
+  // ── the lost page, carried round and round by the paper plane ──
+  const lostPage = page();
+  const carrier = grp(0, -50, 0);
+  carrier.add(lostPage); lostPage.position.y = -0.17;
+  const str = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.2, 3), dark, carrier, 0, 0.1, 0); str.userData.noInk = true;
+  const planeHit = mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }), HOOK.plane);
+  planeHit.userData.noInk = true;
+  let dropped = false, tDrop = -99; const dropFrom = new THREE.Vector3(), dropTo = new THREE.Vector3();
+  tap(HOOK.plane, 'whistle at the paper plane', (sfx) => {
+    if (dropped || lostPage.collected) { say('The paper plane does a little loop-the-loop, showing off.'); return sfx([[1200, 0.1], [1600, 0.15]], 'sine', 0.05); }
+    dropped = true; tDrop = now(); dropFrom.copy(carrier.position);
+    dropTo.set(Math.max(-3.4, Math.min(3.4, dropFrom.x)), 0.0, Math.max(-4.9, Math.min(-0.3, dropFrom.z)));
+    str.visible = false;
+    say('The paper plane lets go of what it was carrying…');
+    sfx([[1400, 0.1], [900, 0.1], [600, 0.2]], 'sine', 0.05);
+  });
+  live((t) => {
+    if (!dropped) { carrier.position.set(HOOK.plane.position.x, HOOK.plane.position.y - 0.2, HOOK.plane.position.z); carrier.rotation.y = HOOK.plane.rotation.y; return; }
+    const u = Math.min(1, (t - tDrop) / 2.2);
+    carrier.position.set(dropFrom.x + (dropTo.x - dropFrom.x) * u + Math.sin(u * 14) * 0.15 * (1 - u), dropFrom.y + (dropTo.y + 0.17 - dropFrom.y) * u, dropFrom.z + (dropTo.z - dropFrom.z) * u);
+    carrier.rotation.z = Math.sin(u * 12) * 0.5 * (1 - u);
+  });
+
+  // ── secrets and jokes ──
+  const sign = (w, h, text, col, x, y, z, rot, px = 26) => decal(w, h, (c, cw, ch) => {
+    c.fillStyle = '#fffdf6'; c.fillRect(0, 0, cw, ch); inkLine(c, 4); c.strokeRect(2, 2, cw - 4, ch - 4);
+    c.fillStyle = col; c.font = `700 ${px}px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, cw / 2, ch / 2 + 1);
+  }, Math.round(w * 600), Math.round(h * 600), G, x, y, z, rot);
+  sign(0.3, 0.08, 'first drafts', '#e8466b', -3.45, 0.22, -3.545, [0, 0, 0]);
+  sign(0.3, 0.08, 'undo (physical)', '#2a78d6', -2.7, 0.206, -0.15, [-HPI, 0, 0.35], 22);
+  sign(0.42, 0.09, 'destination: the margin', INKC, 3.05, 0.012, -0.12, [-HPI, 0, 0], 22);
+  sign(0.42, 0.09, 'do not sit (you can sit)', INKC, -1.8, 0.012, -4.66, [-HPI, 0, 0.25], 22);
 
   B.flush(G);
 }

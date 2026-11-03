@@ -6,7 +6,13 @@
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export default function dress(kit) {
-  const { THREE, g, put, box, rb, paint, tap, live, free, claim, canvasTex, texMat, SCRIPT, HAND, D } = kit;
+  const { THREE, g, put, box, rb, paint, tap, free, claim, canvasTex, texMat, SCRIPT, HAND, D } = kit;
+  // the room keeps its own clock so the singing bowl can slow everything down (the calm):
+  // every animation here gets (T, dt·speed) instead of real time
+  let speed = 1, T = 0;
+  kit.live((t, dt) => { T += dt * speed; });
+  const live = (fn) => kit.live((t, dt) => fn(T, dt * speed));
+  const roomNow = () => T;
   const BACK = -D + 0.5, EW = 3.97;          // back wall face, east wall face (west is −EW)
   const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -107,7 +113,7 @@ export default function dress(kit) {
     }
     add(new THREE.SphereGeometry(0.018, 8, 6), paint(0xf2d27a), PX - 0.45, 0.135, PZ + 0.2);
     // stepping stones from the walkway to the pond (flat)
-    for (const [x, z, s] of [[1.25, -0.55, 0.13], [1.45, -0.2, 0.11], [1.1, -1.55, 0.12]]) add(new THREE.CylinderGeometry(s, s * 1.05, 0.03, 12), stoneM, x, 0.015, z, [0, s * 9, 0], [1.25, 1, 1]);
+    for (const [x, z, s] of [[1.25, -0.55, 0.13], [1.45, -0.2, 0.11]]) add(new THREE.CylinderGeometry(s, s * 1.05, 0.03, 12), stoneM, x, 0.015, z, [0, s * 9, 0], [1.25, 1, 1]);
 
     // the koi: one swept body with a tail fin on a hinge at the body's end
     const KOI = [[0xf07a3a, 0xfaf3e6, 0.9, 0.35, 0], [0xfaf3e6, 0xe8503a, 0.68, -0.3, 2.1], [0xf2c14e, 0xf07a3a, 0.45, 0.45, 4.0]];
@@ -120,7 +126,7 @@ export default function dress(kit) {
       const tailJoint = grp(-0.1, 0, 0, f);
       mesh(tailGeo, paint(body), tailJoint);
       for (const s of [-1, 1]) { const fin = mesh(new THREE.SphereGeometry(0.022, 8, 6), paint(body), f, 0.03, -0.01, s * 0.045); fin.scale.set(1, 0.25, 1.5); fin.userData.noInk = true; }
-      const st = { a: ph, boost: 0, f, tailJoint };
+      const st = { a: ph, boost: 0, f, tailJoint, taps: [], leap: -1 };
       live((t, dt) => {
         st.boost = Math.max(0, st.boost - dt * 1.2);
         const w = spd * (1 + st.boost * 4);
@@ -132,8 +138,22 @@ export default function dress(kit) {
         f.rotation.y = Math.atan2(-dz, dx);
         tailJoint.rotation.y = Math.sin(t * (6 + st.boost * 14) + i) * 0.45;
         f.position.y = 0.065 + st.boost * Math.sin(st.boost * 12) * 0.01;
+        if (st.leap >= 0) {                                               // the secret: a leap clean out of the pond
+          st.leap += dt;
+          const u = Math.min(1, st.leap / 1.1);
+          f.position.y = 0.065 + Math.sin(u * Math.PI) * 0.55;
+          f.rotation.z = (0.5 - u) * 2.2;
+          if (u >= 1) { st.leap = -1; f.rotation.z = 0; ripple(x, 0.105, z, 0.3); ripple(x, 0.105, z, 0.18); }
+        }
       });
       tap(f, 'koi', (sfx) => {
+        const now = kit.now(); st.taps = st.taps.filter(q => now - q < 4); st.taps.push(now);
+        if (st.taps.length >= 5 && st.leap < 0) {
+          st.taps = []; st.leap = 0; ripple(f.position.x, 0.105, f.position.z, 0.3);
+          sfx([[400, 0.1], [600, 0.1], [900, 0.1], [1300, 0.3]], 'sine', 0.07);
+          kit.say(kit.anyOf(['That koi has been practising.', 'Koi, but make it competitive.', 'Five pokes and it’s off. Fair.', 'A personal best: 55 cm. The other koi are unimpressed.']));
+          return;
+        }
         st.boost = 1.5;
         ripple(f.position.x, 0.105, f.position.z, 0.22);
         sfx([[520 + i * 80, 0.06], [780 + i * 80, 0.12]], 'sine', 0.06);
@@ -287,7 +307,7 @@ export default function dress(kit) {
       lanterns.push({ L, mat, sx, k, string, glow: 0 });
       string.list.push(lanterns[lanterns.length - 1]);
       tap(L, 'paper lantern', (sfx) => {
-        string.kick = 1; string.t0 = kit.now(); string.from = k;
+        string.kick = 1; string.t0 = roomNow(); string.from = k;
         sfx([[392, 0.1], [523, 0.1], [659, 0.1], [784, 0.25]].map(([f, d]) => [f * (sx > 0 ? 1 : 0.89), d]), 'triangle', 0.05);
       });
     }
@@ -300,7 +320,7 @@ export default function dress(kit) {
       l.glow = since > 0 ? Math.max(0, 1 - since / 2.5) : 0;
       l.L.rotation.x = Math.sin(t * 0.9 + l.k * 0.8 + l.sx) * 0.035 + kick;
       l.L.rotation.z = Math.cos(t * 0.7 + l.k) * 0.02;
-      l.mat.emissiveIntensity = 0.45 + l.glow * 0.9 + Math.sin(t * 7 + l.k * 3) * 0.03;
+      l.mat.emissiveIntensity = (0.45 + l.glow * 0.9 + Math.sin(t * 7 + l.k * 3) * 0.03) * (0.3 + 0.7 * speed);   // the calm dims them
     }
   });
 
@@ -362,8 +382,13 @@ export default function dress(kit) {
           if (pourT > 2.2) { pourT = -1; pot.rotation.z = 0; pourStream.visible = false; }
         }
       });
+      const FORTUNES = ['Your tea leaves say: the bug is in the line you were sure about.', 'Tea fortune: you will rake beautifully, then step in it.',
+        'Tea fortune: a merge conflict approaches. Breathe.', 'Tea fortune: inbox zero is a state of mind, not of inbox.',
+        'Tea fortune: the sand forgives. The linter does not.', 'Tea fortune: someone will ask “is it done yet?” — it is not, and that is fine.',
+        'Tea fortune: you will close one tab today. Just one. Grow slowly.'];
+      let fi = Math.floor(Math.random() * FORTUNES.length);
       tap(pot, 'iron kettle', (sfx) => {
-        if (pourT < 0) pourT = 0;
+        if (pourT < 0) { pourT = 0; setTimeout(() => kit.say(FORTUNES[fi++ % FORTUNES.length]), 1300); }
         sfx([[300, 0.4], [260, 0.5], [240, 0.6]], 'sine', 0.03);
       });
     }
@@ -427,14 +452,17 @@ export default function dress(kit) {
       add(new THREE.CylinderGeometry(0.012, 0.012, 0.26, 8), paint(0x6b4a34), X + 0.05, 0.085, Z + 0.17, [0, 0.4, Math.PI / 2]);
       add(new THREE.CylinderGeometry(0.02, 0.02, 0.06, 10), paint(0x3a3c40), X - 0.065, 0.085, Z + 0.22, [0, 0.4, Math.PI / 2]);
       let hum = 0;
-      live((t, dt) => {
+      kit.live((t, dt) => {                                               // (real time: the bowl rings on through the calm)
         if (hum <= 0) return;
-        hum = Math.max(0, hum - dt / 3);
+        hum = Math.max(0, hum - dt / 5);
         const w = Math.sin(t * 40) * 0.012 * hum;
         bowl.scale.set(1 + w, 1, 1 - w);
         if (Math.floor(t * 2.2) !== bowl.userData.beat && hum > 0.15) { bowl.userData.beat = Math.floor(t * 2.2); ripple(X, 0.18, Z, 0.45 * hum + 0.1); }
       });
-      tap(bowl, 'singing bowl', (sfx) => { hum = 1; sfx([[216, 2.6]], 'sine', 0.09); setTimeout(() => sfx([[432, 2.0]], 'sine', 0.025), 30); });
+      tap(bowl, 'singing bowl', (sfx) => {
+        hum = 1; sfx([[216, 2.6]], 'sine', 0.09); setTimeout(() => sfx([[432, 2.0]], 'sine', 0.025), 30);
+        calm.start();
+      });
     }
   }
 
@@ -480,8 +508,22 @@ export default function dress(kit) {
       s.userData.base = y + h / 2; y += h * 0.85; stones.push(s);
       void i;
     });
-    let hop = -1;
+    let hop = -1, fall = -1, ctaps = [];
+    const FALL = stones.map((s, i) => [(i % 2 ? 1 : -1) * (0.05 + i * 0.035), (i % 3 - 1) * 0.06]);   // where each stone lands on the shelf
     live((t, dt) => {
+      if (fall >= 0) {
+        fall += dt;
+        const down = Math.min(1, fall / 0.5), back = Math.min(1, Math.max(0, (fall - 3.2) / 1.2)), k = (down * down) * (1 - back * back * (3 - 2 * back));
+        stones.forEach((s, i) => {
+          if (i === 0) return;
+          const r = s.children[0].geometry.parameters.radius * 0.55;
+          s.position.y = s.userData.base + (r - s.userData.base) * k + Math.sin(Math.min(1, fall / 0.5) * Math.PI) * 0.03 * (1 - back);
+          s.position.z = FALL[i][0] * k; s.position.x = FALL[i][1] * k;
+          s.rotation.x = k * (i % 2 ? 0.4 : -0.3);
+        });
+        if (fall > 4.5) { fall = -1; stones.forEach(s => { s.position.set(0, s.userData.base, 0); s.rotation.set(0, 0, 0); }); }
+        return;
+      }
       if (hop < 0) return;
       hop += dt;
       stones.forEach((s, i) => {
@@ -493,7 +535,17 @@ export default function dress(kit) {
       });
       if (hop > 1) { hop = -1; stones.forEach(s => { s.position.y = s.userData.base; s.rotation.set(0, 0, 0); }); }
     });
-    tap(cairn, 'stone cairn', (sfx) => { hop = 0; setTimeout(() => sfx([[1200, 0.03], [1500, 0.03], [1100, 0.03], [1700, 0.05]], 'square', 0.02), 420); });
+    tap(cairn, 'stone cairn', (sfx) => {
+      if (fall >= 0) return;
+      const now = kit.now(); ctaps = ctaps.filter(q => now - q < 4); ctaps.push(now);
+      if (ctaps.length >= 5) {                                            // the secret: push your luck and it all comes down
+        ctaps = []; fall = 0; hop = -1;
+        sfx([[900, 0.04], [700, 0.04], [1100, 0.04], [500, 0.05], [800, 0.08]], 'square', 0.03);
+        kit.say('Balance is a practice, not a state. (It will put itself back. Give it a moment.)');
+        return;
+      }
+      hop = 0; setTimeout(() => sfx([[1200, 0.03], [1500, 0.03], [1100, 0.03], [1700, 0.05]], 'square', 0.02), 420);
+    });
   }
 
   // ═════════════ 9. a folding fan on the west wall, and a wind chime ═════════════
@@ -605,9 +657,9 @@ export default function dress(kit) {
     }
     // a pair of geta sandals by the door (flat)
     for (const s of [-1, 1]) {
-      addBox(0.1, 0.02, 0.24, woodLt, -0.95 + s * 0.07, 0.04, -0.35, 0.008, [0, s * 0.1, 0]);
-      for (const dz of [-0.07, 0.07]) addBox(0.09, 0.03, 0.02, wood, -0.95 + s * 0.07, 0.015, -0.35 + dz, 0.004, [0, s * 0.1, 0]);
-      add(new THREE.TorusGeometry(0.03, 0.006, 5, 10, Math.PI), paint(0x8e2f3a), -0.95 + s * 0.07, 0.05, -0.33, [0, s * 0.1, 0]);
+      addBox(0.1, 0.02, 0.24, woodLt, -1.55 + s * 0.07, 0.04, -0.2, 0.008, [0, s * 0.1, 0]);
+      for (const dz of [-0.07, 0.07]) addBox(0.09, 0.03, 0.02, wood, -1.55 + s * 0.07, 0.015, -0.2 + dz, 0.004, [0, s * 0.1, 0]);
+      add(new THREE.TorusGeometry(0.03, 0.006, 5, 10, Math.PI), paint(0x8e2f3a), -1.55 + s * 0.07, 0.05, -0.18, [0, s * 0.1, 0]);
     }
     // tall bamboo in a box planter by the east wall, between the lantern and the pond corner
     const BX = 3.66, BZ = -1.72;
@@ -661,6 +713,192 @@ export default function dress(kit) {
       });
       tap(drum, 'taiko drum', (sfx) => { hit = 1; sfx([[70, 0.5]], 'sine', 0.35); sfx([[110, 0.12]], 'triangle', 0.12); });
     }
+  }
+
+  // ═════════════ 13. THE CALM: strike the singing bowl and the whole room slows to a hush ═════════════
+  // koi drift, the deer-scarer creeps, petals hang in the air, lanterns dim, steam barely rises
+  const calm = (() => {
+    let until = -1, on = false;
+    kit.live((t, dt) => {
+      const want = t < until ? 0.1 : 1;
+      speed += (want - speed) * Math.min(1, dt * (want < speed ? 1.6 : 0.5));
+      if (on && t >= until && speed > 0.95) { on = false; kit.fx.filter(''); }
+    });
+    kit.onExit(() => { until = -1; speed = 1; on = false; });
+    return {
+      start() {
+        const first = !on;
+        until = kit.now() + 14; on = true;
+        kit.fx.filter('saturate(0.55) brightness(0.93) sepia(0.22)');
+        if (first) kit.say(kit.anyOf(['Breathe in… and out. Everything in here just slowed down. (Even the koi.)',
+          'The calm. The petals have decided there is no rush.', 'Shh. The deer-scarer will knock when it is ready.']));
+      },
+    };
+  })();
+
+  // ═════════════ 14. THE SIGNATURE TRICK: a sand garden you rake by walking on it ═════════════
+  // The player IS the rake: every step drags five tines through the sand. The trails smooth
+  // over by themselves; stones from the basket get raked rings that stay. And something's buried.
+  {
+    const X0 = -0.65, X1 = 1.35, Z0 = -4.25, Z1 = -0.75, PPM = 160;            // pixels per metre
+    const cw = Math.round((X1 - X0) * PPM), ch = Math.round((Z1 - Z0) * PPM);
+    const px = (x) => (x - X0) * PPM, pz = (z) => (z - Z0) * PPM;
+    const clean = document.createElement('canvas'); clean.width = cw; clean.height = ch;
+    const cc = clean.getContext('2d');
+    const tex = canvasTex(cw, ch, () => {}), c = tex.image.getContext('2d');
+    const GR = kit.mkRng(9), grains = Array.from({ length: 2400 }, () => [GR() * cw, GR() * ch, GR()]);
+    const placed = [];                                                             // stones on the sand: { x, z, m }
+    const groove = (ctx, draw, w = 2.4) => {                                       // a raked line: a shadow and a lit lip
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(125,90,45,0.7)'; ctx.lineWidth = w; ctx.beginPath(); draw(0); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,250,235,0.85)'; ctx.lineWidth = w * 0.7; ctx.beginPath(); draw(1.6); ctx.stroke();
+    };
+    const drawClean = () => {
+      cc.fillStyle = '#e3cb98'; cc.fillRect(0, 0, cw, ch);
+      for (const [gx, gy, k] of grains) { cc.fillStyle = k < 0.5 ? 'rgba(150,115,60,0.32)' : 'rgba(255,248,230,0.55)'; cc.fillRect(gx, gy, 2, 2); }
+      // calm straight lines, the way the garden is left at night
+      for (let y = 10; y < ch; y += 11) groove(cc, (o) => { cc.moveTo(0, y + o); cc.lineTo(cw, y + o); }, 1.6);
+      for (const s of placed) {                                                    // smooth round each stone, then rake rings
+        cc.fillStyle = '#e3cb98'; cc.beginPath(); cc.arc(px(s.x), pz(s.z), 58, 0, 7); cc.fill();
+        for (let k = 0; k < 4; k++) groove(cc, (o) => cc.arc(px(s.x) + o * 0.5, pz(s.z) + o * 0.5, 16 + k * 11, 0, 7), 2);
+      }
+    };
+    drawClean(); c.drawImage(clean, 0, 0); tex.needsUpdate = true;
+    const sandM = paint(0xffffff, { map: tex, hatch: 0, unique: true });
+    const sand = put(new THREE.PlaneGeometry(X1 - X0, Z1 - Z0), sandM, (X0 + X1) / 2, 0.006, (Z0 + Z1) / 2, [-Math.PI / 2, 0, 0]);
+    sand.userData.noInk = true; sand.renderOrder = 1;
+    // a low cedar edging all round (flat enough to step over)
+    for (const [w, d, x, z] of [[X1 - X0 + 0.08, 0.04, (X0 + X1) / 2, Z0 - 0.02], [X1 - X0 + 0.08, 0.04, (X0 + X1) / 2, Z1 + 0.02], [0.04, Z1 - Z0, X0 - 0.02, (Z0 + Z1) / 2], [0.04, Z1 - Z0, X1 + 0.02, (Z0 + Z1) / 2]])
+      addBox(w, 0.025, d, wood, x, 0.0125, z, 0.006);
+
+    // ── raking: follow the player's feet ──
+    let last = null, dirty = false, fadeAcc = 0, dug = false;
+    const TINES = [-2, -1, 0, 1, 2].map(k => k * 0.034);
+    kit.live((t, dt) => {
+      const p = kit.player();
+      if (p && p.x > X0 && p.x < X1 && p.z > Z0 && p.z < Z1) {
+        if (last) {
+          const dx = p.x - last.x, dz = p.z - last.z, L = Math.hypot(dx, dz);
+          if (L > 0.025) {
+            const nx = -dz / L, nz = dx / L;                                         // across the stroke
+            for (const o of TINES) groove(c, (lip) => { c.moveTo(px(last.x + nx * o) + lip * 0.6, pz(last.z + nz * o) + lip * 0.6); c.lineTo(px(p.x + nx * o) + lip * 0.6, pz(p.z + nz * o) + lip * 0.6); }, 3);
+            last = { x: p.x, z: p.z }; dirty = true;
+            if (!dug && pg && !pg.collected && Math.hypot(p.x - PGX, p.z - PGZ) < 0.32) unearth();
+          }
+        } else last = { x: p.x, z: p.z };
+      } else last = null;
+      // the sand slowly settles back (slower still in the calm)
+      fadeAcc += dt * speed;
+      if (fadeAcc > 0.25) { fadeAcc = 0; c.globalAlpha = 0.018; c.drawImage(clean, 0, 0); c.globalAlpha = 1; dirty = true; }
+      if (dirty) { tex.needsUpdate = true; dirty = false; }
+    });
+    let hinted = false;
+    kit.onEnter(() => { last = null; if (!hinted) { hinted = true; setTimeout(() => kit.say('Psst: that patch of sand in the middle is a garden you rake with your feet. Go on, walk on it.'), 6500); } });
+
+    // ── the stone basket: tap for a stone; it lands near you on the sand; tap a placed stone to take it back ──
+    const BX = -0.85, BZ = -0.4;
+    if (free(BX, BZ, 0.16)) {
+      claim(BX, BZ, 0.15);
+      add(lathe([[0.001, 0], [0.13, 0], [0.16, 0.12], [0.145, 0.12], [0.115, 0.015], [0.001, 0.015]], 16), paint(0xb98a5e, { side: THREE.DoubleSide }), BX, 0, BZ);
+      for (let k = 0; k < 5; k++) add(new THREE.DodecahedronGeometry(0.05, 1), k % 2 ? stoneDk : stoneM, BX + Math.cos(k * 1.3) * 0.06, 0.1 + (k % 2) * 0.02, BZ + Math.sin(k * 1.3) * 0.06, [k, k * 2, 0], [1.2, 0.7, 1]);
+      const basketHit = grp(BX, 0, BZ);
+      const hm = paint(0xffffff, { opacity: 0, hatch: 0, unique: true }); hm.depthWrite = false;
+      mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.2, 10).translate(0, 0.1, 0), hm, basketHit).userData.noInk = true;
+      const pool = [0.11, 0.08, 0.095, 0.07, 0.085].map((r, i) => {
+        const m = mesh(new THREE.DodecahedronGeometry(r, 1), i % 2 ? stoneDk : paint(0x3a3c40), g, 0, -1, 0, [i, i * 2, 0]); m.scale.set(1.15, 0.55, 1); m.visible = false;
+        const st = { m, x: 0, z: 0, on: false, drop: -1 };
+        tap(m, 'raked stone', (sfx) => {                                          // pick it back up
+          if (!st.on) return;
+          st.on = false; m.visible = false; placed.splice(placed.indexOf(st), 1); drawClean();
+          sfx([[700, 0.05], [500, 0.08]], 'triangle', 0.04);
+        });
+        return st;
+      });
+      kit.live((t, dt) => { for (const st of pool) if (st.drop >= 0) { st.drop = Math.min(1, st.drop + dt * 3); st.m.position.y = 0.04 + (1 - st.drop * st.drop) * 0.6; if (st.drop >= 1) st.drop = -1; } });
+      tap(basketHit, 'basket of river stones', (sfx) => {
+        const st = pool.find(q => !q.on);
+        if (!st) { kit.say('All five stones are out. A garden needs a little emptiness too.'); return; }
+        const p = kit.player();
+        // near you if you're on the sand, else a quiet spot of its own; never on top of another stone
+        let best = null;
+        for (let k = 0; k < 80 && !best; k++) {
+          const cx = p && p.x > X0 && p.x < X1 && p.z > Z0 && p.z < Z1 && k < 40 ? p.x + (Math.random() - 0.5) * 0.9 : X0 + 0.25 + Math.random() * (X1 - X0 - 0.5);
+          const cz = p && p.x > X0 && p.x < X1 && p.z > Z0 && p.z < Z1 && k < 40 ? p.z + (Math.random() - 0.5) * 0.9 : Z0 + 0.25 + Math.random() * (Z1 - Z0 - 0.5);
+          if (cx < X0 + 0.15 || cx > X1 - 0.15 || cz < Z0 + 0.15 || cz > Z1 - 0.15) continue;
+          if (placed.some(q => Math.hypot(q.x - cx, q.z - cz) < 0.42)) continue;
+          if (p && Math.hypot(p.x - cx, p.z - cz) < 0.22) continue;
+          best = [cx, cz];
+        }
+        if (!best) { kit.say('No room left for a stone there.'); return; }
+        st.x = best[0]; st.z = best[1]; st.on = true; st.drop = 0;
+        st.m.position.set(st.x, 0.6, st.z); st.m.visible = true; placed.push(st); drawClean();
+        c.save(); c.beginPath(); c.arc(px(st.x), pz(st.z), 62, 0, 7); c.clip(); c.drawImage(clean, 0, 0); c.restore(); tex.needsUpdate = true;   // its rings, raked at once
+        sfx([[260, 0.06], [180, 0.12]], 'triangle', 0.06);
+        if (placed.length === 5) setTimeout(() => kit.say('Five stones, raked rings round every one. That is a garden.'), 600);
+      });
+    }
+    // a sign stuck in the sand table's rim, facing the sand
+    const sign = put(new THREE.PlaneGeometry(0.5, 0.3), texMat(250, 150, (cv, w, h) => {
+      cv.fillStyle = '#f4ecd8'; cv.fillRect(0, 0, w, h); cv.strokeStyle = '#6b4a34'; cv.lineWidth = 8; cv.strokeRect(4, 4, w - 8, h - 8);
+      cv.fillStyle = '#2a2230'; cv.textAlign = 'center'; cv.font = `700 26px ${HAND}`; cv.fillText('PLEASE DO NOT', w / 2, 40); cv.fillText('WALK ON THE SAND', w / 2, 70);
+      cv.font = `24px ${SCRIPT}`; cv.fillStyle = '#c0392b'; cv.fillText('(please walk on the sand)', w / 2, 108);
+      cv.font = `16px ${HAND}`; cv.fillStyle = '#6b4a34'; cv.fillText('— the management', w / 2, 134);
+    }), -0.8, 0.82, -2.55, [0, Math.PI / 2, 0]);
+    sign.userData.noInk = true;
+    addBox(0.025, 0.36, 0.56, paint(0x6b4a34), -0.818, 0.82, -2.55, 0.006);
+    add(new THREE.CylinderGeometry(0.015, 0.015, 0.66, 6), paint(0x6b4a34), -0.83, 0.33, -2.55);   // its stake, down to the floor
+    claim(-0.83, -2.55, 0.05);
+
+    // ── the lost page: buried in the sand, one corner peeking out; rake over it (or tap the corner) ──
+    const PGX = 1.0, PGZ = -3.45;
+    const pg = kit.page();
+    let corner = null;
+    const unearth = () => {
+      if (dug) return;
+      dug = true; corner.visible = false;
+      let t0 = -1;
+      kit.live((t) => {
+        if (t0 < 0) t0 = t;
+        const u = Math.min(1, (t - t0) / 0.7);
+        pg.position.y = -0.16 + u * 0.16 + Math.sin(u * Math.PI) * 0.12;
+        pg.rotation.z = (1 - u) * 0.6;
+      });
+      kit.sfx([[520, 0.06], [660, 0.06], [880, 0.14]], 'triangle', 0.05);
+      kit.say('Something was buried in the sand… a folded page!');
+    };
+    if (!pg.collected) {
+      pg.position.set(PGX, -0.16, PGZ); pg.rotation.y = 0.7; g.add(pg);
+      corner = mesh(new THREE.ConeGeometry(0.035, 0.06, 3), paint(0xfffdf6, { hatch: 0 }), g, PGX + 0.02, 0.02, PGZ, [0.3, 0.7, 0.5]);
+      corner.userData.noInk = true;
+      tap(corner, 'something poking out of the sand', () => unearth());
+      kit.live((t) => { if (!dug) corner.scale.setScalar(1 + Math.sin(t * 3) * 0.08); });
+    }
+  }
+
+  // ═════════════ 15. THE SMARTER GAME: the garden's riddles (you have to have looked around) ═════════════
+  {
+    const st = kit.K.minis.find(q => q.label === 'rake the sand');
+    const rakeTable = st?.run;
+    const RIDDLES = [
+      { q: 'How many koi swim in the pond?', choices: ['two', 'three', 'four', 'five'], answer: 1, why: 'Three: orange, white and gold. (Tap one five times. It has a secret.)' },
+      { q: 'The board above the label says one word. Which?', choices: ['patience', 'harmony', 'stillness', 'breathe'], answer: 2, why: '静 — stillness.' },
+      { q: 'How many stones are balanced in the cairn on the east shelf?', choices: ['three', 'four', 'five', 'six'], answer: 2, why: 'Five, smallest on top.' },
+      { q: 'What can you see through the round window by the bamboo?', choices: ['a koi pond', 'mountains under the moon', 'a pagoda', 'the sea'], answer: 1, why: 'Mountains, a pale moon and a cherry branch.' },
+      { q: 'How many paper lanterns hang in the room?', choices: ['six', 'eight', 'ten', 'twelve'], answer: 1, why: 'Eight: four on each side wall.' },
+      { q: 'What does the bamboo pipe by the pond do?', choices: ['rings a bell', 'fills, tips and knocks on a stone', 'sprays mist', 'nothing, it’s decorative'], answer: 1, why: 'It’s a shishi-odoshi: it fills, tips into the pond and knocks on its stone.' },
+      { q: 'What does the sign on the sand table ask you to do?', choices: ['take your shoes off', 'not walk on the sand (please walk on the sand)', 'rake slowly', 'keep quiet'], answer: 1, why: 'Do not walk on the sand. (Please walk on the sand.)' },
+      { q: 'Which instrument slows the whole room down?', choices: ['the taiko drum', 'the wind chime', 'the singing bowl', 'the deer-scarer'], answer: 2, why: 'Strike the singing bowl by the door and everything takes its time.' },
+    ];
+    if (st) kit.games.replace('rake the sand', (m) => {
+      const g = m.game;
+      g.open('The garden’s riddles');
+      g.text('A zen garden is about noticing. Answer four riddles about this room — then rake a pattern of your own.');
+      g.next('begin', () => kit.quiz(g, 'The garden’s riddles', kit.shuffle(RIDDLES).slice(0, 4).map(r => {
+        const order = kit.shuffle(r.choices.map((c, i) => i));
+        return { q: r.q, choices: order.map(i => r.choices[i]), answer: order.indexOf(r.answer), why: r.why };
+      }), { end: (s, n) => `${s} of ${n}. ${s === n ? 'You were paying attention. The sand approves.' : 'Walk round once more and look closely — everything here is an answer.'}` }));
+      if (rakeTable) g.next('skip: just rake the table', () => rakeTable(m));
+    }, 'garden riddles');
   }
 
   flush();
