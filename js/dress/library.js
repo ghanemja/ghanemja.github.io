@@ -576,7 +576,7 @@ export default function dress(kit) {
         if (Math.abs(th) > 1.2) { th = 0.05; w = 0; x = 0; v = 0; reward = 0; }    // fell over: new episode
         reward += h * 30;
         cart.position.x = x; pole.rotation.z = -th;
-        if (Math.floor(reward) !== lastR) { lastR = Math.floor(reward); const c = rt.image.getContext('2d'); c.fillStyle = '#fffdf6'; c.fillRect(0, 0, 200, 48); c.fillStyle = INKC; c.font = `700 20px ${HAND}`; c.textAlign = 'center'; c.fillText(`reward: ${lastR}  (+1 per frame upright)`, 100, 30); rt.needsUpdate = true; }
+        if (Math.floor(reward) !== lastR) { lastR = Math.floor(reward); const c = rt.image.getContext('2d'); c.fillStyle = '#fffdf6'; c.fillRect(0, 0, 200, 48); c.fillStyle = INKC; c.font = `700 15px ${HAND}`; c.textAlign = 'center'; c.fillText(`reward: ${lastR}  (+1 per frame upright)`, 100, 30); rt.needsUpdate = true; }
       };
     }
     // 4. ros2_depth_camera_tutorial: a depth camera on a tripod sweeps the blocks; points appear, coloured by depth
@@ -651,7 +651,7 @@ export default function dress(kit) {
     if (!pg.collected) tuck();
 
     // ── the pull: out of the shelf, through the air, open on the table, and back again ──
-    let cur = null, state = 'idle', st = 0, queued = null, showT = 0;
+    let cur = null, state = 'idle', st = 0, queued = null, showT = 0, FAST = 1;
     const qShelf = new THREE.Quaternion(), qTable = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, Math.PI / 2));
     const OUT = V3(-0.22, 0.02, 0), TABLE = V3(TX + 0.15, TY + 0.045, TZ);
     const pose = (b, k) => {                                                       // k: 0 shelf … 1 table, on an arc
@@ -661,7 +661,7 @@ export default function dress(kit) {
     live((t, dt) => {
       books.forEach(b => { b.glow.material.opacity = 0.22 + 0.14 * Math.sin(t * 3 + b.i); });
       if (state === 'idle') return;
-      st += dt;
+      dt *= FAST; st += dt;
       const b = cur;
       if (state === 'out') { const k = Math.min(1, st / 0.4); b.b.position.copy(b.home).addScaledVector(OUT, k); b.b.rotation.z = Math.sin(k * Math.PI) * 0.05; if (k >= 1) { state = 'fly'; st = 0; } }
       else if (state === 'fly') { const k = Math.min(1, st / 0.9); pose(b, k * k * (3 - 2 * k)); if (k >= 1) { state = 'open'; st = 0; b.b.visible = false; P.visible = true; coverM.color.setHex(b.col); coverM2.color.setHex(b.col); scenes[b.name].g.visible = true; if (b.name === 'art-heist' && !pg.collected && pg.visible !== false) { P.add(pg); pg.position.set(0.2, 0.05, 0.14); pg.rotation.set(0, -0.6, 0); pg.scale.setScalar(1); } kit.say(`${b.name}: ${b.blurb}`); } }
@@ -692,7 +692,7 @@ export default function dress(kit) {
     // a label on the shelf edge under them
     const lbl = put(new THREE.PlaneGeometry(0.5, 0.06), texMat(250, 30, (c, w, h) => { c.fillStyle = '#e4b84f'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 20px ${HAND}`; c.textAlign = 'center'; c.fillText('REFERENCE — pull to open ✦', w / 2, 22); }), 3.575, 0.905, -3.73, [0, -Math.PI / 2, 0]);
     lbl.userData.noInk = true;
-    window.__libPortal = { pull: (name) => pull(books.find(b => b.name === name)) };     // (for the check sheet)
+    window.__libPortal = { pull: (name) => pull(books.find(b => b.name === name)), fast: (k) => { FAST = k; } };     // (for the check sheet: slow headless frames)
   }
 
   // ═════════════ 11. THE SMARTER GAME: the librarian's questions (you have to have looked) ═════════════
