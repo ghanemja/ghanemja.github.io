@@ -652,6 +652,109 @@ export default function dress(kit) {
     intro();
   }, 'spot what changed');
 
+  // ══ WALK-OVER FLOOR: flat painted rugs, runners and scraps a few millimetres up — you walk
+  // straight across them, so they can go anywhere, walkways included (just not on a game ring) ══
+  let decalN = 0;
+  const decal = (w, h, draw, x, z, rot = 0, { y, px = 150 } = {}) => {
+    const cw = Math.min(512, Math.max(32, Math.round(w * px))), ch = Math.min(1024, Math.max(32, Math.round(h * px)));
+    const m = paint(0xffffff, { map: canvasTex(cw, ch, draw), hatch: 0, unique: true });
+    m.transparent = true; m.alphaTest = 0.35; m.depthWrite = false;
+    const k = decalN++;
+    const p = plane(w, h, m, x, y ?? 0.004 + (k % 12) * 0.001, z, [-Math.PI / 2, 0, rot]); p.renderOrder = 1 + k * 0.01;
+    return p;
+  };
+  const firstFree = (list, r) => list.find(([x, z]) => free(x, z, r));
+  const curl = (c, x, y, len, col, seed, lw = 3) => {          // a snipped end of yarn
+    c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.beginPath(); c.moveTo(x, y);
+    for (let i = 1; i <= 12; i++) { const t = i / 12; c.lineTo(x + Math.cos(seed + t * 5) * len * t + Math.sin(t * 9 + seed) * 6, y + Math.sin(seed * 1.3 + t * 4) * len * 0.6 * t + Math.cos(t * 11) * 5); }
+    c.stroke();
+  };
+  {
+    const runner = (c, w, h) => {
+      c.fillStyle = '#7a1f2c'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#c9a24a'; c.fillRect(0, 0, w, 10); c.fillRect(0, h - 10, w, 10); c.fillRect(0, 0, 10, h); c.fillRect(w - 10, 0, 10, h);
+      c.fillStyle = '#5e1621'; c.fillRect(16, 16, w - 32, h - 32);
+      c.fillStyle = '#7a1f2c'; c.fillRect(20, 20, w - 40, h - 40);
+      c.strokeStyle = 'rgba(201,162,74,0.55)'; c.lineWidth = 2;
+      const along = h > w, n = Math.floor((along ? h : w) / 70);
+      for (let i = 0; i < n; i++) {
+        const cx = along ? w / 2 : 40 + i * 70, cy = along ? 40 + i * 70 : h / 2;
+        c.beginPath(); c.moveTo(cx, cy - 18); c.lineTo(cx + 18, cy); c.lineTo(cx, cy + 18); c.lineTo(cx - 18, cy); c.closePath(); c.stroke();
+        c.fillStyle = '#c9a24a'; c.beginPath(); c.arc(cx, cy, 3, 0, 7); c.fill();
+      }
+    };
+    // the aisle runner, door to the front row, and a cross runner at the foot of the screen
+    decal(0.9, 2.75, runner, 0, -1.12, 0, { px: 100 });
+    decal(3.3, 0.72, runner, 0.1, -4.6, 0, { px: 100 });
+    // ticket stubs and popcorn, dropped all over
+    const scraps = (seed) => (c, w, h) => {
+      for (let k = 0; k < 5; k++) {
+        const x = 20 + ((k * 41 + seed * 17) % (w - 60)), y = 20 + ((k * 29 + seed * 23) % (h - 50));
+        c.save(); c.translate(x, y); c.rotate(k * 1.3 + seed);
+        if (k % 2) { c.fillStyle = '#f2d27a'; c.fillRect(-14, -7, 28, 14); c.strokeStyle = '#b03a30'; c.lineWidth = 1.5; c.setLineDash([2, 2]); c.strokeRect(-12, -5, 24, 10); c.setLineDash([]); c.fillStyle = '#b03a30'; c.font = `700 7px ${HAND}`; c.fillText('ADMIT', -9, 2); }
+        else { c.fillStyle = '#f6eedb'; for (let q = 0; q < 4; q++) { c.beginPath(); c.arc(Math.cos(q * 1.6) * 4, Math.sin(q * 1.6) * 4, 4, 0, 7); c.fill(); } c.strokeStyle = 'rgba(160,120,60,0.6)'; c.lineWidth = 1; c.stroke(); }
+        c.restore();
+      }
+    };
+    [[-0.7, -1.9], [0.75, -0.8], [1.9, -2.4], [-1.5, -1.2], [0.4, -2.45], [-1.1, -4.0], [2.1, -4.2], [-0.3, -0.25]].forEach(([x, z], i) => decal(0.6, 0.6, scraps(i), x, z, i));
+    // "stand here for your close-up": a gaffer-tape mark
+    decal(0.6, 0.45, (c, w, h) => {
+      c.strokeStyle = '#e4b84f'; c.lineWidth = 10; c.beginPath(); c.moveTo(w / 2 - 22, 18); c.lineTo(w / 2 + 22, 62); c.moveTo(w / 2 + 22, 18); c.lineTo(w / 2 - 22, 62); c.stroke();
+      c.fillStyle = '#f6eedb'; c.font = `400 13px ${HAND}`; c.textAlign = 'center'; c.fillText('your close-up: here', w / 2, h - 6);
+    }, 1.35, -0.5, -0.2);
+    // a walk-of-fame star set in the carpet (tap it)
+    const starG = new THREE.Group(); starG.position.set(-1.15, 0, -1.75); g.add(starG);
+    const stTex = canvasTex(256, 256, () => {});
+    let name = 0;
+    const NAMES = ['DeckGPT', 'YOU', 'Slide 4', 'The Popcorn'];
+    const drawStar = (lit) => {
+      const c = stTex.image.getContext('2d'), w = 256;
+      c.clearRect(0, 0, w, w);
+      c.fillStyle = '#6a5a5a'; c.fillRect(6, 6, w - 12, w - 12);
+      c.fillStyle = '#8a7a74'; c.fillRect(14, 14, w - 28, w - 28);
+      c.fillStyle = lit ? '#ffb0c8' : '#e88aa6'; c.strokeStyle = '#d8b25a'; c.lineWidth = 8;
+      c.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 46 : 106; c.lineTo(w / 2 + Math.cos(a) * r, w / 2 + 6 + Math.sin(a) * r); } c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#d8b25a'; c.textAlign = 'center'; c.font = `700 30px ${HAND}`; c.fillText(NAMES[name], w / 2, w / 2 + 12);
+      c.beginPath(); c.arc(w / 2, w / 2 + 50, 12, 0, 7); c.fill(); c.fillStyle = '#6a5a5a'; c.fillRect(w / 2 - 4, w / 2 + 44, 8, 12);
+      stTex.needsUpdate = true;
+    };
+    drawStar(false);
+    const stM = paint(0xffffff, { map: stTex, hatch: 0, unique: true }); stM.transparent = true; stM.alphaTest = 0.35; stM.depthWrite = false;
+    const stP = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62).rotateX(-Math.PI / 2), stM); stP.position.y = 0.012; stP.renderOrder = 1.5; stP.userData.noInk = true; starG.add(stP);
+    const glowM = new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const glw = new THREE.Mesh(new THREE.CircleGeometry(0.5, 28).rotateX(-Math.PI / 2), glowM); glw.position.y = 0.02; glw.renderOrder = 3; glw.userData.noInk = true; starG.add(glw);
+    let gt0 = -9;
+    live((t) => { const s = since(gt0); glowM.opacity = s < 2 ? 0.55 * (1 - s / 2) * (0.7 + 0.3 * Math.sin(s * 20)) : 0; glw.scale.setScalar(1 + (s < 2 ? s * 0.4 : 0)); });
+    const QUIPS = ['You stepped on a star. It’s fine: they’re used to it.', 'A star is born. Mostly out of popcorn.', 'Slide 4 got a star before you did. Rude.', 'The Popcorn thanks its agent, its butter, and you.'];
+    tap(starG, 'step on the walk-of-fame star', (sfx) => { gt0 = now(); name = (name + 1) % NAMES.length; drawStar(true); setTimeout(() => drawStar(false), 900); say(QUIPS[name]); sfx([[784, 0.08], [988, 0.08], [1175, 0.08], [1568, 0.3]], 'triangle', 0.2); });
+    // two spotlights roaming the carpet, like a premiere
+    const pool = (col) => {
+      const m = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, map: canvasTex(64, 64, (c, w) => { const gr = c.createRadialGradient(w / 2, w / 2, 2, w / 2, w / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.7, 'rgba(255,255,255,0.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, w); }) });
+      const p = new THREE.Mesh(new THREE.CircleGeometry(0.55, 28).rotateX(-Math.PI / 2), m); p.position.y = 0.022; p.renderOrder = 3; p.userData.noInk = true; g.add(p); return p;
+    };
+    const pools = [pool(0xfff1c0), pool(0xffd0e0)];
+    live((t) => {
+      pools[0].position.set(Math.sin(t * 0.23) * 1.6, 0.022, -1.6 + Math.sin(t * 0.37) * 0.9);
+      pools[1].position.set(Math.sin(t * 0.19 + 2) * 1.4, 0.022, -1.4 + Math.cos(t * 0.29) * 1.0);
+    });
+    // solid things where there's room: a Q&A microphone and a popcorn-tub bin
+    const mic = firstFree([[3.55, -2.3], [3.6, -1.95], [-3.55, -1.45], [3.6, -0.95], [-3.5, -4.0]], 0.16);
+    if (mic) {
+      const [x, z] = mic; claim(x, z, 0.16);
+      S.put(new THREE.CylinderGeometry(0.15, 0.17, 0.03, 16), dark, x, 0.015, z);
+      S.put(new THREE.CylinderGeometry(0.014, 0.014, 1.3, 8), paint(0x9a9aa8), x, 0.66, z);
+      S.put(new THREE.CylinderGeometry(0.03, 0.025, 0.12, 10).rotateX(0.5), dark, x, 1.34, z + 0.02);
+      S.put(new THREE.SphereGeometry(0.04, 10, 8), paint(0x6f7d92), x, 1.41, z + 0.05);
+    }
+    const bin = firstFree([[-3.55, -1.45], [3.6, -0.95], [3.6, -1.95], [-3.5, -4.0], [-1.55, -4.9]].filter(p => !mic || Math.hypot(p[0] - mic[0], p[1] - mic[1]) > 0.5), 0.2);
+    if (bin) {
+      const [x, z] = bin; claim(x, z, 0.2);
+      S.put(new THREE.CylinderGeometry(0.2, 0.16, 0.55, 16, 1, false), paint(0xffffff, { map: canvasTex(64, 64, (c, w, h) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#c23f36' : '#f6eedb'; c.fillRect(i * 8, 0, 8, h); } }), unique: true }), x, 0.275, z);
+      for (let i = 0; i < 7; i++) S.put(new THREE.SphereGeometry(0.05, 7, 6), paint(0xf3e3b8), x + Math.sin(i * 2.4) * 0.1, 0.56 + (i % 2) * 0.04, z + Math.cos(i * 2.4) * 0.1);
+      decal(0.5, 0.5, (c, w, h) => { c.fillStyle = '#f6eedb'; for (let q = 0; q < 14; q++) { c.beginPath(); c.arc(w / 2 + Math.cos(q * 2.2) * (20 + q * 3), h / 2 + Math.sin(q * 2.2) * (20 + q * 3), 5, 0, 7); c.fill(); } }, x, z + 0.05);
+    }
+  }
+
   S.flush(g); L.flush(g, true);
 }
 
