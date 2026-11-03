@@ -9,6 +9,7 @@ import { buildInteriors, tickInteriors, dressReady, WORLD, roomEvent, HUNT } fro
 import { createPlayer } from './player.js';
 import { person, pose, LOOKS } from './human.js';
 import { PLACES, APPS } from './apps.js';
+import { placeShopFolk, tickShopFolk, talkTo, tickBubble } from './npcs.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -31,7 +32,7 @@ sun.position.set(14, 22, 10);
 scene.add(hemi, sun);
 
 // ── build the world once the hand fonts are in (signs are painted with them) ──
-let town, rooms, player, viviG;
+let town, rooms, player, viviG, shopFolk = [];
 const walkers = [];
 const visited = new Set(JSON.parse(localStorage.getItem('street-visited') || '[]'));
 let zone = 'street';                       // 'street' or a place id
@@ -139,6 +140,8 @@ function nearestInteract() {
     if (viviG) list.push({ x: viviG.position.x, z: viviG.position.z, r: 1.2, label: 'talk to Vivi', act: { type: 'vivi' } });
   } else {
     list.push(...rooms[zone].interact);
+    const o = rooms[zone].origin;
+    for (const n of shopFolk) if (n.id === zone) list.push({ x: o.x + n.g.position.x, z: o.z + n.g.position.z, r: 1.0, label: `talk to ${n.name}`, act: { type: 'npc', npc: n } });
   }
   for (const it of list) {
     const d = Math.hypot(p.x - it.x, p.z - it.z);
@@ -162,6 +165,7 @@ function doAct(it) {
     fadeDo(() => {
       zone = act.id;
       showRoom(act.id);
+      try { placeShopFolk(rooms, act.id, shopFolk); } catch (e) { console.warn('shop folk:', e); }
       roomEvent(act.id, 'enter');
       const rm = rooms[act.id];
       player.setZone({ colliders: rm.colliders, bounds: rm.bounds, lookY: 1.5 });
@@ -189,6 +193,8 @@ function doAct(it) {
     playing = act;
     act.played?.();
     act.run(mini);
+  } else if (act.type === 'npc') {
+    talkTo(act.npc, clock.elapsedTime, game.blip);
   } else if (act.type === 'vivi') {
     talkToVivi();
   } else if (act.type === 'card') {
@@ -469,7 +475,10 @@ function pickAt(cx, cy) {
   const hits = ray.intersectObjects(roots, true).filter(h => h.object.visible && !h.object.userData.isInk && !isPlayer(h.object));
   const h = hits[0];
   if (!h) return null;
-  for (let o = h.object; o; o = o.parent) if (o.userData.toy) return { toy: o.userData.toy, point: h.point };
+  for (let o = h.object; o; o = o.parent) {
+    if (o.userData.toy) return { toy: o.userData.toy, point: h.point };
+    if (o.userData.npc) { const n = o.userData.npc; return { toy: { label: `talk to ${n.name}`, poke: () => talkTo(n, clock.elapsedTime, game.blip) }, point: h.point }; }
+  }
   const p = h.point;
   // what it belongs to: the nearest thing you can use, if you tapped an object (not the floor)
   const list = zone === 'street'
@@ -615,6 +624,8 @@ function loop() {
   }
   { const a = t - tapT; tapRing.material.opacity = a < 0.7 ? 0.8 * (1 - a / 0.7) : 0; tapRing.scale.setScalar(1 + a * 0.8); }
   tickParty(t);
+  if (rooms && zone !== 'street') tickShopFolk(shopFolk, zone, player?.pos, rooms[zone].origin, dt, t);
+  tickBubble(camera, t, zone);
   tickInteriors(t);
   styleTick(t, renderer.domElement.width, renderer.domElement.height);
   renderer.render(scene, camera);

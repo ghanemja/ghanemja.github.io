@@ -2938,6 +2938,12 @@ function dressKit(K, place, lib, origin) {
     if (K.cols.some(c => x + r > c.x0 && x - r < c.x1 && z + r > c.z0 && z - r < c.z1)) return false;
     return reserved.every(q => q.length === 3 ? Math.hypot(x - q[0], z - q[1]) > q[2] + r : segD(x, z, q[0], q[1], q[2], q[3]) > q[4] + r);
   };
+  // the same, minus the walkways: for people, who can stand beside a path
+  const freeSoft = (x, z, r = 0.2) => {
+    if (x - r < -W / 2 + 0.05 || x + r > W / 2 - 0.05 || z - r < -D + 0.5 || z + r > 0.35) return false;
+    if (K.cols.some(c => x + r > c.x0 && x - r < c.x1 && z + r > c.z0 && z - r < c.z1)) return false;
+    return reserved.every(q => q.length !== 3 || Math.hypot(x - q[0], z - q[1]) > q[2] + r);
+  };
   const block = (x0, x1, z0, z1) => K.cols.push({ x0, x1, z0, z1 });
   const claim = (x, z, r) => block(x - r, x + r, z - r, z + r);
   const R = rng(place.id.length * 101 + place.id.charCodeAt(0));
@@ -2994,7 +3000,7 @@ function dressKit(K, place, lib, origin) {
     page: () => makePage(place.id),
     THREE, K, g: K.g, put: K.put, box: K.box, flat: K.flat, kit, rb, paint, PAL, canvasTex, texMat, fitLine, rng: R, mkRng: rng,
     HAND, SCRIPT, INKC, W, D, H, SCR_W, SCR_H, SCR_Y, LBL_X, place, lib,
-    free, block, claim, ring, lane, scatter, tap, toy, live, shadow: blobShadow, now: () => NOW, shuffle, anyOf,
+    free, freeSoft, block, claim, ring, lane, scatter, tap, toy, live, shadow: blobShadow, now: () => NOW, shuffle, anyOf,
     fern: (x, z, s, seed) => fern(K, x, z, s, seed), bloom: (x, z, h, col, seed) => bloom(K, x, z, h, col, seed), bunting: (pts, n, make) => bunting(K, pts, n, make),
   };
 }
@@ -3042,8 +3048,9 @@ export function buildInteriors(scene) {
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
     ink(g, 'mid');
     scene.add(g);
+    const spotKit = dressKit(K, place, lib, { x: ox, z: oz });     // (for placing the townsfolk later)
     rooms[place.id] = {
-      group: g,
+      group: g, free: spotKit.free, freeSoft: spotKit.freeSoft, cols: K.cols,
       origin: { x: ox, z: oz },
       spawn: { x: ox, z: oz - 0.9, yaw: Math.PI },     // just inside, facing the room
       bounds: { x0: ox - W / 2 + 0.25, x1: ox + W / 2 - 0.25, z0: oz - D + 0.8, z1: oz + 0.42 },
