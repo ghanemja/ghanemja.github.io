@@ -726,5 +726,85 @@ export default function dress(kit) {
     });
   }, 'what medium is the room?');
 
+  // ══ WALK-OVER FLOOR: flat painted rugs, runners and scraps a few millimetres up — you walk
+  // straight across them, so they can go anywhere, walkways included (just not on a game ring) ══
+  let decalN = 0;
+  const decal = (w, h, draw, x, z, rot = 0, { y, px = 150 } = {}) => {
+    const cw = Math.min(512, Math.max(32, Math.round(w * px))), ch = Math.min(1024, Math.max(32, Math.round(h * px)));
+    const m = paint(0xffffff, { map: canvasTex(cw, ch, draw), hatch: 0, unique: true });
+    m.transparent = true; m.alphaTest = 0.35; m.depthWrite = false;
+    const k = decalN++;
+    const p = plane(w, h, m, x, y ?? 0.004 + (k % 12) * 0.001, z, [-Math.PI / 2, 0, rot]); p.renderOrder = 1 + k * 0.01;
+    return p;
+  };
+  const firstFree = (list, r) => list.find(([x, z]) => free(x, z, r));
+  const curl = (c, x, y, len, col, seed, lw = 3) => {          // a snipped end of yarn
+    c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.beginPath(); c.moveTo(x, y);
+    for (let i = 1; i <= 12; i++) { const t = i / 12; c.lineTo(x + Math.cos(seed + t * 5) * len * t + Math.sin(t * 9 + seed) * 6, y + Math.sin(seed * 1.3 + t * 4) * len * 0.6 * t + Math.cos(t * 11) * 5); }
+    c.stroke();
+  };
+  {
+    // a big painted mural on the floor in the middle of the studio: one brushy "splat!"
+    decal(2.7, 1.8, (c, w, h) => {
+      const sw = (pts, col, lw) => { c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x * w, y * h) : c.moveTo(x * w, y * h)); c.stroke(); };
+      c.globalAlpha = 0.85;
+      sw([[0.08, 0.7], [0.25, 0.35], [0.45, 0.6], [0.62, 0.25], [0.9, 0.5]], '#8f7ae8', 46);
+      sw([[0.1, 0.45], [0.3, 0.75], [0.5, 0.4], [0.75, 0.75], [0.92, 0.3]], '#e4b84f', 30);
+      sw([[0.2, 0.2], [0.4, 0.15], [0.6, 0.85], [0.85, 0.85]], '#7fb3a8', 22);
+      for (let i = 0; i < 18; i++) blob(c, w * (0.08 + ((i * 37) % 84) / 100), h * (0.1 + ((i * 53) % 80) / 100), 6 + (i % 4) * 5, CSS[i % 6], i);
+      c.globalAlpha = 1; c.fillStyle = '#fdf8ec'; c.strokeStyle = INKC; c.lineWidth = 6; c.font = `700 ${Math.round(h * 0.3)}px ${SCRIPT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.strokeText('splat!', w / 2, h / 2); c.fillText('splat!', w / 2, h / 2);
+    }, -0.15, -3.55, 0.08, { px: 110 });
+    // purple footprints walking from the spilt can out to the door
+    decal(0.6, 2.9, (c, w, h) => {
+      c.fillStyle = 'rgba(143,122,232,0.85)';
+      for (let k = 0; k < 9; k++) { const x = w / 2 + (k % 2 ? 16 : -16), y = h - 30 - k * (h - 60) / 8; c.globalAlpha = 0.3 + k * 0.08; c.beginPath(); c.ellipse(x, y, 11, 18, 0, 0, 7); c.fill(); c.beginPath(); c.ellipse(x, y + 26, 8, 9, 0, 0, 7); c.fill(); }
+    }, -0.75, -1.05, 0.42);
+    // more drop cloths
+    cloth(1.3, 0.9, 1.05, -0.75, -0.25, 11);
+    cloth(1.2, 0.95, 1.25, -3.75, 0.2, 14);
+    // a taped-off square of wet paint by the door, right
+    decal(0.85, 0.85, (c, w, h) => {
+      c.fillStyle = 'rgba(95,140,200,0.55)'; c.fillRect(24, 24, w - 48, h - 48);
+      c.strokeStyle = '#e4b84f'; c.lineWidth = 12; c.strokeRect(16, 16, w - 32, h - 32);
+      c.fillStyle = '#fdf8ec'; c.fillRect(w / 2 - 42, h / 2 - 14, 84, 28); c.fillStyle = '#c23f36'; c.font = `700 18px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('WET PAINT', w / 2, h / 2 + 1);
+      c.fillStyle = 'rgba(143,122,232,0.85)'; c.beginPath(); c.ellipse(w * 0.72, h * 0.3, 9, 15, 0.3, 0, 7); c.fill();   // (somebody did anyway)
+    }, 2.35, -0.55, 0.12);
+    // a stencilled arrow toward the game, and one by the door you can spin (tap it)
+    const arrowDraw = (txt, col) => (c, w, h) => {
+      c.fillStyle = col; c.beginPath(); c.moveTo(w * 0.1, h * 0.38); c.lineTo(w * 0.62, h * 0.38); c.lineTo(w * 0.62, h * 0.18); c.lineTo(w * 0.95, h * 0.5); c.lineTo(w * 0.62, h * 0.82); c.lineTo(w * 0.62, h * 0.62); c.lineTo(w * 0.1, h * 0.62); c.closePath(); c.fill();
+      c.fillStyle = '#fdf8ec'; c.font = `700 ${Math.round(h * 0.17)}px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, w * 0.42, h * 0.5);
+    };
+    decal(0.9, 0.36, arrowDraw('paint here', '#e8604c'), -1.65, -1.45, Math.atan2(0.6, -1.25));
+    const arr = new THREE.Group(); arr.position.set(0.55, 0, -0.45); g.add(arr);
+    const am = paint(0xffffff, { map: canvasTex(192, 80, arrowDraw('this way', '#5f8cc8')), hatch: 0, unique: true }); am.transparent = true; am.alphaTest = 0.35; am.depthWrite = false;
+    const ap = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.33).rotateX(-Math.PI / 2), am); ap.position.y = 0.014; ap.renderOrder = 1.6; ap.userData.noInk = true; arr.add(ap);
+    arr.rotation.y = Math.PI / 2;                    // pointing into the room
+    const WAYS = [['to the paint', [-2.9, -2.05]], ['to more paint', [3.5, -1.75]], ['to the exit (also paint)', [0, 1]], ['to the giant can', [3.42, -0.5]], ['to whoever made these footprints', [-0.75, -1.6]], ['to the screen, where the paint is on purpose', [0, -5]]];
+    let a0 = Math.PI / 2, a1 = a0, at0 = -9, w = 0;
+    live(() => { const s = since(at0); if (s > 1.4) return; const u = Math.min(1, s / 1.3), e = 1 - Math.pow(1 - u, 3); arr.rotation.y = a0 + (a1 - a0) * e; ap.position.y = 0.014 + Math.sin(u * Math.PI) * 0.03; });
+    tap(arr, 'spin the floor arrow', (sfx) => {
+      if (since(at0) < 1.4) return;
+      at0 = now(); w = (w + 1) % WAYS.length; a0 = arr.rotation.y; const [tx, tz] = WAYS[w][1]; a1 = Math.atan2(-(tz - arr.position.z), tx - arr.position.x); while (a1 < a0 + Math.PI) a1 += Math.PI * 2;
+      say(`This way: ${WAYS[w][0]}.`); sfx([[300, 0.04], [400, 0.04], [500, 0.04], [600, 0.04], [800, 0.1]], 'triangle', 0.15);
+    });
+    // more solid clutter where it fits: a stack of blank canvases, a bucket of rollers
+    const stack = firstFree([[1.9, -4.85], [-1.45, -4.9], [2.0, -3.3], [-0.9, -4.95], [3.55, -2.7]], 0.25);
+    if (stack) {
+      const [x, z] = stack; claim(x, z, 0.25);
+      for (let i = 0; i < 5; i++) S.box(0.5 - i * 0.03, 0.05, 0.4 - i * 0.02, i % 2 ? cream : paint(0xe8d8c0), x + Math.sin(i * 2) * 0.02, 0.025 + i * 0.05, z + Math.cos(i * 3) * 0.02, 0.008, [0, i * 0.12, 0]);
+      S.put(new THREE.CylinderGeometry(0.05, 0.05, 0.12, 12), paint(0xdc6a9a), x + 0.08, 0.31, z);
+    }
+    const buck = firstFree([[-1.45, -4.9], [2.0, -3.3], [1.9, -4.85], [3.55, -2.7], [-0.9, -4.95]].filter(p => !stack || Math.hypot(p[0] - stack[0], p[1] - stack[1]) > 0.55), 0.2);
+    if (buck) {
+      const [x, z] = buck; claim(x, z, 0.2);
+      S.put(new THREE.CylinderGeometry(0.18, 0.15, 0.32, 16, 1, true), paint(0x7fb3a8, { side: THREE.DoubleSide }), x, 0.16, z);
+      S.put(new THREE.CylinderGeometry(0.15, 0.15, 0.02, 14), paint(0x5f9a90), x, 0.01, z);
+      for (let i = 0; i < 2; i++) { const a = i * 2.5; S.put(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6).translate(0, 0.25, 0), tin, x + Math.cos(a) * 0.06, 0.1, z + Math.sin(a) * 0.06, [Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25]); }
+      const tip = (a) => new THREE.Vector3(0, 0.6, 0).applyEuler(new THREE.Euler(Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25));
+      for (let i = 0; i < 2; i++) { const a = i * 2.5, t = tip(a); S.put(new THREE.CylinderGeometry(0.04, 0.04, 0.16, 12).rotateZ(Math.PI / 2), paint(COLS[i * 3]), x + Math.cos(a) * 0.06 + t.x, 0.1 + t.y, z + Math.sin(a) * 0.06 + t.z, [Math.sin(a) * 0.25, a, -Math.cos(a) * 0.25]); }
+    }
+  }
+
   S.flush(g); L.flush(g, true);
 }
