@@ -371,12 +371,12 @@ function talkToVivi() {
   g.next('🎉 party!', () => g.close());
 }
 let partyT = -99, _spark = null;
-// somewhere up ahead of wherever you're looking
+// over the open street (never behind the shopfronts), up ahead the way you're facing along it
 const _fw = new THREE.Vector3();
 function burstSpot(v) {
-  camera.getWorldDirection(_fw); _fw.y = 0; _fw.normalize();
-  return v.copy(camera.position).addScaledVector(_fw, 7 + Math.random() * 4)
-    .add(new THREE.Vector3(-_fw.z, 0, _fw.x).multiplyScalar((Math.random() - 0.5) * 8)).setY(3.2 + Math.random() * 2);
+  camera.getWorldDirection(_fw);
+  const dir = Math.abs(_fw.x) > 0.25 ? Math.sign(_fw.x) : (camera.position.x < 0 ? 1 : -1);
+  return v.set(camera.position.x + dir * (5 + Math.random() * 7), 4.6 + Math.random() * 2.2, -1.6 + Math.random() * 3.2);
 }
 // a soft round spark with a hand-drawn ink rim
 function sparkTex() {
