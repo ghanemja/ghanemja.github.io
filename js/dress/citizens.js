@@ -767,6 +767,91 @@ export default function dress(kit) {
     }), 3.17, 1.35, -5.1, [0, -Math.PI / 2, 0]).userData.noInk = true;
   }
 
+  // ═════════════ 16. WALK-OVER FLOOR: a runner, chalk marks, pattern paper, a tape line, threads and buttons ═════════════
+  {
+    const decal = (w, d, x, z, ry, draw, { y = 0.008, ppm = 128, ro = 1 } = {}) => {
+      const m = put(new THREE.PlaneGeometry(w, d), texMat(Math.round(w * ppm), Math.round(d * ppm), draw), x, y, z, [-Math.PI / 2, 0, ry]);
+      m.userData.noInk = true; m.renderOrder = ro; return m;
+    };
+    // the long runner from the door to the rug
+    decal(0.8, 2.1, 0, -0.73, 0, (c, w, h) => {
+      c.fillStyle = '#8e2f3a'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = '#e4b84f'; c.lineWidth = 5; c.strokeRect(9, 9, w - 18, h - 18);
+      c.fillStyle = 'rgba(228,184,79,0.55)';
+      for (let y = 40; y < h - 30; y += 46) { c.save(); c.translate(w / 2, y); c.rotate(Math.PI / 4); c.fillRect(-9, -9, 18, 18); c.restore(); }
+      c.fillStyle = '#f1e4c8'; for (let x = 6; x < w; x += 8) { c.fillRect(x, 0, 3, 7); c.fillRect(x, h - 7, 3, 7); }   // fringe
+    });
+    // pattern-paper pieces: tissue sheets with dashed cutting lines and their labels
+    const piece = (label, shape) => (c, w, h) => {
+      c.fillStyle = 'rgba(246,236,200,0.93)'; c.beginPath(); shape(c, w, h); c.fill();
+      c.strokeStyle = INKC; c.lineWidth = 2; c.setLineDash([7, 5]); c.beginPath(); shape(c, w, h, 8); c.stroke(); c.setLineDash([]);
+      c.strokeStyle = '#3f5872'; c.lineWidth = 2; c.beginPath(); c.moveTo(w * 0.5, h * 0.25); c.lineTo(w * 0.5, h * 0.7); c.stroke();      // the grain line
+      c.fillStyle = '#3f5872'; c.beginPath(); c.moveTo(w * 0.5, h * 0.22); c.lineTo(w * 0.47, h * 0.29); c.lineTo(w * 0.53, h * 0.29); c.fill();
+      c.fillStyle = INKC; c.font = `700 ${Math.round(w / 9)}px ${HAND}`; c.textAlign = 'center'; c.fillText(label, w / 2, h * 0.84);
+    };
+    const bodice = (c, w, h, i = 0) => { c.moveTo(w * 0.2 + i, h * 0.05 + i); c.lineTo(w * 0.8 - i, h * 0.05 + i); c.lineTo(w * 0.95 - i, h * 0.3); c.lineTo(w * 0.85 - i, h * 0.95 - i); c.lineTo(w * 0.15 + i, h * 0.95 - i); c.lineTo(w * 0.05 + i, h * 0.3); c.closePath(); };
+    const sleeve = (c, w, h, i = 0) => { c.moveTo(w * 0.1 + i, h * 0.35); c.quadraticCurveTo(w * 0.5, h * 0.0 + i * 2, w * 0.9 - i, h * 0.35); c.lineTo(w * 0.75 - i, h * 0.95 - i); c.lineTo(w * 0.25 + i, h * 0.95 - i); c.closePath(); };
+    const skirt = (c, w, h, i = 0) => { c.moveTo(w * 0.32 + i, h * 0.05 + i); c.lineTo(w * 0.68 - i, h * 0.05 + i); c.lineTo(w * 0.95 - i, h * 0.95 - i); c.lineTo(w * 0.05 + i, h * 0.95 - i); c.closePath(); };
+    decal(1.1, 0.95, 0.1, -4.15, 0.12, piece('FRONT — cut 1 on fold', bodice), { y: 0.009, ppm: 110 });
+    decal(0.6, 0.65, 1.05, -3.85, -0.5, piece('SLEEVE ×2', sleeve), { y: 0.01, ppm: 120 });
+    decal(0.7, 0.75, -0.75, -4.0, 0.4, piece('SKIRT PANEL', skirt), { y: 0.011, ppm: 120 });
+    decal(0.55, 0.6, 1.45, -1.55, 0.9, piece('BACK', bodice), { y: 0.01, ppm: 120 });
+    decal(0.5, 0.55, -2.45, -1.08, -0.3, piece('COLLAR', sleeve), { y: 0.01, ppm: 120 });
+    // tailor's chalk on the boards
+    const chalk = (draw) => (c, w, h) => { c.strokeStyle = 'rgba(250,248,240,0.85)'; c.fillStyle = 'rgba(250,248,240,0.85)'; c.lineWidth = 3; c.lineCap = 'round'; draw(c, w, h); };
+    decal(0.7, 0.5, -0.85, -1.05, 0.2, chalk((c, w, h) => {
+      c.beginPath(); c.moveTo(10, h * 0.3); c.lineTo(w - 10, h * 0.3); c.stroke();
+      for (let x = 20; x < w - 10; x += 22) { c.beginPath(); c.moveTo(x, h * 0.3 - 6); c.lineTo(x, h * 0.3 + 6); c.stroke(); }
+      c.font = `24px ${SCRIPT}`; c.fillText('✂ cut here', 20, h * 0.75); c.beginPath(); c.moveTo(w - 40, h * 0.6); c.lineTo(w - 20, h * 0.8); c.moveTo(w - 20, h * 0.6); c.lineTo(w - 40, h * 0.8); c.stroke();
+    }), { y: 0.006 });
+    decal(0.6, 0.5, 1.45, -0.95, -0.3, chalk((c, w, h) => {
+      c.font = `22px ${SCRIPT}`; c.fillText('chest 96', 10, 30); c.fillText('waist 81', 10, 58); c.fillText('inside leg: ??', 10, 86);
+      c.beginPath(); c.arc(w - 30, 40, 14, 0, 7); c.stroke();
+    }), { y: 0.006 });
+    decal(0.5, 0.5, -0.8, -2.9, 0.6, chalk((c, w, h) => { c.setLineDash([8, 6]); c.beginPath(); c.arc(w / 2, h / 2, w * 0.35, 0, 7); c.stroke(); c.setLineDash([]); c.beginPath(); c.moveTo(w / 2 - 10, h / 2); c.lineTo(w / 2 + 10, h / 2); c.moveTo(w / 2, h / 2 - 10); c.lineTo(w / 2, h / 2 + 10); c.stroke(); }), { y: 0.021, ro: 2 });
+    // threads, buttons and pins dropped round the cutting table and the rack
+    const clutter = (seed) => (c, w, h) => {
+      const Rr = kit.mkRng(seed);
+      const cols = ['#e8604c', '#e4b84f', '#7fb3a8', '#8f7ae8', '#3f5872', '#f2a7bd'];
+      for (let k = 0; k < 4; k++) { c.strokeStyle = cols[k]; c.lineWidth = 2; c.beginPath(); let x = Rr() * w, y = Rr() * h; c.moveTo(x, y); for (let j = 0; j < 6; j++) { x += (Rr() - 0.5) * 60; y += (Rr() - 0.5) * 60; c.quadraticCurveTo(x + 20, y - 20, x, y); } c.stroke(); }
+      for (let k = 0; k < 7; k++) { const x = Rr() * w, y = Rr() * h, r = 5 + Rr() * 5; c.fillStyle = cols[k % cols.length]; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); c.fillStyle = 'rgba(0,0,0,0.35)'; for (const [dx, dy] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) c.fillRect(x + dx - 1, y + dy - 1, 2, 2); }
+      for (let k = 0; k < 5; k++) { const x = Rr() * w, y = Rr() * h, a = Rr() * 6; c.strokeStyle = '#9aa0aa'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * 16, y + Math.sin(a) * 16); c.stroke(); c.fillStyle = cols[k % cols.length]; c.beginPath(); c.arc(x, y, 3, 0, 7); c.fill(); }
+    };
+    for (const [x, z, s, sd] of [[-1.15, -0.45, 0.6, 3], [0.55, -1.25, 0.55, 8], [1.6, -2.95, 0.6, 13], [-2.9, -2.0, 0.5, 21], [0.6, -0.15, 0.5, 34]]) decal(s, s, x, z, sd, clutter(sd), { y: 0.013, ppm: 120, ro: 2 });
+
+    // the fun one: a tape measure laid right across the floor — tap its case and it zips home, then rolls out again
+    const CX = 1.72, CZ = -0.48, AX = -1.55, AZ = -0.82;
+    const L = Math.hypot(CX - AX, CZ - AZ), ang = Math.atan2(AZ - CZ, CX - AX);
+    const tapeG = new THREE.PlaneGeometry(L, 0.04).translate(-L / 2, 0, 0);          // anchored at the case end
+    const tape = new THREE.Mesh(tapeG);
+    const tapeTex = canvasTex(Math.round(L * 120), 24, (c, w, h) => {
+      c.fillStyle = '#f2d04a'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 11px ${HAND}`;
+      for (let k = 0; k * 12 < w; k++) { const x = w - k * 12; c.fillRect(x, 0, 1, k % 10 === 0 ? 12 : k % 5 === 0 ? 8 : 4); if (k % 10 === 0 && k) c.fillText(String(k), x + 2, 21); }
+    });
+    tape.material = paint(0xffffff, { map: tapeTex, hatch: 0, unique: true });
+    tape.rotation.set(-Math.PI / 2, 0, ang); tape.position.set(CX, 0.012, CZ); tape.userData.noInk = true; tape.renderOrder = 3; g.add(tape);
+    const reel = grp(CX, 0, CZ); reel.rotation.y = ang;
+    mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 18), paint(0xe8604c), reel, 0.02, 0.015, 0);
+    mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.033, 10), paint(0xc9ccd6), reel, 0.02, 0.015, 0);
+    const tip = mesh(rb(0.012, 0.012, 0.045, 0.002), paint(0xc9ccd6), g, AX, 0.012, AZ, [0, ang, 0]);
+    let zip = -1;
+    live((t, dt) => {
+      if (zip < 0) return;
+      zip += dt;
+      const k = zip < 0.5 ? 1 - zip / 0.5 : zip < 1.5 ? 0 : Math.min(1, (zip - 1.5) / 1.4);
+      tape.scale.x = Math.max(0.02, k);
+      tip.position.set(CX + (AX - CX) * k, 0.012, CZ + (AZ - CZ) * k);
+      reel.children[0].rotation.y = zip * 20;
+      if (zip > 2.9) zip = -1;
+    });
+    tap(reel, 'tape measure', (sfx) => {
+      if (zip >= 0) return;
+      zip = 0; sfx(Array.from({ length: 12 }, (_, i) => [2000 - i * 90, 0.02]), 'square', 0.015);
+      setTimeout(() => sfx([[400, 0.04], [300, 0.06]], 'square', 0.03), 500);
+      setTimeout(() => kit.say(kit.anyOf(['The shop floor: 3.3 m. The queue for the fitting room: longer.', 'Measure twice, cut once, zip it back for fun.', 'Inside leg: still ??.'])), 900);
+    });
+  }
+
   S.flush();
   g.userData.shoppers = shoppers;
 }

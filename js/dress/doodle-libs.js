@@ -978,5 +978,99 @@ export default function dress(K) {
   sign(0.42, 0.09, 'destination: the margin', INKC, 3.05, 0.012, -0.12, [-HPI, 0, 0], 22);
   sign(0.42, 0.09, 'do not sit (you can sit)', INKC, -1.8, 0.012, -4.66, [-HPI, 0, 0.25], 22);
 
+  // ═══ round 3: the floor, walk-over dressing edge to edge (flat, so nobody is blocked) ═══
+  // one big canvas laid over the whole floor; the game rings are cut out of it so they still glow
+  const floorArt = (draw, seed) => {
+    const cw = 2048, ch = 1536, PXM = cw / 8;
+    const P = (x, z) => [(x + 4) * PXM, (z + 5.5) * PXM];
+    const R = K.mkRng(seed);
+    const m = mesh(new THREE.PlaneGeometry(8, 6), texMat(cw, ch, (c) => {
+      c.lineCap = c.lineJoin = 'round';
+      draw(c, P, PXM, R);
+      c.globalCompositeOperation = 'destination-out';
+      for (const q of K.K.minis) { const [px, py] = P(q.x, q.z); c.beginPath(); c.arc(px, py, 0.5 * PXM, 0, 7); c.fill(); }
+    }), G, 0, 0.008, -2.5, [-Math.PI / 2, 0, 0]);
+    m.userData.noInk = true; m.renderOrder = 1;
+    return m;
+  };
+  // draw something at room point (x, z), rotated a, scaled to s metres per 100 px
+  const at = (c, P, PXM, x, z, a, s, fn) => { const [px, py] = P(x, z); c.save(); c.translate(px, py); c.rotate(a); c.scale(s * PXM / 100, s * PXM / 100); fn(c); c.restore(); };
+  floorArt((c, P, M, R) => {
+    // giant sheets of notebook paper dropped across the boards
+    for (const [x, z, a, w, h] of [[-0.9, -0.55, 0.12, 1.5, 1.05], [1.6, -1.7, -0.25, 1.4, 1.0], [-0.4, -3.9, 0.3, 1.6, 1.1], [2.5, -4.3, -0.1, 1.2, 0.9], [-2.8, -2.9, -0.4, 1.2, 0.95], [0.6, -5.05, 0.05, 1.3, 0.7], [-3.2, -0.25, 0.2, 0.9, 0.6]]) {
+      const [px, py] = P(x, z), ww = w * M, hh = h * M;
+      c.save(); c.translate(px, py); c.rotate(a);
+      c.fillStyle = 'rgba(255,253,246,0.92)'; c.fillRect(-ww / 2, -hh / 2, ww, hh);
+      c.strokeStyle = 'rgba(76,155,232,0.45)'; c.lineWidth = 3; for (let y = -hh / 2 + 34; y < hh / 2; y += 26) { c.beginPath(); c.moveTo(-ww / 2, y); c.lineTo(ww / 2, y); c.stroke(); }
+      c.strokeStyle = 'rgba(232,70,107,0.55)'; c.beginPath(); c.moveTo(-ww / 2 + 46, -hh / 2); c.lineTo(-ww / 2 + 46, hh / 2); c.stroke();
+      c.fillStyle = 'rgba(200,180,140,0.6)'; for (const f of [0.2, 0.5, 0.8]) { c.beginPath(); c.arc(-ww / 2 + 18, -hh / 2 + hh * f, 9, 0, 7); c.fill(); }
+      c.strokeStyle = 'rgba(42,34,48,0.25)'; c.lineWidth = 3; c.strokeRect(-ww / 2, -hh / 2, ww, hh);
+      c.restore();
+    }
+    // chalk word bubbles and doodles
+    const bubble = (t, x, z, a, col) => at(c, P, M, x, z, a, 0.5, (c) => {
+      c.font = `700 30px ${HAND}`; const tw = c.measureText(t).width;
+      c.fillStyle = 'rgba(255,255,255,0.75)'; c.strokeStyle = col; c.lineWidth = 4;
+      c.beginPath(); c.ellipse(0, 0, tw / 2 + 18, 30, 0, 0, 7); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(-10, 26); c.lineTo(-24, 50); c.lineTo(6, 28); c.fill(); c.stroke();
+      c.fillStyle = col; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(t, 0, 2);
+    });
+    bubble('BOING!', -0.6, -1.6, -0.2, '#e8466b'); bubble('whoosh…', 2.3, -2.9, 0.15, '#2a78d6'); bubble('(adjective)', -1.2, -4.6, 0.1, '#3fae5a'); bubble('zap!', 0.4, -0.25, 0.25, '#8f7ae8'); bubble('(verb)', 2.9, -1.2, -0.3, '#eb6834'); bubble('???', -3.1, -2.0, 0.2, '#e8466b'); bubble('ta-da!', 1.9, -5.0, -0.1, '#3fae5a');
+    // crayon scribbles
+    const CC = ['#e8463a', '#2a78d6', '#3fae5a', '#f6c445', '#8f7ae8', '#eb6834', '#e8466b'];
+    for (let i = 0; i < 26; i++) at(c, P, M, -3.7 + R() * 7.4, -5.3 + R() * 5.5, R() * 6.3, 0.18 + R() * 0.15, (c) => {
+      c.strokeStyle = CC[i % CC.length]; c.globalAlpha = 0.75; c.lineWidth = 9;
+      c.beginPath(); c.moveTo(-50, 0); for (let k = 0; k < 9; k++) c.lineTo(-50 + k * 12, (k % 2 ? -1 : 1) * (14 + R() * 12)); c.stroke(); c.globalAlpha = 1;
+    });
+    // little doodles: stars, spirals, hearts, arrows
+    for (let i = 0; i < 30; i++) at(c, P, M, -3.7 + R() * 7.4, -5.3 + R() * 5.5, R() * 6.3, 0.12, (c) => {
+      c.strokeStyle = 'rgba(42,34,48,0.6)'; c.lineWidth = 5; const k = i % 4; c.beginPath();
+      if (k === 0) for (let j = 0; j <= 10; j++) { const a = j * Math.PI / 5 - Math.PI / 2, r = j % 2 ? 18 : 40; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+      else if (k === 1) for (let a = 0; a < 14; a += 0.3) c.lineTo(Math.cos(a) * a * 3, Math.sin(a) * a * 3);
+      else if (k === 2) { c.moveTo(0, 30); c.bezierCurveTo(-50, -10, -20, -40, 0, -14); c.bezierCurveTo(20, -40, 50, -10, 0, 30); }
+      else { c.moveTo(-40, 0); c.lineTo(40, 0); c.moveTo(20, -18); c.lineTo(40, 0); c.lineTo(20, 18); }
+      c.stroke();
+    });
+    // confetti everywhere
+    for (let i = 0; i < 900; i++) { const [px, py] = P(-3.9 + R() * 7.8, -5.4 + R() * 5.7); c.fillStyle = CC[i % CC.length]; c.save(); c.translate(px, py); c.rotate(R() * 6.3); c.fillRect(-5, -3, 10, 6); c.restore(); }
+  }, 59);
+  // the fun one: a chalk hopscotch down the way in; tap it and a pebble hops all the way to HOME
+  {
+    const HX = 0.3, HZ0 = 0.18, ROW = 0.28;
+    const rows = [[0], [0], [0], [-1, 1], [0], [-1, 1], [0], ['HOME']];
+    const HS = mesh(new THREE.PlaneGeometry(0.62, ROW * rows.length + 0.04), texMat(248, 912, (c, w, h) => {
+      const r = (h - 16) / rows.length;
+      c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 6; c.fillStyle = 'rgba(255,255,255,0.95)'; c.font = `700 44px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      let n = 1;
+      rows.forEach((row, i) => {
+        const y = h - 8 - (i + 1) * r;
+        if (row[0] === 'HOME') { c.beginPath(); c.arc(w / 2, y + r * 0.6, w * 0.4, Math.PI, 0); c.closePath(); c.stroke(); c.fillText('HOME', w / 2, y + r * 0.55); return; }
+        if (row.length === 1) { c.strokeRect(w * 0.27, y, w * 0.46, r); c.fillText(n++, w / 2, y + r / 2); }
+        else for (const s of row) { c.strokeRect(s < 0 ? 6 : w / 2, y, w / 2 - 6, r); c.fillText(n++, s < 0 ? w / 4 + 3 : w * 0.75 - 3, y + r / 2); }
+      });
+    }), G, HX, 0.014, HZ0 - (ROW * rows.length) / 2, [-HPI, 0, 0]);
+    HS.userData.noInk = true; HS.renderOrder = 2;
+    const pebble = mesh(new THREE.SphereGeometry(0.035, 10, 6).scale(1, 0.45, 1), paint(0xe8466b), G, HX, 0.016, HZ0 + 0.06);
+    const spots = []; rows.forEach((row, i) => { const z = HZ0 - (i + 0.5) * ROW; if (row[0] === 'HOME') spots.push([0, z]); else for (const s of row) spots.push([s * 0.15, z]); });
+    let tHop = -99;
+    tap(HS, 'hop the hopscotch', (sfx) => { tHop = now(); sfx(spots.map((_, i) => [392 * Math.pow(2, i / 8), 0.08]), 'triangle', 0.05); });
+    pebble.userData.toy = HS.userData.toy;
+    live((t) => {
+      const k = t - tHop, HOP = 0.32, n = spots.length;
+      if (k < 0 || k > HOP * n + 1.2) { pebble.position.set(HX, 0.016, HZ0 + 0.06); return; }
+      if (k > HOP * n) { const u = (k - HOP * n) / 1.2; const [sx, sz] = spots[n - 1]; pebble.position.set(HX + sx + (0 - sx) * u, 0.016 + Math.sin(u * Math.PI) * 0.5, sz + (HZ0 + 0.06 - sz) * u); return; }
+      const i = Math.floor(k / HOP), u = (k % HOP) / HOP;
+      const [ax, az] = i ? spots[i - 1] : [0, HZ0 + 0.06], [bx, bz] = spots[i];
+      pebble.position.set(HX + ax + (bx - ax) * u, 0.016 + Math.sin(u * Math.PI) * 0.18, az + (bz - az) * u);
+    });
+  }
+  // more solid bits where there's room: giant ink bottles
+  K.scatter(3, 0.16, (x, z, i) => {
+    const col = [0x2a78d6, 0x2a2230, 0xe8466b][i % 3];
+    B.add(paint(0xdff0f6, { hatch: 0.3 }), rb(0.24, 0.26, 0.24, 0.06), x, 0.13, z);
+    B.add(paint(col), rb(0.2, 0.16, 0.2, 0.04), x, 0.09, z);
+    B.add(dark, new THREE.CylinderGeometry(0.06, 0.06, 0.08, 12), x, 0.3, z);
+  }, { along: 'walls' });
+
   B.flush(G);
 }
