@@ -69,6 +69,9 @@
 
   /* visited counter */
   #nbBtn { right: 16px; top: 14px; font-size: 19px; padding: 6px 16px; }
+  #pgBtn { right: 16px; top: 62px; font-size: 17px; padding: 4px 14px; transform: rotate(0.8deg); }
+  #pgBtn i { font-style: normal; margin-left: 4px; font-weight: 700; color: var(--accent); }
+  #pgBtn.done { background: var(--gold); }
   #nbBtn i { font-style: normal; display: inline-block; min-width: 24px; margin-left: 6px; background: var(--accent); color: #fff; border-radius: 50%; text-align: center; font-size: 15px; }
 
   /* waypoint */
@@ -307,6 +310,7 @@
   </div>
 
   <button id="nbBtn" class="ui sk fade hide">visited <i id="visitCt">0</i></button>
+  <button id="pgBtn" class="ui sk fade hide" title="Vivi's lost guest list">📄 guest list <i id="pageCt">0/12</i></button>
 
   <div id="way" class="ui hide">
     <svg width="34" height="30" viewBox="0 0 34 30"><path d="M17 28 L3 6 Q17 13 31 6 Z" fill="#e8604c" stroke="#2a2230" stroke-width="2.5" stroke-linejoin="round"/></svg>
@@ -344,6 +348,6 @@
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="./js/main.js?cb=82"></script>
+<script type="module" src="./js/main.js?cb=83"></script>
 </body>
 </html>

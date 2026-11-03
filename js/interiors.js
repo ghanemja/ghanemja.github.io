@@ -9,6 +9,7 @@ import { PAL, paint, ink, blobShadow } from './style.js';
 import { APPS, LIBRARY, PLACES } from './apps.js';
 import { bush } from './props.js';
 import { DRESS } from './dress/index.js';
+import { applyRenderStyle } from './render-styles.js';
 export { dressReady } from './dress/index.js';
 
 const INKC = '#2a2230';
@@ -2862,12 +2863,62 @@ function scatterToys(K, placeId, idx, lib) {
   return out;
 }
 
+// ── what the rooms can reach outside themselves (main.js fills these in) ──
+export const WORLD = { playerPos: null, zone: 'street', see: null, say: null, game: null, addCitizen: null, blip: null };
+const ROOM_HOOKS = {};                         // id → { enter: [fn], exit: [fn] }
+export function roomEvent(id, kind) {
+  for (const f of ROOM_HOOKS[id]?.[kind] || []) { try { f(); } catch (e) { console.warn(`room ${id} ${kind}:`, e); } }
+}
+
+// ── the hunt: Vivi lost the twelve pages of her guest list, one in every shop ──
+let PAGES;
+try { PAGES = new Set(JSON.parse(localStorage.getItem('street-pages') || '[]')); } catch (e) { PAGES = new Set(); }
+export const HUNT = { total: PLACES.length, has: (id) => PAGES.has(id), get count() { return PAGES.size; }, onFind: null,
+  reset() { PAGES.clear(); try { localStorage.removeItem('street-pages'); } catch (e) { /* ok */ } } };
+const PAGE_MADE = new Set();
+function makePage(placeId) {
+  PAGE_MADE.add(placeId);
+  const n = PLACES.findIndex(p => p.id === placeId) + 1;
+  const g = new THREE.Group();
+  const tex = canvasTex(128, 160, (c, w, h) => {
+    c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#e8604c'; c.fillRect(0, 0, 10, h);
+    c.strokeStyle = 'rgba(76,155,232,0.45)'; c.lineWidth = 2;
+    for (let y = 44; y < h; y += 18) { c.beginPath(); c.moveTo(14, y); c.lineTo(w, y); c.stroke(); }
+    c.fillStyle = INKC; c.font = `700 22px ${SCRIPT}`; c.fillText('guest list', 18, 28);
+    c.font = `400 15px ${HAND}`; c.fillText(`page ${n} of ${PLACES.length}`, 18, h - 10);
+    c.strokeStyle = INKC; c.lineWidth = 1.5;
+    for (let y = 58; y < h - 30; y += 18) { c.beginPath(); c.moveTo(20, y - 4); for (let x = 20; x < 20 + 40 + (y * 7) % 50; x += 6) c.lineTo(x, y - 4 - (x % 12 > 6 ? 3 : 0)); c.stroke(); }
+  });
+  // a sheet folded once down the middle, standing a little open (one connected piece)
+  const half = (sx) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.15).translate(sx * 0.055, 0.075, 0), paint(0xffffff, { map: tex, hatch: 0, unique: true, side: THREE.DoubleSide })); m.rotation.y = -sx * 0.35; return m; };
+  g.add(half(-1), half(1));
+  const glint = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.13, 24), new THREE.MeshBasicMaterial({ color: 0xf2d27a, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide }));
+  glint.position.y = 0.075; glint.userData.noInk = true; g.add(glint);
+  let got = PAGES.has(placeId), t0 = -1;
+  g.userData.toy = { label: 'a lost page!', poke(sfx) {
+    if (got) return;
+    got = true; t0 = NOW; PAGES.add(placeId);
+    try { localStorage.setItem('street-pages', JSON.stringify([...PAGES])); } catch (e) { /* private window */ }
+    sfx([[784, 0.1], [988, 0.1], [1318, 0.25]], 'sine', 0.06);
+    HUNT.onFind?.(placeId, n);
+  } };
+  LIVE.push((t) => {
+    glint.material.opacity = 0.35 + 0.25 * Math.sin(t * 4);
+    glint.rotation.z = t;
+    if (got && t0 < 0) { g.visible = false; return; }
+    if (got) { const k = Math.min(1, (t - t0) / 0.8); g.position.y = (g.userData.y0 ??= g.position.y) + k * 0.8; g.rotation.y += 0.3; g.scale.setScalar(1 - k * 0.9); if (k >= 1) g.visible = false; }
+  });
+  g.collected = got;
+  return g;
+}
+
 // ── the dressing kit: what js/dress/<room>.js gets to fill its room with ──
 // Room-local coords: x −4..4 (side walls at ±W/2), z from the back wall (−D+0.5) to the open
 // front (+0.4), floor y=0, walls H tall. The back wall has the app screen in the middle and
 // the label at x=LBL_X. `free(x, z, r)` says whether a floor footprint of radius r is clear of
 // furniture, the game rings and the walkways to them; `block` makes something solid.
-function dressKit(K, place, lib) {
+function dressKit(K, place, lib, origin) {
   const reserved = [];       // [x, z, r] circles and capsules ([x0, z0, x1, z1, r]) the player needs
   const ring = (x, z, r) => reserved.push([x, z, r]);
   const lane = (x0, z0, x1, z1, r) => reserved.push([x0, z0, x1, z1, r]);
@@ -2923,7 +2974,28 @@ function dressKit(K, place, lib) {
   };
   // per-frame animation: fn(t, dt) — t in seconds
   const live = (fn) => { let last = 0; LIVE.push((t) => { const dt = Math.min(0.05, Math.max(0, t - last)); last = t; fn(t, dt); }); };
+  const hooks = (ROOM_HOOKS[place.id] ??= { enter: [], exit: [] });
+  const games = {
+    // swap what an existing station does (labels: see the station list in MINI/CENTER)
+    replace(label, run, newLabel) { const m = K.minis.find(q => q.label === label); if (!m) throw new Error(`no game "${label}"`); m.run = run; if (newLabel) m.label = newLabel; return m; },
+    // a new station to walk up to; gets its ring and ★ like the others
+    add(x, z, label, run, r = 0.95) { K.minis.push({ x, z, r, label, run }); ring(x, z, 0.85); lane(spawn[0], spawn[1], x, z, 0.45); },
+  };
   return {
+    // reaching outside the room
+    player: () => (WORLD.zone === place.id && WORLD.playerPos ? { x: WORLD.playerPos.x - origin.x, z: WORLD.playerPos.z - origin.z } : null),
+    onEnter: (fn) => hooks.enter.push(fn), onExit: (fn) => hooks.exit.push(fn),
+    say: (text) => WORLD.say?.(text),
+    sfx: (notes, wave, vol) => WORLD.blip?.(notes, wave, vol),
+    fx: {
+      style: (name = 'gouache') => applyRenderStyle(K.g, name, { keepTextured: true }),   // NB: swaps materials — animate via mesh.material, not a saved material          // redraw the whole room in another medium
+      filter: (css) => WORLD.see?.(css),                                 // a CSS filter on the whole view ('' to clear)
+    },
+    street: { addCitizen: (look, name) => WORLD.addCitizen?.(look, name) },
+    games, quiz, order,
+    // this room's page of Vivi's guest list: place it (add it to K.g or inside some prop),
+    // hide it somewhere clever; tapping it collects it. page.collected is true if already found.
+    page: () => makePage(place.id),
     THREE, K, g: K.g, put: K.put, box: K.box, flat: K.flat, kit, rb, paint, PAL, canvasTex, texMat, fitLine, rng: R, mkRng: rng,
     HAND, SCRIPT, INKC, W, D, H, SCR_W, SCR_H, SCR_Y, LBL_X, place, lib,
     free, block, claim, ring, lane, scatter, tap, toy, live, shadow: blobShadow, now: () => NOW, shuffle, anyOf,
@@ -2956,14 +3028,20 @@ export function buildInteriors(scene) {
     else wallLabel(K, place, LBL_X, 1.35, -D + 0.56);
     SETS[place.id]?.(K);
     MINI[place.id]?.(K);
-    for (const m of K.minis) gameMarker(K, place.id, m);
     let dressed = false;
     if (DRESS[place.id]) {
-      const n = K.g.children.length, cols = K.cols.length;
-      try { DRESS[place.id](dressKit(K, place, lib)); dressed = true; }
-      catch (e) { console.warn(`room ${place.id} left plain:`, e); K.g.children.slice(n).forEach(o => K.g.remove(o)); K.cols.length = cols; }
+      const n = K.g.children.length, cols = K.cols.length, minis = K.minis.map(m => ({ ...m }));
+      try { DRESS[place.id](dressKit(K, place, lib, { x: ox, z: oz })); dressed = true; }
+      catch (e) {
+        console.warn(`room ${place.id} left plain:`, e);
+        K.g.children.slice(n).forEach(o => K.g.remove(o)); K.cols.length = cols; K.minis = minis; delete ROOM_HOOKS[place.id];
+      }
     }
     if (!dressed) scatterToys(K, place.id, i, lib);
+    if (!PAGE_MADE.has(place.id)) {             // every shop has its page, dressed or not
+      const pg = makePage(place.id); pg.position.set(-W / 2 + 0.5, 0, -0.4); pg.rotation.y = 0.6; K.g.add(pg);
+    }
+    for (const m of K.minis) gameMarker(K, place.id, m);
     // a soft pool of light on the floor
     g.add(blobShadow(0.001));            // (keeps the group non-empty before ink)
     ink(g, 'mid');
