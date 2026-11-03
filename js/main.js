@@ -364,17 +364,33 @@ function talkToVivi() {
   g.cheer(); party();
   g.next('🎉 party!', () => g.close());
 }
-let partyT = -99;
+let partyT = -99, _spark = null;
+// somewhere up ahead of wherever you're looking
+const _fw = new THREE.Vector3();
+function burstSpot(v) {
+  camera.getWorldDirection(_fw); _fw.y = 0; _fw.normalize();
+  return v.copy(camera.position).addScaledVector(_fw, 7 + Math.random() * 4)
+    .add(new THREE.Vector3(-_fw.z, 0, _fw.x).multiplyScalar((Math.random() - 0.5) * 8)).setY(3.2 + Math.random() * 2);
+}
+// a soft round spark with a hand-drawn ink rim
+function sparkTex() {
+  if (_spark) return _spark;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 32;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(16, 16, 11, 0, 7); c.fill();
+  c.strokeStyle = 'rgba(42,34,48,0.55)'; c.lineWidth = 3; c.stroke();
+  return (_spark = new THREE.CanvasTexture(cv));
+}
 const fireworks = [];
 function party() {
   partyT = clock.elapsedTime;
   for (let k = 0; k < 7; k++) {
-    const N = 70, pos = new Float32Array(N * 3), vel = [];
+    const N = 140, pos = new Float32Array(N * 3), vel = [];
     for (let i = 0; i < N; i++) { const a = Math.random() * 6.28, b = Math.acos(2 * Math.random() - 1), sp = 2 + Math.random() * 1.5; vel.push([Math.sin(b) * Math.cos(a) * sp, Math.cos(b) * sp, Math.sin(b) * Math.sin(a) * sp]); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0xdc6a9a][k % 5], size: 0.22, transparent: true, depthWrite: false }));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0xdc6a9a][k % 5], size: 0.42, map: sparkTex(), transparent: true, depthWrite: false }));
     pts.frustumCulled = false; scene.add(pts);
-    fireworks.push({ pts, vel, t0: partyT + k * 0.9, c: new THREE.Vector3(-6 + Math.random() * 12, 6 + Math.random() * 3, -3 + Math.random() * 6), N });
+    fireworks.push({ pts, vel, t0: partyT + k * 0.6, c: burstSpot(new THREE.Vector3()), N });
   }
   for (const w of walkers) w.hop = Math.random() * 6;
 }
@@ -385,7 +401,7 @@ function tickParty(t) {
     f.pts.visible = true;
     for (let k = 0; k < f.N; k++) { const v = f.vel[k]; P.setXYZ(k, f.c.x + v[0] * a, f.c.y + v[1] * a - 1.2 * a * a, f.c.z + v[2] * a); }
     P.needsUpdate = true; f.pts.material.opacity = Math.max(0, 1 - a / 2.2);
-    if (a > 2.3) { if (t - partyT < 18) { f.t0 = t + Math.random() * 1.5; f.c.set(-6 + Math.random() * 12, 6 + Math.random() * 3, -3 + Math.random() * 6); } else { scene.remove(f.pts); fireworks.splice(i, 1); } }
+    if (a > 2.3) { if (t - partyT < 18) { f.t0 = t + Math.random() * 0.6; burstSpot(f.c); } else { scene.remove(f.pts); fireworks.splice(i, 1); } }
   }
 }
 
