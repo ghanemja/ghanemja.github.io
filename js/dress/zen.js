@@ -901,5 +901,89 @@ export default function dress(kit) {
     }, 'garden riddles');
   }
 
+  // ═════════════ 16. WALK-OVER FLOOR: mats, flush stepping stones, raked gravel, moss and petals ═════════════
+  // all flat (≤ 2 cm): the walkways stay walkable, the tatami stops looking bare
+  {
+    const decal = (w, d, x, z, ry, draw, { y = 0.008, ppm = 128, ro = 1 } = {}) => {
+      const m = put(new THREE.PlaneGeometry(w, d), texMat(Math.round(w * ppm), Math.round(d * ppm), draw), x, y, z, [-Math.PI / 2, 0, ry]);
+      m.userData.noInk = true; m.renderOrder = ro; return m;
+    };
+    const goza = (border) => (c, w, h) => {                                        // a woven rush mat with a cloth border
+      c.fillStyle = '#d8cf98'; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(130,120,60,0.35)'; c.lineWidth = 1;
+      for (let y = 2; y < h; y += 3) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      c.strokeStyle = 'rgba(255,250,220,0.35)'; for (let x = 0; x < w; x += 18) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+      c.strokeStyle = border; c.lineWidth = 12; c.strokeRect(6, 6, w - 12, h - 12);
+      c.strokeStyle = 'rgba(228,184,79,0.8)'; c.lineWidth = 2; c.strokeRect(13, 13, w - 26, h - 26);
+    };
+    // a woven runner from the door up to the sand, and a small mat in front of the tea corner
+    decal(1.0, 1.05, 0.35, -0.2, 0, goza('#2f5a52'));
+    decal(0.95, 0.6, -1.55, -0.05, 0.08, goza('#8e2f3a'));
+    // raked gravel along the foot of the screen, with two flush stones in it
+    decal(3.85, 0.95, 0.02, -4.85, 0, (c, w, h) => {
+      c.fillStyle = '#d9d2c2'; c.fillRect(0, 0, w, h);
+      for (let k = 0; k < 2600; k++) { c.fillStyle = k % 3 ? 'rgba(120,112,100,0.35)' : 'rgba(255,255,250,0.6)'; c.fillRect((k * 7919) % w, (k * 104729) % h, 2, 2); }
+      const stones = [[w * 0.22, h * 0.5, 30], [w * 0.74, h * 0.45, 24]];
+      c.strokeStyle = 'rgba(110,100,85,0.55)'; c.lineWidth = 2.5;
+      for (let y = 8; y < h; y += 9) {
+        c.beginPath(); let pen = false;
+        for (let x = 0; x <= w; x += 4) { const inS = stones.some(([sx, sy, r]) => Math.hypot(x - sx, y - sy) < r + 26); if (inS) { pen = false; continue; } pen ? c.lineTo(x, y) : c.moveTo(x, y); pen = true; }
+        c.stroke();
+      }
+      for (const [sx, sy, r] of stones) {
+        for (let k = 0; k < 3; k++) { c.beginPath(); c.arc(sx, sy, r + 6 + k * 8, 0, 7); c.stroke(); }
+        c.fillStyle = '#7a756d'; c.beginPath(); c.ellipse(sx, sy, r, r * 0.8, 0.3, 0, 7); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.25)'; c.beginPath(); c.ellipse(sx - r * 0.3, sy - r * 0.3, r * 0.4, r * 0.25, 0.3, 0, 7); c.fill();
+      }
+      c.strokeStyle = '#6b4a34'; c.lineWidth = 6; c.strokeRect(3, 3, w - 6, h - 6);
+    }, { ppm: 110 });
+    // stepping stones set flush, from the pond side up to the label (rings of moss round each)
+    const moss = (c, w, h) => { for (let k = 0; k < 70; k++) { const a = k * 2.4, r = (k % 9) / 9 * w * 0.45; c.fillStyle = k % 2 ? 'rgba(95,143,62,0.75)' : 'rgba(130,170,80,0.7)'; c.beginPath(); c.arc(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r * 0.8, 6 + (k % 4) * 3, 0, 7); c.fill(); } };
+    [[1.62, -1.75, 0.15], [1.78, -2.3, 0.13], [1.98, -2.85, 0.14], [2.12, -3.35, 0.12]].forEach(([x, z, r], i) => {
+      add(new THREE.CylinderGeometry(r, r * 1.04, 0.014, 14), stoneM, x, 0.007, z, [0, i * 1.3, 0], [1.2, 1, 1]);
+      decal(r * 3.2, r * 2.6, x + 0.04, z + 0.03, i, moss, { y: 0.004, ppm: 100, ro: 0 });
+    });
+    // moss patches and drifted petals round the edges
+    for (const [x, z, s, r] of [[-3.3, -1.0, 0.7, 0.4], [-2.4, -4.0, 0.6, 1.1], [1.7, -0.35, 0.5, 2], [3.2, -0.6, 0.55, 0.3], [-0.2, 0.05, 0.4, 0.9]]) decal(s, s * 0.75, x, z, r, moss, { y: 0.005, ppm: 100, ro: 0 });
+    const petals = (n, seed) => (c, w, h) => { const Rr = kit.mkRng(seed); for (let k = 0; k < n; k++) { c.save(); c.translate(Rr() * w, Rr() * h); c.rotate(Rr() * 6); c.fillStyle = Rr() < 0.5 ? '#f6c2d2' : '#f2a7bd'; c.beginPath(); c.ellipse(0, 0, 6, 3.5, 0, 0, 7); c.fill(); c.restore(); } };
+    for (const [x, z, w, d, n, sd] of [[3.0, -4.55, 1.0, 0.7, 40, 3], [1.9, -1.15, 0.9, 0.6, 18, 7], [-0.15, -0.55, 0.6, 0.5, 10, 11], [2.3, -3.0, 0.7, 0.9, 16, 5]]) decal(w, d, x, z, 0, petals(n, sd), { y: 0.012, ppm: 100, ro: 2 });
+
+    // the fun one: a drift of petals heaped by the east shelf — tap it and it bursts up and floats down
+    const HX = 3.35, HZ = -3.45;
+    const heap = decal(0.55, 0.45, HX, HZ, 0.4, petals(90, 21), { y: 0.014, ppm: 140, ro: 2 });
+    const NB = 40, burst = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.03, 0.02), paint(0xf6c2d2, { side: THREE.DoubleSide, hatch: 0 }), NB);
+    burst.userData.noInk = true; burst.frustumCulled = false; burst.visible = false; g.add(burst);
+    const BP = Array.from({ length: NB }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), s: 0 }));
+    const dmy = new THREE.Object3D();
+    let bt = -1;
+    kit.live((t, dt) => {
+      if (bt < 0) return;
+      bt += dt;
+      BP.forEach((q, i) => {
+        q.v.y -= 1.6 * dt; q.v.multiplyScalar(0.97); q.v.y = Math.max(q.v.y, -0.25);
+        q.p.addScaledVector(q.v, dt); q.s += dt * 4;
+        if (q.p.y < 0.015) { q.p.y = 0.015; q.v.set(0, 0, 0); }
+        dmy.position.copy(q.p); dmy.rotation.set(q.p.y > 0.02 ? Math.sin(q.s) : -Math.PI / 2, q.s, 0); dmy.updateMatrix(); burst.setMatrixAt(i, dmy.matrix);
+      });
+      burst.instanceMatrix.needsUpdate = true;
+      if (bt > 4) { bt = -1; burst.visible = false; heap.visible = true; }
+    });
+    const heapHit = grp(HX, 0, HZ);
+    const hm = paint(0xffffff, { opacity: 0, hatch: 0, unique: true }); hm.depthWrite = false;
+    mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.05, 10).translate(0, 0.025, 0), hm, heapHit).userData.noInk = true;
+    tap(heapHit, 'a drift of petals', (sfx) => {
+      if (bt >= 0) return;
+      bt = 0; burst.visible = true; heap.visible = false;
+      BP.forEach(q => { q.p.set(HX + (Math.random() - 0.5) * 0.4, 0.03, HZ + (Math.random() - 0.5) * 0.3); q.v.set((Math.random() - 0.5) * 0.9, 1.1 + Math.random() * 0.9, (Math.random() - 0.5) * 0.9); q.s = Math.random() * 6; });
+      sfx([[1318, 0.06], [1568, 0.06], [2093, 0.06], [2637, 0.14]], 'sine', 0.04);
+    });
+
+    // and a couple more mossy rocks along the walls, wherever there's still room
+    kit.scatter(2, 0.14, (x, z) => {
+      add(new THREE.DodecahedronGeometry(0.12, 1), stoneDk, x, 0.06, z, [x, z, 0], [1.2, 0.8, 1]);
+      add(new THREE.SphereGeometry(0.09, 8, 6), moss ? paint(0x6f8f4a) : stoneM, x, 0.12, z, null, [1.2, 0.35, 1.1]);
+    }, { along: 'walls' });
+  }
+
   flush();
 }

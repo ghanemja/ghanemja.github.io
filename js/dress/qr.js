@@ -648,5 +648,104 @@ export default function dress(kit) {
     claim(x, z, 0.16);
   }
 
+  // ── walk-over floor art: one transparent overlay the size of the floor, painted in metres ──
+  const floorArt = (draw, px = 1536) => {
+    const hh = Math.round(px * 6 / 8);
+    const mat = texMat(px, hh, (c, w, h) => { c.lineCap = c.lineJoin = 'round'; draw(c, w, h, (x) => (x + 4) / 8 * w, (z) => (z + 5.5) / 6 * h, w / 8); });
+    mat.depthWrite = false;
+    const m = kit.flat(8, 6, mat, 0, 0.006, -2.5, [-PI / 2, 0, 0]);
+    m.renderOrder = 1; m.raycast = () => {};
+    return m;
+  };
+  // try spots for a solid floor piece; build it wherever free() still says yes
+  const solid = (cands, r, build) => { let n = 0; for (const [x, z] of cands) if (kit.free(x, z, r)) { build(x, z); claim(x, z, r * 0.9); n++; } return n; };
+
+  // ════════ 14. the floor: a treasure route across the code, a compass rose, a runner, postcards, a "you are here" ════════
+  floorArt((c, w, h, X, Z, s) => {
+    // the route, dashed red like on a pirate map, from the door to an X
+    const route = [[0.55, 0.08], [1.65, -0.35], [1.05, -1.7], [0.3, -3.0], [-0.9, -3.85], [-1.6, -4.7]];
+    c.strokeStyle = 'rgba(210,72,62,0.92)'; c.lineWidth = 8; c.setLineDash([22, 16]);
+    c.beginPath(); c.moveTo(X(route[0][0]), Z(route[0][1]));
+    for (let i = 1; i < route.length - 1; i++) { const [x, z] = route[i], [nx, nz] = route[i + 1]; c.quadraticCurveTo(X(x), Z(z), X((x + nx) / 2), Z((z + nz) / 2)); }
+    c.lineTo(X(route.at(-1)[0]), Z(route.at(-1)[1])); c.stroke(); c.setLineDash([]);
+    // the X
+    c.strokeStyle = '#d2483e'; c.lineWidth = 16; const xx = X(-1.75), xz = Z(-4.8), r = 0.2 * s;
+    c.beginPath(); c.moveTo(xx - r, xz - r); c.lineTo(xx + r, xz + r); c.moveTo(xx + r, xz - r); c.lineTo(xx - r, xz + r); c.stroke();
+    // you are here
+    c.fillStyle = '#d2483e'; c.beginPath(); c.arc(X(0.55), Z(0.08), 14, 0, 7); c.fill(); c.strokeStyle = '#fffaf0'; c.lineWidth = 4; c.stroke();
+    font(c, 30, SCRIPT); c.fillStyle = '#d2483e'; c.textAlign = 'left'; c.fillText('you are here', X(0.66), Z(0.14));
+    // a compass rose under the ship's compass
+    {
+      const cx = X(3.0), cy = Z(-3.25), R0 = 0.66 * s;
+      c.fillStyle = 'rgba(233,223,194,0.85)'; c.beginPath(); c.arc(cx, cy, R0, 0, 7); c.fill();
+      c.strokeStyle = 'rgba(42,34,48,0.7)'; c.lineWidth = 4; c.stroke(); c.beginPath(); c.arc(cx, cy, R0 * 0.8, 0, 7); c.stroke();
+      for (let k = 0; k < 16; k++) { c.save(); c.translate(cx, cy); c.rotate(k * PI / 8); c.fillStyle = k % 2 ? 'rgba(213,139,99,0.9)' : 'rgba(42,34,48,0.85)'; const L = (k % 4 === 0 ? 0.78 : k % 2 ? 0.4 : 0.58) * R0; c.beginPath(); c.moveTo(0, -L); c.lineTo(10, 0); c.lineTo(-10, 0); c.fill(); c.restore(); }
+      font(c, 34, SCRIPT); c.fillStyle = INKC; c.textAlign = 'center'; c.fillText('N', cx, cy - R0 * 0.84);
+    }
+    // a kilim runner along the left, between the cabinet and the map table
+    {
+      const x0 = X(-3.28), y0 = Z(-4.3), rw = 0.66 * s, rh = 1.6 * s;
+      c.fillStyle = '#b8574a'; c.fillRect(x0, y0, rw, rh);
+      c.strokeStyle = '#f6efdf'; c.lineWidth = 6; c.strokeRect(x0 + 10, y0 + 10, rw - 20, rh - 20);
+      for (let k = 0; k < 6; k++) { const cy = y0 + 40 + k * (rh - 80) / 5, cx = x0 + rw / 2; c.fillStyle = k % 2 ? '#e4b84f' : '#3f5aa8'; c.beginPath(); c.moveTo(cx, cy - 22); c.lineTo(cx + 34, cy); c.lineTo(cx, cy + 22); c.lineTo(cx - 34, cy); c.closePath(); c.fill(); }
+      c.strokeStyle = '#f6efdf'; c.lineWidth = 3; for (let k = 0; k < 14; k++) { c.beginPath(); c.moveTo(x0 + 6 + k * (rw - 12) / 13, y0); c.lineTo(x0 + 6 + k * (rw - 12) / 13, y0 - 12); c.moveTo(x0 + 6 + k * (rw - 12) / 13, y0 + rh); c.lineTo(x0 + 6 + k * (rw - 12) / 13, y0 + rh + 12); c.stroke(); }
+    }
+    // the map room's name, painted across the back of the floor, with a scale bar that refuses to commit
+    c.textAlign = 'center'; font(c, 60, SCRIPT); c.fillStyle = 'rgba(42,34,48,0.55)'; c.fillText('The Map Room', X(0), Z(-4.82));
+    const sb0 = X(-0.8), sbw = 1.6 * s, sy = Z(-4.62);
+    for (let k = 0; k < 4; k++) { c.fillStyle = k % 2 ? 'rgba(246,239,223,0.9)' : 'rgba(42,34,48,0.75)'; c.fillRect(sb0 + k * sbw / 4, sy, sbw / 4, 10); }
+    font(c, 18, HAND, 400); c.fillStyle = 'rgba(42,34,48,0.75)'; ['0', '1', '2', '?', 'not to scale'].forEach((t, k) => c.fillText(t, sb0 + Math.min(4, k) * sbw / 4 + (k === 4 ? 70 : 0), sy + 30));
+    // postcards, luggage tags and pennants that fell off the bunting
+    const card = (x, z, a, col, txt) => { c.save(); c.translate(X(x), Z(z)); c.rotate(a); const cw = 0.16 * s, ch = 0.11 * s; c.fillStyle = '#fbf6ea'; c.fillRect(-cw / 2, -ch / 2, cw, ch); c.strokeStyle = 'rgba(42,34,48,0.6)'; c.lineWidth = 2; c.strokeRect(-cw / 2, -ch / 2, cw, ch); c.fillStyle = col; c.fillRect(-cw / 2 + 5, -ch / 2 + 5, cw * 0.45, ch - 10); c.fillStyle = '#d2483e'; c.fillRect(cw / 2 - 18, -ch / 2 + 5, 13, 15); font(c, 11, HAND, 400); c.fillStyle = INKC; c.textAlign = 'left'; c.fillText(txt, 3, 4); c.restore(); };
+    card(2.75, -0.1, 0.35, '#8fc3c9', 'wish u'); card(2.95, 0.15, -0.3, '#e1b95c', 'here!'); card(-2.95, 0.15, 0.5, '#a8b994', 'Omaha'); card(-3.0, -2.6, -0.2, '#dc9e9a', 'Detroit');
+    const tri = (x, z, a) => { c.save(); c.translate(X(x), Z(z)); c.rotate(a); c.fillStyle = '#f6efdf'; c.beginPath(); c.moveTo(-17, -20); c.lineTo(17, -20); c.lineTo(0, 22); c.closePath(); c.fill(); c.strokeStyle = INKC; c.lineWidth = 2; c.stroke(); c.fillStyle = INKC; for (let k = 0; k < 5; k++) c.fillRect(-9 + (k % 3) * 6, -16 + Math.floor(k / 3) * 6, 5, 5); c.restore(); };
+    tri(-3.55, -1.95, 0.6); tri(3.4, -4.3, -0.9); tri(2.9, -0.55, 2.2); tri(-1.2, -4.95, 1.0);
+    // a paper map, unfolded on the floor by the sculpture
+    c.save(); c.translate(X(3.05), Z(-2.3)); c.rotate(0.2); const mw = 0.6 * s, mh = 0.42 * s;
+    c.fillStyle = '#e9dfc2'; c.fillRect(-mw / 2, -mh / 2, mw, mh); c.strokeStyle = 'rgba(42,34,48,0.35)'; c.lineWidth = 2; for (let k = 1; k < 4; k++) { c.beginPath(); c.moveTo(-mw / 2 + k * mw / 4, -mh / 2); c.lineTo(-mw / 2 + k * mw / 4, mh / 2); c.stroke(); }
+    c.beginPath(); c.moveTo(-mw / 2, 0); c.lineTo(mw / 2, 0); c.stroke();
+    c.strokeStyle = 'rgba(60,110,100,0.6)'; for (let k = 0; k < 4; k++) { c.beginPath(); c.ellipse(-20, 5, 20 + k * 14, 12 + k * 9, 0.3, 0, 7); c.stroke(); }
+    c.restore();
+  });
+
+  // ════════ 15. X marks the spot: tap it and a little chest rises out of the floor ════════
+  {
+    const x = -1.75, z = -4.8;
+    const spot = new THREE.Group(); spot.position.set(x, 0, z); G.add(spot);
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(0.28, 20).rotateX(-PI / 2), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    pad.position.y = 0.012; pad.userData.noInk = true; spot.add(pad);                     // an invisible target over the painted X
+    const chest = new THREE.Group(); spot.add(chest);
+    const Ck = sub(chest);
+    Ck.box(0.3, 0.16, 0.2, M.wood, 0, 0.08, 0, 0.015);
+    Ck.box(0.31, 0.03, 0.21, M.brass, 0, 0.13, 0, 0.006);
+    for (let k = 0; k < 6; k++) Ck.put(new THREE.CylinderGeometry(0.025, 0.025, 0.008, 12), M.gold, -0.08 + (k % 3) * 0.07, 0.165 + Math.floor(k / 3) * 0.008, -0.03 + Math.floor(k / 3) * 0.05);
+    const lid = new THREE.Group(); lid.position.set(0, 0.16, -0.1); chest.add(lid);          // hinged on its back edge
+    sub(lid).box(0.3, 0.06, 0.2, M.wood, 0, 0.03, 0.1, 0.02);
+    sub(lid).box(0.31, 0.02, 0.21, M.brass, 0, 0.045, 0.1, 0.006);
+    const card = sub(chest).flat(0.1, 0.1, paint(0xffffff, { hatch: 0, map: canvasTex(64, 64, (c) => qrDraw(c, 5, 5, 54, 7, 11)) }), 0.06, 0.18, 0.03, [-1.2, 0, 0.2]);
+    card.renderOrder = 2;
+    chest.visible = false;
+    let t0 = -99, n = 0;
+    const LINES = ['X marks the spot! Inside: gold coins and a QR code. It links to… a treasure map. Of this room.', 'Still just coins and a QR code. The treasure was the companies we mapped along the way.', 'The chest is empty-ish. Vivi’s page isn’t in here, but it is in this room.'];
+    tap(spot, 'dig at the X', (sfx) => {
+      const now = kit.now(); if (now - t0 < 6) return; t0 = now;
+      sfx([[200, 0.1], [0, 0.1], [200, 0.1], [0, 0.1], [523, 0.1], [659, 0.1], [784, 0.1], [1046, 0.3]], 'triangle', 0.05);
+      setTimeout(() => kit.say(LINES[Math.min(n++, LINES.length - 1)]), 1200);
+    });
+    live((t) => {
+      const k = t - t0, up = k < 0.6 ? ease(k / 0.6) : k < 5 ? 1 : 1 - ease((k - 5) / 0.6);
+      chest.visible = up > 0.001; chest.position.y = -0.26 + up * 0.26;
+      lid.rotation.x = k > 0.6 && k < 5 ? -Math.min(1.9, (k - 0.6) * 5) : k >= 5 ? -1.9 * (1 - ease((k - 5) / 0.3)) : 0;
+      chest.rotation.y = Math.sin(t * 0.6) * 0.05;
+    });
+  }
+
+  // ════════ 16. a sea chest of atlases wherever there's still floor ════════
+  solid([[3.55, -4.15], [-2.45, -5.2]], 0.24, (x, z) => {
+    SB(0.46, 0.26, 0.3, M.wood, x, 0.13, z, 0.02, [0, 0.1, 0]);
+    SB(0.48, 0.04, 0.32, M.brass, x, 0.2, z, 0.008, [0, 0.1, 0]);
+    for (let k = 0; k < 3; k++) SB(0.26 - k * 0.02, 0.05, 0.2, [M.red, M.blue, M.sage][k], x - 0.02, 0.285 + k * 0.052, z, 0.008, [0, 0.1 + (k - 1) * 0.15, 0]);
+  });
+
   bake();
 }

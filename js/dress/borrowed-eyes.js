@@ -715,5 +715,93 @@ export default function dress(K) {
     c.font = `700 22px ${HAND}`; c.fillStyle = '#b03a30'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('do not lick the glow-caps', w / 2, h / 2);
   }, 200, 78, 1.05, 0.06, 0.02, [-0.9, 0, 0]);
 
+  // ═══ round 3: the floor, walk-over dressing edge to edge (flat, so nobody is blocked) ═══
+  // one big canvas laid over the whole floor; the game rings are cut out of it so they still glow
+  const floorArt = (draw, seed) => {
+    const cw = 2048, ch = 1536, PXM = cw / 8;
+    const P = (x, z) => [(x + 4) * PXM, (z + 5.5) * PXM];
+    const R = K.mkRng(seed);
+    const m = mesh(new THREE.PlaneGeometry(8, 6), texMat(cw, ch, (c) => {
+      c.lineCap = c.lineJoin = 'round';
+      draw(c, P, PXM, R);
+      c.globalCompositeOperation = 'destination-out';
+      for (const q of K.K.minis) { const [px, py] = P(q.x, q.z); c.beginPath(); c.arc(px, py, 0.5 * PXM, 0, 7); c.fill(); }
+    }), G, 0, 0.014, -2.5, [-Math.PI / 2, 0, 0]);
+    m.userData.noInk = true; m.renderOrder = 1;
+    return m;
+  };
+  // draw something at room point (x, z), rotated a, scaled to s metres per 100 px
+  const at = (c, P, PXM, x, z, a, s, fn) => { const [px, py] = P(x, z); c.save(); c.translate(px, py); c.rotate(a); c.scale(s * PXM / 100, s * PXM / 100); fn(c); c.restore(); };
+  floorArt((c, P, M, R) => {
+    const rx = () => -3.8 + R() * 7.6, rz = () => -5.3 + R() * 5.5;
+    // moss patches
+    for (let i = 0; i < 16; i++) {
+      const [px, py] = P(rx(), rz()), r = (0.25 + R() * 0.35) * M;
+      const g = c.createRadialGradient(px, py, 2, px, py, r); g.addColorStop(0, 'rgba(96,150,70,0.6)'); g.addColorStop(1, 'rgba(96,150,70,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(px, py, r, 0, 7); c.fill();
+      c.fillStyle = 'rgba(70,120,55,0.45)'; for (let k = 0; k < 14; k++) { c.beginPath(); c.arc(px + (R() - 0.5) * r, py + (R() - 0.5) * r, 3 + R() * 4, 0, 7); c.fill(); }
+    }
+    // a fox's trail curving across the room, and bird tracks by the pond
+    for (let i = 0; i < 24; i++) {
+      const u = i / 23, x = -3.4 + u * 6.6, z = -0.35 - Math.sin(u * Math.PI) * 1.2 - u * 0.4 + (i % 2 ? 0.07 : -0.07);
+      at(c, P, M, x, z, Math.PI / 2 - 0.3 + Math.cos(u * Math.PI) * 0.6, 0.14, (c) => {
+        c.fillStyle = 'rgba(80,55,35,0.55)'; c.beginPath(); c.ellipse(0, 12, 14, 12, 0, 0, 7); c.fill();
+        for (let k = 0; k < 4; k++) { c.beginPath(); c.ellipse(-15 + k * 10, -10 - (k % 3 ? 5 : 0), 5, 7, 0, 0, 7); c.fill(); }
+      });
+    }
+    for (let i = 0; i < 9; i++) at(c, P, M, -0.75 + Math.sin(i) * 0.25, -2.9 + i * 0.12, 0.3 * Math.sin(i * 2), 0.1, (c) => {
+      c.strokeStyle = 'rgba(70,50,35,0.6)'; c.lineWidth = 4; c.beginPath(); c.moveTo(0, 20); c.lineTo(0, -10); c.moveTo(0, 0); c.lineTo(-14, -18); c.moveTo(0, 0); c.lineTo(14, -18); c.stroke();
+    });
+    // leaf litter everywhere
+    const LC = ['#6f9a4c', '#8fb860', '#c8a040', '#b8743a', '#d6a24a', '#7a5a40', '#a8c070', '#e08a4a'];
+    for (let i = 0; i < 380; i++) at(c, P, M, rx(), rz(), R() * 6.3, 0.08 + R() * 0.08, (c) => {
+      c.fillStyle = LC[Math.floor(R() * LC.length)]; c.beginPath(); c.moveTo(0, -50); c.quadraticCurveTo(35, -10, 0, 50); c.quadraticCurveTo(-35, -10, 0, -50); c.fill();
+      c.strokeStyle = 'rgba(42,34,48,0.45)'; c.lineWidth = 4; c.stroke(); c.beginPath(); c.moveTo(0, -40); c.lineTo(0, 55); c.stroke();
+    });
+    // twigs and acorns
+    for (let i = 0; i < 30; i++) at(c, P, M, rx(), rz(), R() * 6.3, 0.12 + R() * 0.1, (c) => {
+      c.strokeStyle = '#6e5238'; c.lineWidth = 7; c.beginPath(); c.moveTo(-50, 0); c.lineTo(50, 4); c.moveTo(10, 2); c.lineTo(35, -20); c.stroke();
+    });
+    for (let i = 0; i < 18; i++) at(c, P, M, rx(), rz(), R() * 6.3, 0.05, (c) => {
+      c.fillStyle = '#b8743a'; c.beginPath(); c.ellipse(0, 10, 28, 34, 0, 0, 7); c.fill(); c.fillStyle = '#6e5238'; c.beginPath(); c.ellipse(0, -18, 32, 18, 0, 0, 7); c.fill();
+      c.strokeStyle = INKC; c.lineWidth = 5; c.stroke();
+    });
+    // fallen petals all along the path
+    const PC = ['#f29bb4', '#ffffff', '#f6c453', '#b7a3e6', '#f4b6c8'];
+    for (let i = 0; i < 170; i++) {
+      const u = R(), x = Math.sin(u * 7) * 0.5 + (R() - 0.5) * 1.6, z = -0.1 - u * 4.6;
+      at(c, P, M, x, z, R() * 6.3, 0.03 + R() * 0.03, (c) => { c.fillStyle = PC[Math.floor(R() * PC.length)]; c.beginPath(); c.ellipse(0, 0, 30, 50, 0, 0, 7); c.fill(); c.strokeStyle = 'rgba(42,34,48,0.3)'; c.lineWidth = 5; c.stroke(); });
+    }
+  }, 31);
+  // the fun one: a heap of petals on the path; tap and a little whirlwind takes them up
+  {
+    const hx = 0.35, hz = -1.95, PC = [0xf29bb4, 0xffffff, 0xf6c453, 0xb7a3e6];
+    const heap = grp(hx, 0, hz);
+    const petals = Array.from({ length: 14 }, (_, i) => {
+      const m = mesh(new THREE.CircleGeometry(0.035, 8).scale(0.6, 1, 1), paint(PC[i % 4], { hatch: 0, side: THREE.DoubleSide }), heap);
+      m.userData.noInk = true; m.userData.a = i * 2.4; m.userData.r = 0.05 + (i % 5) * 0.03;
+      return m;
+    });
+    const hit = mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.03, 12), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }), heap, 0, 0.015, 0);
+    hit.userData.noInk = true;
+    let tW = -99;
+    tap(heap, 'kick up the petals', (sfx) => { tW = now(); sfx([[700, 0.1], [900, 0.1], [1200, 0.1], [900, 0.1], [700, 0.2]], 'sine', 0.04); });
+    live((t) => {
+      const k = t - tW, on = k >= 0 && k < 3.2, h = on ? Math.sin(Math.min(1, k / 3.2) * Math.PI) : 0;
+      petals.forEach((p, i) => {
+        const a = p.userData.a + (on ? k * (5 + i * 0.3) : 0), r = p.userData.r * (1 + h * 3);
+        p.position.set(Math.cos(a) * r, 0.012 + i * 0.0008 + h * (0.3 + i * 0.06), Math.sin(a) * r);
+        p.rotation.set(-Math.PI / 2 + (on ? Math.sin(k * 7 + i) * 1.2 * h : 0), 0, a);
+      });
+    });
+  }
+  // more solid bits along the walls where there's room: mossy stumps
+  K.scatter(3, 0.18, (x, z, i) => {
+    const s = 0.8 + (i % 2) * 0.3;
+    B.add(paint(0x7a5a40, { hatch: 0.6 }), new THREE.CylinderGeometry(0.14 * s, 0.17 * s, 0.26 * s, 12), x, 0.13 * s, z);
+    B.add(paint(0xb08a62), new THREE.CylinderGeometry(0.14 * s, 0.14 * s, 0.01, 12), x, 0.26 * s + 0.004, z);
+    B.add(moss, new THREE.IcosahedronGeometry(0.07 * s, 1), x + 0.04, 0.27 * s, z, null, [1.4, 0.5, 1.1]);
+  }, { along: 'walls' });
+
   B.flush(G);
 }

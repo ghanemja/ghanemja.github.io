@@ -737,5 +737,102 @@ export default function dress(kit) {
     put(new THREE.PlaneGeometry(0.3, 0.1), texMat(150, 50, (c, w, h) => { c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 18px ${HAND}`; c.textAlign = 'center'; c.fillText('RETURNS', w / 2, 20); c.font = `14px ${HAND}`; c.fillText('pull requests welcome', w / 2, 40); }), -2.2, 0.68, -2.31, [0, 0.25, 0]).userData.noInk = true;
   }
 
+  // ═════════════ 13. WALK-OVER FLOOR: a long runner, a compass inlay, a side rug, dropped bookmarks, a floor plaque ═════════════
+  {
+    const decal = (w, d, x, z, ry, draw, { y = 0.008, ppm = 128, ro = 1 } = {}) => {
+      const m = put(new THREE.PlaneGeometry(w, d), texMat(Math.round(w * ppm), Math.round(d * ppm), draw), x, y, z, [-Math.PI / 2, 0, ry]);
+      m.userData.noInk = true; m.renderOrder = ro; return m;
+    };
+    // the runner from the door to the reading rug: green, gold fleurs, a red border, fringed ends
+    decal(0.85, 2.1, 0, -0.73, 0, (c, w, h) => {
+      c.fillStyle = '#8e2f3a'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#2f5a42'; c.fillRect(14, 14, w - 28, h - 28);
+      c.strokeStyle = '#e4b84f'; c.lineWidth = 3; c.strokeRect(20, 20, w - 40, h - 40);
+      c.fillStyle = 'rgba(228,184,79,0.7)';
+      for (let y = 50; y < h - 30; y += 52) for (const x of [w * 0.3, w * 0.7]) { c.beginPath(); c.ellipse(x, y - 6, 4, 9, 0, 0, 7); c.fill(); for (const s of [-1, 1]) { c.beginPath(); c.ellipse(x + s * 7, y - 1, 3, 7, s * 0.8, 0, 7); c.fill(); } c.fillRect(x - 6, y + 4, 12, 3); }
+      c.fillStyle = '#f1e4c8'; for (let x = 6; x < w; x += 8) { c.fillRect(x, 0, 3, 8); c.fillRect(x, h - 8, 3, 8); }
+    });
+    // a side rug by the west case, under the ladder's feet
+    decal(0.95, 1.5, -2.82, -4.0, 0, (c, w, h) => {
+      c.fillStyle = '#3f5872'; c.fillRect(0, 0, w, h); c.strokeStyle = '#e4b84f'; c.lineWidth = 8; c.strokeRect(10, 10, w - 20, h - 20);
+      c.strokeStyle = '#dc9e9a'; c.lineWidth = 4; c.strokeRect(24, 24, w - 48, h - 48);
+      c.fillStyle = '#e4b84f'; c.save(); c.translate(w / 2, h / 2); for (let k = 0; k < 8; k++) { c.rotate(Math.PI / 4); c.beginPath(); c.ellipse(0, 22, 7, 20, 0, 0, 7); c.fill(); } c.restore();
+      c.fillStyle = '#f1e4c8'; for (let x = 6; x < w; x += 8) { c.fillRect(x, 0, 3, 7); c.fillRect(x, h - 7, 3, 7); }
+    });
+    // a "SILENCE" brass plaque set in the floor by the reading nook
+    decal(0.62, 0.26, -1.25, -1.4, 0.15, (c, w, h) => {
+      c.fillStyle = '#c9a24a'; c.fillRect(0, 0, w, h); c.strokeStyle = '#7a5a20'; c.lineWidth = 6; c.strokeRect(4, 4, w - 8, h - 8);
+      c.fillStyle = '#5a3c10'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `700 28px ${HAND}`; c.fillText('S I L E N C E', w / 2, h * 0.42);
+      c.font = `14px ${HAND}`; c.fillText('(git status: clean)', w / 2, h * 0.78);
+      for (const [x, y] of [[12, 12], [w - 12, 12], [12, h - 12], [w - 12, h - 12]]) { c.beginPath(); c.arc(x, y, 3, 0, 7); c.fill(); }
+    }, { y: 0.009 });
+    // dropped bookmarks, call-number slips and loose pages
+    const litter = (seed) => (c, w, h) => {
+      const Rr = kit.mkRng(seed), cols = ['#e8604c', '#e4b84f', '#7fb3a8', '#8f7ae8', '#dc9e9a'];
+      for (let k = 0; k < 3; k++) {                                             // loose pages
+        c.save(); c.translate(Rr() * w, Rr() * h); c.rotate(Rr() * 6);
+        c.fillStyle = '#fbf6ea'; c.fillRect(-26, -34, 52, 68); c.strokeStyle = 'rgba(60,50,60,0.25)'; c.lineWidth = 2;
+        for (let y = -24; y < 28; y += 7) { c.beginPath(); c.moveTo(-20, y); c.lineTo(14 - (y * 3) % 10, y); c.stroke(); }
+        c.restore();
+      }
+      for (let k = 0; k < 4; k++) {                                             // ribbon bookmarks with tassels
+        c.save(); c.translate(Rr() * w, Rr() * h); c.rotate(Rr() * 6);
+        c.fillStyle = cols[k % cols.length]; c.fillRect(-5, -26, 10, 52); c.beginPath(); c.moveTo(-5, 26); c.lineTo(0, 20); c.lineTo(5, 26); c.fillStyle = '#5a4030'; c.fill();
+        c.restore();
+      }
+      c.save(); c.translate(Rr() * w * 0.8 + 20, Rr() * h * 0.8 + 20); c.rotate(Rr());                // a call slip
+      c.fillStyle = '#fff6c8'; c.fillRect(-30, -14, 60, 28); c.fillStyle = INKC; c.font = `12px ${HAND}`; c.fillText('005.1 GHA', -24, 4); c.restore();
+    };
+    for (const [x, z, s, sd] of [[0.75, -1.35, 0.6, 2], [-0.65, -3.0, 0.55, 5], [-1.95, -1.15, 0.55, 9], [1.35, -4.45, 0.5, 14], [-2.0, -2.55, 0.5, 17], [0.95, -2.95, 0.5, 23], [-0.55, -0.2, 0.45, 29]]) decal(s, s, x, z, sd, litter(sd), { y: 0.021, ppm: 120, ro: 2 });   // (above the reading rug too)
+
+    // the fun one: a compass rose inlaid in the parquet. Tap it: the needle spins, then points at
+    // whatever you're still missing in here (the lost page, while it's lost) — or at the cat
+    const CX = 0.95, CZ = -0.62, CR = 0.48;
+    decal(CR * 2, CR * 2, CX, CZ, 0, (c, w, h) => {
+      const r = w / 2; c.translate(r, r);
+      c.fillStyle = '#d9b98a'; c.beginPath(); c.arc(0, 0, r - 2, 0, 7); c.fill();
+      c.strokeStyle = '#5c4030'; c.lineWidth = 6; c.beginPath(); c.arc(0, 0, r - 5, 0, 7); c.stroke();
+      c.lineWidth = 2; c.beginPath(); c.arc(0, 0, r * 0.82, 0, 7); c.stroke();
+      for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, L = k % 4 === 0 ? r * 0.78 : k % 2 ? r * 0.38 : r * 0.55; c.fillStyle = k % 2 ? '#8e2f3a' : '#3f5872'; c.beginPath(); c.moveTo(Math.cos(a) * L, Math.sin(a) * L); c.lineTo(Math.cos(a + 0.18) * r * 0.14, Math.sin(a + 0.18) * r * 0.14); c.lineTo(Math.cos(a - 0.18) * r * 0.14, Math.sin(a - 0.18) * r * 0.14); c.fill(); }
+      c.fillStyle = '#5c4030'; c.font = `700 ${Math.round(r * 0.16)}px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      [['N', 0, -1], ['E', 1, 0], ['S', 0, 1], ['W', -1, 0]].forEach(([l, x, y]) => c.fillText(l, x * r * 0.9, y * r * 0.9));
+    }, { y: 0.007, ppm: 150 });
+    const needle = grp(CX, 0.016, CZ);
+    const ng = new THREE.BufferGeometry().setFromPoints([V3(0, 0, -0.4), V3(0.05, 0, 0), V3(0, 0, 0.18), V3(-0.05, 0, 0)]);
+    ng.setIndex([0, 2, 1, 0, 3, 2]); ng.computeVertexNormals();
+    const nm = mesh(ng, paint(0xc9a24a, { side: THREE.DoubleSide }), needle); nm.userData.noInk = true;
+    mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.01, 12), paint(0x5c4030), needle);
+    const target = () => {                                                           // the lost page, if it's still in here; else the cat
+      let pg = null; g.traverse(o => { if (o.userData.toy?.label === 'a lost page!' && o.visible) pg = o; });
+      const v = new THREE.Vector3();
+      if (pg) { pg.getWorldPosition(v); g.worldToLocal(v); return [v, true]; }
+      return [V3(0.55, 0, -D + 0.75), false];
+    };
+    let spinT = -1, from = 0, to = 0;
+    live((t, dt) => {
+      if (spinT < 0) { needle.rotation.y += Math.sin(t * 0.7) * 0.002; return; }
+      spinT += dt;
+      const u = Math.min(1, spinT / 2.2), e = 1 - Math.pow(1 - u, 3);
+      needle.rotation.y = from + (to + Math.PI * 8 - from) * e;
+      if (u >= 1) spinT = -1;
+    });
+    const hm = paint(0xffffff, { opacity: 0, hatch: 0, unique: true }); hm.depthWrite = false;
+    const hit = grp(CX, 0, CZ); mesh(new THREE.CylinderGeometry(CR, CR, 0.04, 16).translate(0, 0.02, 0), hm, hit).userData.noInk = true;
+    tap(hit, 'compass rose', (sfx) => {
+      if (spinT >= 0) return;
+      const [v, isPage] = target();
+      from = needle.rotation.y % (Math.PI * 2); to = Math.atan2(-(v.x - CX), -(v.z - CZ));    // the needle's tip is its −z end
+      spinT = 0;
+      sfx([[880, 0.05], [988, 0.05], [1175, 0.05], [1318, 0.05], [1760, 0.2]], 'triangle', 0.035);
+      setTimeout(() => kit.say(isPage ? 'The compass points at what you’re looking for. (Something in the glowing books, perhaps?)' : 'The compass points at the library cat. Everything here does, eventually.'), 2300);
+    });
+
+    // and a couple more book piles along the walls, wherever there's still room
+    kit.scatter(3, 0.18, (x, z, i) => {
+      let yy = 0;
+      for (let j = 0; j < 3 + (i % 3); j++) { const h = 0.06; addBox(0.3 - j * 0.02, h, 0.22, bookM[(i * 5 + j * 3) % bookM.length], x, yy + h / 2, z, 0.008, [0, j * 0.35 + i, 0]); yy += h; }
+    }, { along: 'walls' });
+  }
+
   S.flush();
 }

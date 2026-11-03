@@ -742,5 +742,132 @@ export default function dress(kit) {
     font(c, 17, SCRIPT); c.fillStyle = INKC; c.fillText('the crate', w / 2, 166); font(c, 12, HAND, 400); c.fillText('never once moved', w / 2, 184);
   }, -3.99, 1.62, -4.12, 'left', { board: 0xe4b84f });
 
+  // ── walk-over floor art: one transparent overlay the size of the floor, painted in metres ──
+  const floorArt = (draw, px = 1536) => {
+    const hh = Math.round(px * 6 / 8);
+    const mat = texMat(px, hh, (c, w, h) => { c.lineCap = c.lineJoin = 'round'; draw(c, w, h, (x) => (x + 4) / 8 * w, (z) => (z + 5.5) / 6 * h, w / 8); });
+    mat.depthWrite = false;
+    const m = kit.flat(8, 6, mat, 0, 0.006, -2.5, [-PI / 2, 0, 0]);
+    m.renderOrder = 1; m.raycast = () => {};
+    return m;
+  };
+  // try spots for a solid floor piece; build it wherever free() still says yes
+  const solid = (cands, r, build) => { let n = 0; for (const [x, z] of cands) if (kit.free(x, z, r)) { build(x, z); claim(x, z, r * 0.9); n++; } return n; };
+
+  // ════════ 14. the floor: a painted behaviour map you can walk on, a measuring line, chalk, cables, printouts ════════
+  floorArt((c, w, h, X, Z, s) => {
+    const CC = ['#3f7fd6', '#f07a3a', '#2fae7f', '#e9b23a'];
+    // the behaviour map, painted in the middle of the floor
+    {
+      const x0 = X(-1.25), y0 = Z(-3.75), mw = 2.5 * s, mh = 2.0 * s, R = kit.mkRng(31);
+      c.fillStyle = 'rgba(241,239,250,0.82)'; c.beginPath(); c.roundRect(x0, y0, mw, mh, 36); c.fill();
+      c.strokeStyle = 'rgba(42,34,48,0.75)'; c.lineWidth = 6; c.stroke();
+      c.fillStyle = INKC; font(c, 34); c.textAlign = 'left'; c.fillText('BEHAVIOR MAP', x0 + 24, y0 + 46);
+      font(c, 22, HAND, 400); c.fillStyle = '#6a6070'; c.fillText('(you are standing in it)', x0 + 250, y0 + 46);
+      const blob = (fx, fy, rx, ry, n, col) => { for (let k = 0; k < n; k++) { const a = R() * 7, d = Math.sqrt(R()); c.fillStyle = col; c.beginPath(); c.arc(x0 + fx * mw + Math.cos(a) * rx * d, y0 + fy * mh + Math.sin(a) * ry * d, 7, 0, 7); c.fill(); c.strokeStyle = 'rgba(42,34,48,0.5)'; c.lineWidth = 1.5; c.stroke(); } };
+      blob(0.32, 0.52, 120, 90, 160, CC[0]); blob(0.72, 0.36, 70, 45, 45, CC[3]); blob(0.8, 0.55, 40, 35, 25, CC[2]); blob(0.68, 0.76, 80, 40, 55, CC[1]);
+      ['slides', 'tips high', 'tips easily', 'rolls'].forEach((n, i) => { const lx = x0 + 28 + i * mw / 4; c.fillStyle = CC[i]; c.beginPath(); c.arc(lx, y0 + mh - 30, 10, 0, 7); c.fill(); c.fillStyle = INKC; font(c, 20, HAND, 400); c.fillText(n, lx + 16, y0 + mh - 23); });
+      c.strokeStyle = '#d2483e'; c.lineWidth = 5; c.beginPath(); c.arc(x0 + 0.56 * mw, y0 + 0.28 * mh, 16, 0, 7); c.stroke();
+      font(c, 20, SCRIPT); c.fillStyle = '#d2483e'; c.fillText('canned peaches', x0 + 0.56 * mw + 22, y0 + 0.28 * mh + 6);
+    }
+    // a measuring line down the walkway
+    {
+      const x = X(-0.72), ya = Z(-0.25), yb = Z(-1.65);
+      c.fillStyle = 'rgba(228,184,79,0.9)'; c.fillRect(x - 7, yb, 14, ya - yb);
+      c.fillStyle = INKC;
+      for (let k = 0; k <= 14; k++) { const y = ya - k * 0.1 * s; c.fillRect(x - 7, y - 1, k % 5 ? 8 : 14, 2); if (k % 5 === 0) { font(c, 16); c.textAlign = 'left'; c.fillText(`${k / 10} m`, x + 12, y + 5); } }
+    }
+    // chalk: the path a ball took off the ramp
+    c.setLineDash([12, 12]); c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 5;
+    c.beginPath(); c.moveTo(X(1.45), Z(-1.75)); c.quadraticCurveTo(X(1.0), Z(-1.2), X(0.5), Z(-1.3)); c.stroke(); c.setLineDash([]);
+    for (const [x, z] of [[1.25, -1.47], [0.85, -1.28], [0.5, -1.3]]) { c.strokeStyle = 'rgba(255,255,255,0.8)'; c.beginPath(); c.arc(X(x), Z(z), 9, 0, 7); c.stroke(); }
+    font(c, 26, SCRIPT); c.fillStyle = 'rgba(255,255,255,0.9)'; c.textAlign = 'center'; c.fillText('rolled 1.1 m', X(0.75), Z(-1.0));
+    // rubber skid marks where something slid
+    c.strokeStyle = 'rgba(42,34,48,0.35)'; c.lineWidth = 9;
+    for (const dz of [0, 0.08]) { c.beginPath(); c.moveTo(X(-0.35), Z(-3.95 + dz)); c.quadraticCurveTo(X(0.3), Z(-4.05 + dz), X(0.9), Z(-3.9 + dz)); c.stroke(); }
+    // a cable taped down from the bounce tube to the tilt lever
+    {
+      const pts = [[3.42, -2.35], [3.42, -0.6], [2.95, 0.05]];
+      c.strokeStyle = '#2a2230'; c.lineWidth = 7; c.beginPath(); pts.forEach(([x, z], i) => (i ? c.lineTo(X(x), Z(z)) : c.moveTo(X(x), Z(z)))); c.stroke();
+      c.fillStyle = 'rgba(160,165,175,0.95)';
+      for (const [x, z] of [[3.42, -2.0], [3.42, -1.5], [3.42, -1.0], [3.2, -0.3]]) { c.fillRect(X(x) - 16, Z(z) - 8, 32, 16); }
+    }
+    // printouts, sticky dots, a stencil by the door and one in front of the screen
+    const sheet = (x, z, a, kind) => {
+      c.save(); c.translate(X(x), Z(z)); c.rotate(a);
+      const pw = 0.21 * s, phh = 0.3 * s;
+      c.fillStyle = '#fffdf6'; c.fillRect(-pw / 2, -phh / 2, pw, phh); c.strokeStyle = 'rgba(42,34,48,0.5)'; c.lineWidth = 2; c.strokeRect(-pw / 2, -phh / 2, pw, phh);
+      c.strokeStyle = CC[kind]; c.lineWidth = 3; c.beginPath();
+      for (let k = 0; k <= 10; k++) { const px = -pw / 2 + 6 + k * (pw - 12) / 10, py = kind === 3 ? -10 + k * 4 : kind === 1 ? 10 - Math.abs(Math.sin(k * 0.9)) * 30 / (1 + k * 0.3) : 10 - Math.sin(k * 0.7) * 14; k ? c.lineTo(px, py) : c.moveTo(px, py); }
+      c.stroke(); c.fillStyle = 'rgba(42,34,48,0.5)'; for (let k = 0; k < 4; k++) c.fillRect(-pw / 2 + 6, phh / 2 - 26 + k * 6, pw * (0.4 + (k % 2) * 0.3), 2);
+      c.restore();
+    };
+    sheet(0.75, -4.3, 0.35, 1); sheet(-0.95, -4.2, -0.25, 0); sheet(1.65, -3.25, 0.6, 3); sheet(-0.98, -0.55, 0.4, 2); sheet(0.35, -0.7, -0.5, 3);
+    const R = kit.mkRng(8);
+    for (let k = 0; k < 16; k++) { const x = -1.3 + R() * 2.6, z = -4.6 + R() * 0.5; c.fillStyle = CC[k % 4]; c.beginPath(); c.arc(X(x), Z(z), 9, 0, 7); c.fill(); }
+    for (let k = 0; k < 10; k++) { const x = -0.5 + R() * 1.0, z = -1.7 + R() * 1.4; c.fillStyle = CC[k % 4]; c.beginPath(); c.arc(X(x), Z(z), 8, 0, 7); c.fill(); }
+    c.textAlign = 'center'; font(c, 40); c.fillStyle = 'rgba(228,184,79,0.9)'; c.fillText('WALK, DON’T ROLL', X(-0.1), Z(-0.38));
+    font(c, 22, HAND, 400); c.fillStyle = 'rgba(42,34,48,0.6)'; c.fillText('(all visitors are tested on arrival)', X(-0.1), Z(-0.24));
+    font(c, 40); c.fillStyle = 'rgba(42,34,48,0.55)'; c.fillText('SEARCH  BY  HOW  IT  MOVES', X(0), Z(-4.95));
+    // an arrow and a note pointing at the lever
+    font(c, 28, SCRIPT); c.fillStyle = 'rgba(210,72,62,0.9)'; c.fillText('pull it, we dare you', X(2.0), Z(-0.52));
+    c.strokeStyle = 'rgba(210,72,62,0.9)'; c.lineWidth = 5; c.beginPath(); c.moveTo(X(2.0), Z(-0.42)); c.quadraticCurveTo(X(2.3), Z(-0.2), X(2.58), Z(-0.08)); c.stroke();
+    c.beginPath(); c.moveTo(X(2.58), Z(-0.08)); c.lineTo(X(2.5), Z(-0.16)); c.moveTo(X(2.58), Z(-0.08)); c.lineTo(X(2.47), Z(-0.06)); c.stroke();
+  });
+
+  // ════════ 15. the drop-test pressure plate, front middle: step on it (tap) and something falls from the sky ════════
+  {
+    const x = 1.2, z = -0.55;
+    const plate = new THREE.Group(); plate.position.set(x, 0, z); G.add(plate);
+    const Pk = sub(plate);
+    Pk.put(new THREE.CylinderGeometry(0.24, 0.25, 0.015, 28), M.dark, 0, 0.0075, 0);
+    const top = new THREE.Group(); plate.add(top);
+    sub(top).put(new THREE.CylinderGeometry(0.205, 0.205, 0.014, 28), M.red, 0, 0.022, 0);
+    const lbl = sub(top).flat(0.36, 0.36, texMat(128, 128, (c, w, h) => { c.strokeStyle = '#fffaf0'; c.lineWidth = 6; for (const r of [56, 36, 16]) { c.beginPath(); c.arc(64, 64, r, 0, 7); c.stroke(); } c.font = `700 15px ${HAND}`; c.fillStyle = '#fffaf0'; c.textAlign = 'center'; c.fillText('DROP TEST', 64, 30); c.fillText('step here', 64, 108); }), 0, 0.0295, 0, [-PI / 2, 0, 0]);
+    lbl.renderOrder = 2;
+    // the specimens it can drop
+    const specs = [
+      { name: 'ball', e: 0.62, build: (Q) => { Q.put(new THREE.SphereGeometry(0.09, 16, 12), M.teal, 0, 0.09, 0); Q.put(new THREE.TorusGeometry(0.091, 0.014, 6, 20), M.white, 0, 0.09, 0); }, line: 'Drop test: it bounced three times and left. Filed under “rolls”.' },
+      { name: 'crate', e: 0.12, build: (Q) => { Q.box(0.2, 0.16, 0.2, M.card, 0, 0.08, 0, 0.015); Q.box(0.206, 0.025, 0.206, M.wood, 0, 0.08, 0, 0.004); }, line: 'Drop test: thud. Didn’t bounce, didn’t care. Filed under “slides”.' },
+      { name: 'cone', e: 0.18, build: (Q) => { Q.put(new THREE.ConeGeometry(0.08, 0.3, 14), M.orange, 0, 0.15, 0); Q.box(0.18, 0.02, 0.18, M.white, 0, 0.01, 0, 0.004); }, tip: true, line: 'Drop test: landed, wobbled, fell over. Filed under “tips easily”.' },
+      { name: 'anvil', e: 0.0, build: (Q) => { Q.box(0.24, 0.06, 0.13, M.dark, 0, 0.03, 0, 0.01); Q.box(0.09, 0.07, 0.09, M.dark, 0, 0.095, 0, 0.01); Q.box(0.28, 0.06, 0.14, M.dark, 0, 0.16, 0, 0.012); }, line: 'Drop test: the anvil. The plate would like a word.' },
+    ].map((sp) => { const g = new THREE.Group(); g.visible = false; plate.add(g); sp.build(sub(g)); return { ...sp, g }; });
+    let cur = null, t0 = -99, n = 0;
+    tap(plate, 'step on the drop-test plate', (sfx) => {
+      const now = kit.now(); if (now - t0 < 3.4) return;
+      t0 = now; if (cur) cur.g.visible = false; cur = specs[n++ % specs.length];
+      sfx([[700, 0.06], [0, 0.25], [1400, 0.05], [1200, 0.05], [1000, 0.05], [800, 0.05], [600, 0.3]], 'sine', 0.05);
+      setTimeout(() => kit.say(cur.line), 1500);
+    });
+    live((t) => {
+      const k = t - t0;
+      top.position.y = k < 0.25 ? -0.008 : 0;
+      if (!cur) return;
+      cur.g.visible = k < 3.2;
+      if (k > 3.2) return;
+      // fall from above the open roof, then bounce with this specimen's restitution
+      const T = k - 0.3; let y;
+      if (T < 0) y = 3.4;
+      else {
+        const v0 = Math.sqrt(2 * 9.8 * 3.4), tf = v0 / 9.8;
+        if (T < tf) y = 3.4 - 4.9 * T * T;
+        else { let tt = T - tf, v = v0 * cur.e; y = 0; while (v > 0.4) { const d = 2 * v / 9.8; if (tt < d) { y = v * tt - 4.9 * tt * tt; break; } tt -= d; v *= cur.e; } }
+      }
+      cur.g.position.y = 0.03 + Math.max(0, y);
+      cur.g.rotation.z = cur.tip && k > 1.7 ? -Math.min(PI / 2, (k - 1.7) ** 2 * 12) : 0;
+      if (cur.tip) cur.g.position.x = k > 1.7 ? Math.min(1, (k - 1.7) * 6) * 0.08 : 0;
+      if (cur.name === 'ball') cur.g.position.x = Math.max(0, k - 1.9) * 0.6;
+      cur.g.scale.setScalar(k > 2.8 ? Math.max(0.001, 1 - (k - 2.8) / 0.4) : 1);
+    });
+  }
+
+  // ════════ 16. a couple more solid things wherever the floor is still free ════════
+  solid([[2.0, -3.3], [1.8, -3.75], [-1.7, -3.0]], 0.2, (x, z) => {
+    SB(0.3, 0.22, 0.3, M.card, x, 0.11, z, 0.015, [0, 0.3, 0]);
+    SB(0.22, 0.16, 0.22, M.teal, x + 0.02, 0.3, z, 0.015, [0, -0.2, 0]);
+    S(new THREE.SphereGeometry(0.06, 12, 8), M.gold, x, 0.44, z);
+    SB(0.24, 0.05, 0.012, paint(0xfbf6ea), x, 0.13, z + 0.155, 0.003, [0, 0.3, 0]);
+  });
+
   bake();
 }

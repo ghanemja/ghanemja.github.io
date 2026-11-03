@@ -625,5 +625,92 @@ export default function dress(K) {
   decal(0.3, 0.1, (c, w, h) => { c.fillStyle = '#ffe26a'; c.fillRect(0, 0, w, h); c.font = `700 22px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('EVIDENCE (half eaten)', w / 2, h / 2 + 1); }, 0, 200, 64, G, DX + 0.42, TOP + 0.052, DZ + 0.12, [-HPI, 0, 0]);
   decal(0.38, 0.12, (c, w, h) => { c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(2, 2, w - 4, h - 4); c.font = `700 20px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('please sit (the art can’t)', w / 2, h / 2 + 1); }, 0, 240, 76, G, -1.2, 0.505, -1.6, [-HPI, 0, 0]);
 
+  // ═══ round 3: the floor, walk-over dressing edge to edge (flat, so nobody is blocked) ═══
+  // one big canvas laid over the whole floor; the game rings are cut out of it so they still glow
+  const floorArt = (draw, seed) => {
+    const cw = 2048, ch = 1536, PXM = cw / 8;
+    const P = (x, z) => [(x + 4) * PXM, (z + 5.5) * PXM];
+    const R = K.mkRng(seed);
+    const m = mesh(new THREE.PlaneGeometry(8, 6), texMat(cw, ch, (c) => {
+      c.lineCap = c.lineJoin = 'round';
+      draw(c, P, PXM, R);
+      c.globalCompositeOperation = 'destination-out';
+      for (const q of K.K.minis) { const [px, py] = P(q.x, q.z); c.beginPath(); c.arc(px, py, 0.5 * PXM, 0, 7); c.fill(); }
+    }), G, 0, 0.008, -2.5, [-Math.PI / 2, 0, 0]);
+    m.userData.noInk = true; m.renderOrder = 1;
+    return m;
+  };
+  // draw something at room point (x, z), rotated a, scaled to s metres per 100 px
+  const at = (c, P, PXM, x, z, a, s, fn) => { const [px, py] = P(x, z); c.save(); c.translate(px, py); c.rotate(a); c.scale(s * PXM / 100, s * PXM / 100); fn(c); c.restore(); };
+  floorArt((c, P, M, R) => {
+    // the museum runner from the door to the screen, with brass stanchion bases set into the floor
+    const [x0, y0] = P(-0.42, 0.35), [x1, y1] = P(0.42, -4.75);
+    c.fillStyle = '#8e2f3a'; c.fillRect(x0, y1, x1 - x0, y0 - y1);
+    c.strokeStyle = '#e4b84f'; c.lineWidth = 9; c.strokeRect(x0 + 14, y1 + 14, x1 - x0 - 28, y0 - y1 - 28);
+    c.fillStyle = 'rgba(228,184,79,0.5)'; for (let y = y1 + 60; y < y0 - 40; y += 90) { c.beginPath(); c.moveTo((x0 + x1) / 2, y - 20); c.lineTo((x0 + x1) / 2 + 18, y); c.lineTo((x0 + x1) / 2, y + 20); c.lineTo((x0 + x1) / 2 - 18, y); c.fill(); }
+    for (const s of [-1, 1]) for (let z = -0.2; z > -4.6; z -= 0.9) {
+      const [px, py] = P(s * 0.62, z), g = c.createRadialGradient(px - 6, py - 6, 2, px, py, 26);
+      g.addColorStop(0, '#fff2b0'); g.addColorStop(1, '#c08a2a'); c.fillStyle = g; c.beginPath(); c.arc(px, py, 24, 0, 7); c.fill(); c.strokeStyle = INKC; c.lineWidth = 4; c.stroke();
+    }
+    // CRIME SCENE tape laid across the floor
+    const tape = (xa, za, xb, zb) => {
+      const [ax, ay] = P(xa, za), [bx, by] = P(xb, zb), L = Math.hypot(bx - ax, by - ay);
+      c.save(); c.translate(ax, ay); c.rotate(Math.atan2(by - ay, bx - ax));
+      c.fillStyle = '#f6d23a'; c.fillRect(0, -16, L, 32); c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(0, -16, L, 32);
+      c.fillStyle = INKC; c.font = `700 20px ${HAND}`; c.textBaseline = 'middle';
+      for (let x = 10; x < L - 200; x += 260) c.fillText('CRIME SCENE · DO NOT CROSS', x, 1);
+      c.restore();
+    };
+    tape(1.0, -0.4, 3.2, -1.6); tape(-1.1, -4.6, -0.6, -2.4); tape(1.2, -3.2, 3.3, -4.3); tape(-3.6, -0.1, -1.4, -0.9);
+    // chalk circles round each evidence tent, and chalk notes
+    c.strokeStyle = 'rgba(255,255,255,0.85)'; c.fillStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 5; c.font = `700 30px ${HAND}`;
+    for (const [n, x, z] of [[1, -2.85, -4.75], [2, -3.25, -2.55], [3, 1.55, -1.85], [4, -3.5, -1.0]]) {
+      const [px, py] = P(x, z); c.beginPath(); c.arc(px, py, 0.2 * M, 0, 7); c.stroke(); c.fillText('#' + n, px + 0.2 * M, py - 0.12 * M);
+    }
+    const chalk = (t, x, z, a, px = 34) => at(c, P, M, x, z, a, 0.5, (c) => { c.font = `700 ${px}px ${HAND}`; c.fillStyle = 'rgba(255,255,255,0.8)'; c.fillText(t, 0, 0); });
+    chalk('3:07 a.m.', 1.0, -4.95, -0.1); chalk('boots → crate?', -2.35, -1.2, -0.5); chalk('the jewel? left behind!', 2.0, -2.3, 0.15, 28); chalk('↑ skylight', -3.0, -3.3, -1.4, 30);
+    // the muddy trail goes on: from the bottom of the rope to the FRAGILE ART crate, dripping Skylight Blue
+    for (let i = 0; i < 7; i++) {
+      const u = i / 6, x = -3.55 + u * 1.0 + (i % 2 ? 0.08 : -0.08), z = -1.15 + u * 0.55;
+      at(c, P, M, x, z, Math.atan2(0.55, 1.0) + Math.PI / 2, 0.16, (c) => {
+        c.fillStyle = 'rgba(70,50,40,0.6)'; c.beginPath(); c.roundRect(-12, -40, 24, 34, 10); c.fill(); c.beginPath(); c.roundRect(-11, 4, 22, 14, 5); c.fill();
+      });
+      const [bx, by] = P(x + 0.1, z - 0.06); c.fillStyle = '#2f6ad0'; c.beginPath(); c.arc(bx, by, 6 + (i % 3) * 3, 0, 7); c.fill();
+    }
+    // a dropped glove, blue fingertips
+    at(c, P, M, -2.95, -0.95, 0.8, 0.13, (c) => { c.fillStyle = '#e8dcc0'; c.beginPath(); c.roundRect(-30, -10, 60, 60, 16); c.fill(); for (let k = 0; k < 4; k++) { c.beginPath(); c.roundRect(-28 + k * 15, -50, 12, 46, 6); c.fill(); } c.fillStyle = '#2f6ad0'; for (let k = 0; k < 4; k++) { c.beginPath(); c.arc(-22 + k * 15, -46, 7, 0, 7); c.fill(); } c.strokeStyle = INKC; c.lineWidth = 4; c.strokeRect(-30, 30, 60, 8); });
+    // floor-guide leaflets everywhere
+    for (let i = 0; i < 16; i++) at(c, P, M, -3.6 + R() * 7.2, -5.2 + R() * 5.3, R() * 6.3, 0.2, (c) => {
+      c.fillStyle = '#fbf6ea'; c.fillRect(-40, -55, 80, 110); c.strokeStyle = 'rgba(42,34,48,0.5)'; c.lineWidth = 3; c.strokeRect(-40, -55, 80, 110);
+      c.fillStyle = '#6a4a8a'; c.fillRect(-40, -55, 80, 22); c.fillStyle = '#fff'; c.font = `700 12px ${HAND}`; c.fillText('FLOOR GUIDE', -34, -39);
+      c.fillStyle = 'rgba(42,34,48,0.5)'; for (let y = -20; y < 45; y += 12) c.fillRect(-32, y, 40 + (y * 7) % 24, 4);
+    });
+    // spilled coffee and doughnut crumbs by the guard's desk, a dropped key ring
+    { const [px, py] = P(2.35, -0.25); c.fillStyle = 'rgba(110,70,40,0.55)'; c.beginPath(); c.ellipse(px, py, 46, 28, 0.4, 0, 7); c.fill(); c.beginPath(); c.arc(px + 50, py + 18, 9, 0, 7); c.fill(); }
+    for (let i = 0; i < 20; i++) { const [px, py] = P(3.2 + (R() - 0.5) * 0.6, -0.3 + (R() - 0.5) * 0.3); c.fillStyle = i % 3 ? '#c98a4a' : '#f29bb4'; c.beginPath(); c.arc(px, py, 3 + R() * 3, 0, 7); c.fill(); }
+    at(c, P, M, 1.75, -0.65, 0.4, 0.12, (c) => { c.strokeStyle = '#e4b84f'; c.lineWidth = 7; c.beginPath(); c.arc(0, 0, 24, 0, 7); c.stroke(); for (const a of [0.4, 1.2, 2.1]) { c.save(); c.rotate(a); c.fillStyle = '#b8bec8'; c.fillRect(22, -5, 46, 10); c.fillRect(56, 5, 8, 8); c.restore(); } });
+  }, 47);
+  // the fun one: the taped-out outline of the missing painting, in front of its empty frame
+  {
+    const OL = grp(-3.15, 0, -4.98);
+    const ol = mesh(new THREE.PlaneGeometry(1.0, 0.55), texMat(400, 220, (c, w, h) => {
+      c.strokeStyle = '#ffffff'; c.lineWidth = 12; c.setLineDash([26, 10]); c.strokeRect(14, 14, w - 28, h - 28); c.setLineDash([]);
+      c.fillStyle = '#ffffff'; c.font = `700 30px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('painting was here', w / 2, h / 2 - 10);
+      c.font = `400 20px ${HAND}`; c.fillText('(roughly)', w / 2, h / 2 + 24);
+    }), OL, 0, 0.012, 0, [-HPI, 0, 0]);
+    ol.userData.noInk = true; ol.renderOrder = 2;
+    const flash = sprite(glowTex, 0xffffff, 0.3, OL); flash.position.y = 0.4;
+    let tOL = -99, snaps = 0;
+    const FOR = ['Forensics photograph the outline. Conclusion: it was painting-shaped.', 'Snap. The outline has been photographed from its good side.', 'Snap. Forensics would like you to stop standing in the evidence.'];
+    tap(OL, 'photograph the crime scene', (sfx) => { tOL = now(); K.say(FOR[snaps++ % FOR.length]); sfx([[2400, 0.03], [1200, 0.05], [600, 0.08]], 'square', 0.035); });
+    live((t) => { const k = t - tOL, f = k >= 0 && k < 0.6 ? 1 - k / 0.6 : 0; flash.material.opacity = f; flash.scale.setScalar(0.4 + f * 1.8); ol.material.color.setScalar(1 + f); });
+  }
+  // more solid bits where there's room: velvet museum ottomans along the walls
+  K.scatter(2, 0.2, (x, z) => {
+    B.add(paint(0x6a4a8a), new THREE.CylinderGeometry(0.19, 0.19, 0.3, 16), x, 0.17, z);
+    B.add(gold, new THREE.CylinderGeometry(0.2, 0.2, 0.03, 16), x, 0.015, z);
+    B.add(paint(0x6a4a8a), new THREE.SphereGeometry(0.19, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), x, 0.32, z, null, [1, 0.25, 1]);
+  }, { along: 'walls' });
+
   B.flush(G);
 }
