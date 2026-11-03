@@ -34,6 +34,8 @@ export default function dress(kit) {
     green: paint(0x6f9a7c), terra: paint(0xd58b63),
   };
   const font = (c, px, f = HAND, wt = 700) => { c.font = `${wt} ${px}px ${f}`; };
+  const ease = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+  const scanProps = [];                    // props the room scan turns into pixels
   // a QR-ish pattern with three finder squares
   const qrDraw = (c, x0, y0, s, seed, n = 13) => {
     const R = kit.mkRng(seed), m = s / n;
@@ -83,6 +85,7 @@ export default function dress(kit) {
     }) }));
     tilt.add(globe);
     let w = 0.25;
+    scanProps.push(tilt);
     tap(tilt, 'spin the globe', (sfx) => { w = 9; sfx([[330, 0.05], [392, 0.05], [494, 0.05], [587, 0.05], [659, 0.18]], 'sine', 0.05); });
     live((t, dt) => { w += (0.25 - w) * Math.min(1, dt * 0.5); globe.rotation.y += w * dt; });
     claim(x, z, 0.3);
@@ -93,7 +96,7 @@ export default function dress(kit) {
     c.fillStyle = '#c79a66'; c.fillRect(0, 0, w, h);
     const R = kit.mkRng(4);
     for (let i = 0; i < 900; i++) { c.fillStyle = `rgba(${90 + R() * 60},${60 + R() * 30},30,0.35)`; c.fillRect(R() * w, R() * h, 2, 2); }
-    const cards = [[60, 70, 'Walmart', 1], [200, 60, 'Apple', 2], [320, 90, 'Exxon', 3], [90, 210, 'Boeing', 4], [240, 190, 'Ford', 5], [330, 250, 'Tesla', 6]];
+    const cards = [[60, 70, 'Walmart', 1], [200, 60, 'Apple', 2], [320, 90, 'Exxon', 3], [90, 210, 'Boeing', 4], [240, 190, 'Vivi’s Lemonade', 5], [330, 250, 'Tesla', 6]];
     c.strokeStyle = '#d2483e'; c.lineWidth = 2.5; c.beginPath();
     cards.forEach(([x, y], i) => (i ? c.lineTo(x, y - 30) : c.moveTo(x, y - 30))); c.stroke();
     for (const [x, y, name, seed] of cards) {
@@ -150,16 +153,25 @@ export default function dress(kit) {
           c.fillStyle = '#e8604c'; c.beginPath(); c.arc(64, 110, 7, 0, 7); c.fill();
         }), -(d - 0.06) / 2, -dh / 2 + 0.045, 0, [-PI / 2, 0, 0]);
         map.renderOrder = 2;
+        Dk.flat(0.09, 0.04, texMat(64, 28, (c, cw, ch) => { c.fillStyle = '#f6efdf'; c.fillRect(0, 0, cw, ch); c.font = `400 20px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.fillText('misc.', cw / 2, 20); }), 0.0215, 0.035, 0.15, [0, PI / 2, 0]).renderOrder = 2;
       } else {
         SB(0.02, dh - 0.02, w - 0.06, M.woodL, x + d / 2 + 0.01, y, z, 0.006);
         SB(0.04, 0.025, 0.14, M.brass, x + d / 2 + 0.03, y, z, 0.006);
       }
     }
-    let open = 0, t0 = -9;
+    let open = 0, t0 = -9, pageIn = false;
+    // Vivi's page: lying in the top drawer, on top of the map. Open the drawer to find it.
+    {
+      const pg = kit.page();
+      if (!pg.collected) {
+        pg.position.set(-0.2, -dh / 2 + 0.05, 0.14); pg.rotation.set(-PI / 2, 0, 2.6); drawer.add(pg); pageIn = true;
+        const poke = pg.userData.toy.poke; pg.userData.toy.poke = (sfx) => { pageIn = false; poke(sfx); };
+      }
+    }
     tap(drawer, 'open the map drawer', (sfx) => { t0 = kit.now(); sfx([[180, 0.12], [240, 0.1], [0, 0.6], [660, 0.1], [880, 0.2]], 'triangle', 0.06); });
     live((t) => {
       const k = t - t0;
-      const target = k < 3.2 ? 1 : 0;
+      const target = k < (pageIn ? 9 : 3.2) ? 1 : 0;
       open += (target - open) * 0.12;
       drawer.position.x = x + d / 2 + open * 0.34;
     });
@@ -248,14 +260,34 @@ export default function dress(kit) {
       Rk.put(new THREE.CylinderGeometry(0.01, 0.01, 0.005, 10), M.blue, 0.026, 0.13, 0, [0, 0, PI / 2]);
       const flame = Rk.put(new THREE.ConeGeometry(0.018, 0.06, 10).rotateX(PI), paint(0xf6a53b, { emissive: 0xf08a2a, hatch: 0 }), 0, 0.0, 0);
       flame.userData.noInk = true; flame.visible = false;
-      let t0 = -9;
-      tap(rk, 'launch the rocket', (sfx) => { t0 = kit.now(); sfx([[110, 0.3], [160, 0.2], [240, 0.2], [400, 0.2], [700, 0.3]], 'sawtooth', 0.03); });
+      let t0 = -9, big = -99, taps = [];
+      const chute = new THREE.Group(); chute.position.y = 0.32; chute.visible = false; rk.add(chute);    // a parachute for the way down
+      sub(chute).put(new THREE.SphereGeometry(0.12, 14, 6, 0, PI * 2, 0, PI / 2), paint(0xe8604c, { side: THREE.DoubleSide }), 0, 0.04, 0);
+      for (const a of [0, 2.09, 4.19]) { const ln = sub(chute).put(new THREE.CylinderGeometry(0.002, 0.002, 0.13, 3), M.dark, Math.cos(a) * 0.06, -0.02, Math.sin(a) * 0.06, [Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4]); ln.userData.noInk = true; }
+      scanProps.push(rk);
+      tap(rk, 'launch the rocket', (sfx) => {
+        const now = kit.now(); taps = taps.filter(q => now - q < 5); taps.push(now);
+        if (taps.length >= 5 && now - big > 12) {                  // the secret: five launches and it actually leaves
+          big = now; taps = []; sfx([[80, 0.5], [110, 0.4], [160, 0.3], [240, 0.3], [400, 0.3], [700, 0.5]], 'sawtooth', 0.04);
+          setTimeout(() => kit.say('Houston, we have a QR code. (It’ll be back.)'), 900);
+          return;
+        }
+        t0 = now; sfx([[110, 0.3], [160, 0.2], [240, 0.2], [400, 0.2], [700, 0.3]], 'sawtooth', 0.03);
+      });
       live((t) => {
-        const k = t - t0;
-        const h = k < 1.2 ? 0.12 * Math.sin(k / 1.2 * PI / 2) : k < 2.6 ? 0.12 * (1 - Math.pow((k - 1.2) / 1.4, 2)) : 0;
-        rk.position.y = y2 + 0.017 + Math.max(0, h);
-        flame.visible = k < 2.6; flame.scale.y = 0.8 + Math.sin(t * 40) * 0.3;
-        rk.rotation.y = k < 2.6 ? k * 2 : 0;
+        const k = t - t0, b = t - big;
+        let h = k < 1.2 ? 0.12 * Math.sin(k / 1.2 * PI / 2) : k < 2.6 ? 0.12 * (1 - Math.pow((k - 1.2) / 1.4, 2)) : 0;
+        let fl = k < 2.6, spin = k < 2.6 ? k * 2 : 0;
+        chute.visible = false;
+        if (b < 9) {                                // up out of the open top of the room, gone, then home under a parachute
+          if (b < 1.8) { h = 4 * (b / 1.8) ** 2; fl = true; spin = b * 3; }
+          else if (b < 4) { h = 6; fl = false; }
+          else { h = 1.4 * (1 - ease((b - 4) / 5)); fl = false; chute.visible = h > 0.01; spin = 0; }
+          rk.visible = b >= 4 || b < 1.8;
+        }
+        rk.position.y = y2 + 0.017 + Math.max(0, h); rk.position.x = sx + (b > 4 && b < 9 ? Math.sin(b * 2) * 0.03 * (1 - (b - 4) / 5) + 0.25 * (1 - ease((b - 4) / 5)) : 0);
+        flame.visible = fl; flame.scale.y = 0.8 + Math.sin(t * 40) * 0.3;
+        rk.rotation.y = spin;
       });
     }
     // a diner with a striped awning, and a cargo ship
@@ -310,6 +342,7 @@ export default function dress(kit) {
     const wall = new THREE.Group(); G.add(wall);
     wall.position.set(x, y0, z0);
     for (const t of tiles) { wall.add(t.tg); t.tg.position.sub(wall.position); }
+    scanProps.push(wall);
     tap(wall, 'flip the company codes', (sfx) => {
       tiles.forEach((t, i) => { t.wait = (i % cols + Math.floor(i / cols)) * 0.08; t.to = t.to ? 0 : PI; });
       sfx([[880, 0.04], [988, 0.04], [1046, 0.04], [1175, 0.04], [1319, 0.12]], 'square', 0.025);
@@ -354,7 +387,8 @@ export default function dress(kit) {
     S(new THREE.TorusGeometry(0.16, 0.014, 6, 24), M.brass, x, 0.925, z, [PI / 2, 0, 0]);
     const hit = new THREE.Group(); hit.position.set(x, 0.9, z); G.add(hit); hit.add(card, dome); card.position.set(0, 0.025, 0); dome.position.set(0, 0.02, 0);
     let a = 0, v = 0;
-    const north = PI / 2;                          // where the card settles: N toward the map on the screen
+    const north = 0;                               // where the card settles: N toward the big screen (the map is always up there)
+    scanProps.push(hit);
     tap(hit, 'swing the compass', (sfx) => { v = 14 + Math.random() * 6; sfx([[523, 0.06], [494, 0.06], [440, 0.06], [392, 0.06], [784, 0.25]], 'sine', 0.05); });
     live((t, dt) => {
       v += (-(a - north - 0.04 * Math.sin(t * 0.7)) * 6 - v * 1.6) * dt;
@@ -385,8 +419,10 @@ export default function dress(kit) {
     Tk.put(new THREE.CylinderGeometry(0.055, 0.055, 0.08, 16), M.wood, 0, 0, 0.33, [PI / 2, 0, 0]);
     Tk.put(new THREE.CylinderGeometry(0.02, 0.02, 0.06, 10), M.dark, 0, 0, -0.27, [PI / 2, 0, 0]);
     Tk.put(new THREE.TorusGeometry(0.047, 0.008, 6, 16), M.wood, 0, 0, -0.1);
-    let t0 = -9;
-    tap(head, 'look through the telescope', (sfx) => { t0 = kit.now(); sfx([[659, 0.08], [784, 0.08], [988, 0.2]], 'sine', 0.05); });
+    let t0 = -9, n = 0;
+    const SPY = ['Land ho! …oh, it’s the globe.', 'I spy a QR code. It’s the floor. It always is.', 'A hot-air balloon! Indoors. Bold.', 'Nothing out there but a lot of graph paper.'];
+    scanProps.push(head);
+    tap(head, 'look through the telescope', (sfx) => { t0 = kit.now(); sfx([[659, 0.08], [784, 0.08], [988, 0.2]], 'sine', 0.05); setTimeout(() => kit.say(SPY[n++ % SPY.length]), 700); });
     live((t) => {
       const k = t - t0, look = k < 3 ? Math.sin(Math.min(1, k / 0.6) * PI / 2) : Math.max(0, 1 - (k - 3) / 1.2);
       head.rotation.y = -0.9 + Math.sin(t * 0.25) * 0.35 * (1 - look) - look * 0.66;      // pans the room; tapped, it finds the globe
@@ -396,7 +432,7 @@ export default function dress(kit) {
   }
 
   // ════════ 8. three clocks for three time zones, back wall right ════════
-  [['SF', -3, 3.1], ['CHI', -1, 3.45], ['NY', 0, 3.8]].forEach(([name, off, x]) => {
+  [['SF', -3, 3.1, 0.04], ['CHI', -1, 3.45, 0.04], ['NY', 0, 3.8, 0.9]].forEach(([name, off, x, rate]) => {      // New York runs fast (of course it does)
     const y = 1.86, z = BACK + 0.03;
     const ck = new THREE.Group(); ck.position.set(x, y, z); G.add(ck);
     const Ck = sub(ck);
@@ -409,13 +445,13 @@ export default function dress(kit) {
     const hr = new THREE.Group(), mn = new THREE.Group(); hr.position.z = mn.position.z = 0.022; ck.add(hr, mn);   // both turn on the centre pin
     sub(hr).box(0.012, 0.06, 0.004, M.dark, 0, 0.025, 0, 0.002);
     sub(mn).box(0.008, 0.09, 0.004, M.red, 0, 0.04, 0.004, 0.002);
-    live((t) => { const m = t * 0.5; mn.rotation.z = -m; hr.rotation.z = -(m / 12 + (off + 10) * PI / 6); });
+    live((t) => { const m = t * rate + 1.2; mn.rotation.z = -m; hr.rotation.z = -(m / 12 + (off + 10) * PI / 6); });
   });
 
   // ════════ 9. hot-air balloons floating up near the walls ════════
   const envelope = (cA, cB) => paint(0xffffff, { unique: true, hatch: 0.4, map: canvasTex(128, 64, (c, w, h) => { for (let k = 0; k < 8; k++) { c.fillStyle = k % 2 ? cA : cB; c.fillRect(k * w / 8, 0, w / 8 + 1, h); } c.fillStyle = 'rgba(42,34,48,0.25)'; c.fillRect(0, h * 0.62, w, 3); }) });
   [[-3.05, 2.05, -4.0, '#e8604c', '#f6efdf', 0], [3.1, 2.0, -2.55, '#3f5aa8', '#e4b84f', 1], [-3.15, 2.12, -1.35, '#7fb3a8', '#f6efdf', 2]].forEach(([x, y, z, cA, cB, i]) => {
-    const bal = new THREE.Group(); bal.position.set(x, y, z); G.add(bal);
+    const bal = new THREE.Group(); bal.position.set(x, y, z); G.add(bal); scanProps.push(bal);
     const pts = [];
     for (let k = 0; k <= 16; k++) { const a = k / 16; pts.push(new THREE.Vector2(Math.max(0.001, 0.125 * Math.sin(Math.pow(a, 1.6) * PI) + 0.035 * (1 - a)), -0.1 + a * 0.32)); }
     const env = new THREE.Mesh(new THREE.LatheGeometry(pts, 18), envelope(cA, cB)); bal.add(env);
@@ -442,7 +478,7 @@ export default function dress(kit) {
   // a basket of rolled maps, front left: tap and they hop
   {
     const x = -3.5, z = -0.2;
-    const bk = new THREE.Group(); bk.position.set(x, 0, z); G.add(bk);
+    const bk = new THREE.Group(); bk.position.set(x, 0, z); G.add(bk); scanProps.push(bk);
     const Bk = sub(bk);
     const wall = Bk.put(new THREE.CylinderGeometry(0.2, 0.17, 0.36, 18, 1, true), paint(0xb98d62, { side: THREE.DoubleSide }), 0, 0.18, 0);
     wall.userData.noInk = true;
@@ -503,7 +539,7 @@ export default function dress(kit) {
     const beam = sub(body).box(0.07, 0.006, 0.004, paint(0xe8604c, { emissive: 0xe8604c, hatch: 0 }), 0, 0.08, 0.009, 0.002);
     beam.userData.noInk = true;
     let t0 = -9;
-    tap(ph, 'scan the code', (sfx) => { t0 = kit.now(); sfx([[1760, 0.08], [0, 0.05], [2093, 0.15]], 'square', 0.03); });
+    tap(ph, 'scan the room', (sfx) => { t0 = kit.now(); sfx([[1760, 0.08], [0, 0.05], [2093, 0.15]], 'square', 0.03); scanRoom(sfx); });
     live((t) => {
       const k = t - t0, ok = k > 0.5 && k < 2.6;
       screen.material = ok ? okM : scanM;
@@ -511,6 +547,105 @@ export default function dress(kit) {
       body.position.y = k < 0.3 ? Math.sin(k / 0.3 * PI) * 0.02 : 0;
     });
     claim(x, z, 0.24);
+  }
+
+  // ════════ 11. THE TRICK: scan the room. A beam sweeps from the door to the screen; every prop it
+  //     passes breaks into pixels that fly up into one giant QR code: the room's own. Then it all flies home. ════════
+  {
+    const n = 21, R = kit.mkRng(99), cell = 0.072;
+    const fd = (i, j) => i >= 0 && i < 7 && j >= 0 && j < 7 && (i === 0 || i === 6 || j === 0 || j === 6 || (i > 1 && i < 5 && j > 1 && j < 5));
+    const mods = [];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const inF = (i < 8 && j < 8) || (i > n - 9 && j < 8) || (i < 8 && j > n - 9);
+      const on = inF ? (fd(i, j) || fd(i - (n - 7), j) || fd(i, j - (n - 7))) : (i === 6 || j === 6) ? (i + j) % 2 === 0 : R() < 0.47;
+      if (on) mods.push([i, j]);
+    }
+    for (let k = mods.length - 1; k > 0; k--) { const q = Math.floor(R() * (k + 1)); [mods[k], mods[q]] = [mods[q], mods[k]]; }
+    const C = new THREE.Vector3(0, 1.45, -2.9), tiltB = 0.25;
+    const ends = mods.map(([i, j]) => new THREE.Vector3(C.x + (i - (n - 1) / 2) * cell, C.y + ((n - 1) / 2 - j) * cell * Math.cos(tiltB), C.z - ((n - 1) / 2 - j) * cell * Math.sin(tiltB)));
+    const N = mods.length;
+    const inst = new THREE.InstancedMesh(rb(cell * 0.9, cell * 0.9, cell * 0.9, 0.008), paint(0xffffff, { hatch: 0, unique: true }), N);
+    inst.userData.noInk = true; inst.visible = false; inst.frustumCulled = false;
+    inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    inst.setColorAt(0, new THREE.Color()); G.add(inst);
+    // the beam
+    const beam = new THREE.Mesh(new THREE.PlaneGeometry(8, 2.7), new THREE.MeshBasicMaterial({ color: 0x7fe0a8, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = 1.35; beam.userData.noInk = true; beam.visible = false; G.add(beam);
+    const edge = new THREE.Mesh(new THREE.PlaneGeometry(8, 0.03), new THREE.MeshBasicMaterial({ color: 0xb8ffd0, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    edge.rotation.x = -PI / 2; edge.position.y = 0.02; edge.userData.noInk = true; beam.add(edge); edge.position.set(0, -1.33, 0);
+    let t0 = -99;
+    const src = [], col0 = [], hideAt = [], ink = new THREE.Color(0x2a2230);
+    const box = new THREE.Box3(), v = new THREE.Vector3(), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), Eu = new THREE.Euler(), SC = new THREE.Vector3(1, 1, 1), cc = new THREE.Color();
+    const zStart = 0.3, zEnd = -5.4, sweep = 1.4;
+    const passAt = (z) => Math.max(0, (zStart - z) / (zStart - zEnd)) * sweep;
+    // the scan itself
+    var scanRoom = (sfx) => {
+      const now = kit.now();
+      if (now - t0 < 8) return;
+      t0 = now;
+      const props = scanProps.filter(p => p.visible !== false);
+      const info = props.map((p) => {
+        box.setFromObject(p);
+        const a = G.worldToLocal(box.min.clone()), b = G.worldToLocal(box.max.clone());
+        const lo = a.clone().min(b), hi = a.clone().max(b);
+        const cols = []; p.traverse(o => { if (o.isMesh && o.material?.color && !o.userData.noInk) cols.push(o.material.color.clone()); });
+        if (!cols.length) cols.push(new THREE.Color(0xe8604c));
+        return { p, lo, hi, cols, at: passAt((lo.z + hi.z) / 2) };
+      });
+      for (let k = 0; k < N; k++) {
+        const I = info[k % info.length];
+        src[k] = new THREE.Vector3(I.lo.x + R() * (I.hi.x - I.lo.x), I.lo.y + R() * (I.hi.y - I.lo.y), I.lo.z + R() * (I.hi.z - I.lo.z));
+        col0[k] = I.cols[Math.floor(R() * I.cols.length)];
+        hideAt[k] = I.at + R() * 0.15;
+      }
+      scanRoom.info = info;
+      sfx([[1200, 0.05], [1400, 0.05], [1600, 0.05], [1800, 0.05], [2000, 0.05], [0, 0.6], [523, 0.1], [659, 0.1], [784, 0.1], [1046, 0.4]], 'square', 0.03);
+      setTimeout(() => kit.say('Scanned! The whole room is one QR code. It links to… this room. You are here.'), 2600);
+    };
+    live((t) => {
+      const k = t - t0;
+      if (k > 9) { if (inst.visible) { inst.visible = false; beam.visible = false; kit.fx.filter(''); scanRoom.info?.forEach(I => { I.p.visible = true; }); } return; }
+      beam.visible = k < sweep; beam.position.z = zStart + (zEnd - zStart) * Math.min(1, k / sweep);
+      beam.material.opacity = 0.22 * (1 - Math.max(0, k - sweep + 0.2) / 0.2);
+      if (k < 0.05) kit.fx.filter('saturate(0.75) contrast(1.08) hue-rotate(-8deg)');
+      if (k > 7.4) kit.fx.filter('');
+      inst.visible = true;
+      // props vanish as the beam crosses them, and come back once their pixels have landed home
+      for (const I of scanRoom.info || []) I.p.visible = !(k > I.at && k < 7.3);
+      const back0 = 5.6;
+      for (let i = 0; i < N; i++) {
+        const h = hideAt[i], go = ease((k - h) / 1.1), ret = ease((k - back0 - (i % 17) * 0.02) / 1.2);
+        const f = go * (1 - ret);
+        v.lerpVectors(src[i], ends[i], f); v.y += Math.sin(f * PI) * 0.5;
+        // the code breathes a little while it hangs there
+        if (go >= 1 && ret <= 0) v.z += Math.sin(t * 2 + ends[i].x * 3) * 0.01;
+        const s = k < h || k > back0 + 1.5 ? 0.001 : 1;
+        Eu.set(f * 4 * (1 - f) * 3, f * (1 - f) * 8, 0); Q.setFromEuler(Eu); SC.setScalar(s);
+        M4.compose(v, Q, SC); inst.setMatrixAt(i, M4);
+        cc.copy(col0[i]).lerp(ink, Math.min(1, f * 1.4)); inst.setColorAt(i, cc);
+      }
+      inst.instanceMatrix.needsUpdate = true; if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+    });
+  }
+
+  // ════════ 12. the map-room survey: a game you can only win by looking round the room ════════
+  kit.games.replace('scan the model', (m) => kit.quiz(m.game, 'Map-room survey', [
+    { q: 'Find the ship’s compass on its stand. Which way does its card say north is?', choices: ['toward the big screen', 'toward the door', 'toward the globe', 'toward the model shelf'], answer: 0, why: 'North is the screen. On QR Compass the map is always up.' },
+    { q: 'On the big wall map above the cabinet, which region is painted purple?', choices: ['the West', 'the Midwest', 'the Southeast', 'the Northeast'], answer: 3, why: 'The Northeast: lilac, same as on the real QR Compass slab.' },
+    { q: 'How many hot-air balloons are floating around this room?', choices: ['2', '3', '4', '5'], answer: 1, why: 'Three: red by the globe, blue by the compass, teal by the model shelf.' },
+    { q: 'One of the three clocks on the back wall is running fast. Which city?', choices: ['San Francisco', 'Chicago', 'New York'], answer: 2, why: 'New York, obviously. It’s always rushing.' },
+    { q: 'Last one. On the cork board, which company is NOT in the Fortune 500?', choices: ['Walmart', 'Exxon', 'Vivi’s Lemonade', 'Boeing'], answer: 2, why: 'Vivi’s Lemonade. Fortune 5,000,000. But it has a QR code, so it counts.' },
+  ], { intro: 'A surveyor’s quiz: every answer is somewhere in this room. Look around before you pick!', end: (s, n) => (s === n ? 'A perfect survey. You’d make a fine cartographer.' : `${s} of ${n}. Have another look around the room!`) }), 'map-room survey');
+
+  // ════════ 13. a little sign by the floor code ════════
+  {
+    const x = -1.05, z = 0.12;
+    const sign = texMat(160, 120, (c, w, h) => { c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 5; c.strokeRect(3, 3, w - 6, h - 6); c.fillStyle = INKC; c.textAlign = 'center'; c.font = `700 20px ${HAND}`; c.fillText('please don’t', w / 2, 32); c.fillText('scan the floor', w / 2, 56); c.font = `400 16px ${HAND}`; c.fillText('(it just takes', w / 2, 82); c.fillText('you here)', w / 2, 102); });
+    for (const s of [-1, 1]) {
+      SB(0.3, 0.24, 0.015, M.woodL, x, 0.24, z + s * 0.045, 0.004, [s * -0.2, 0, 0]);
+      const f = kit.flat(0.27, 0.21, sign, x, 0.24, z + s * 0.055, [s * -0.2, s < 0 ? PI : 0, 0]); f.renderOrder = 2;
+    }
+    claim(x, z, 0.16);
   }
 
   bake();

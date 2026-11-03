@@ -30,6 +30,7 @@ function baker(THREE) {
 export default function dress(K) {
   const { THREE, g: G, paint, PAL, tap, live, free, claim, rb, canvasTex, texMat, HAND, SCRIPT, INKC, now } = K;
   const B = baker(THREE);
+  const HOOK = { cams: [] };                 // props the whodunit and the secrets reach into
   const grp = (x = 0, y = 0, z = 0, parent = G) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
   const mesh = (geo, mat, parent, x = 0, y = 0, z = 0, rot) => {
     const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
@@ -120,9 +121,10 @@ export default function dress(K) {
     }), G, 0, -5, 0);
     z.userData.noInk = true; z.material.opacity = 0; return z;
   });
-  let tTape = -99;
+  let tTape = -99, tapes = 0;
+  const TAPE = ['Tape, 2:58 a.m.: “…zzz… *snort* …five more minutes, Mum…”', 'Tape, 3:07 a.m.: “…zzz… was that a rope? …zzz…”', 'Tape, 3:20 a.m.: “…zzz… no, YOU guard the Monet… zzz…”'];
   tap(TR, 'play the guard’s tape', (sfx) => {
-    tTape = now();
+    tTape = now(); K.say(TAPE[tapes++ % TAPE.length]);
     sfx([[110, 0.5], [95, 0.6], [140, 0.25], [110, 0.6], [95, 0.7]], 'sawtooth', 0.03);
   });
   // an anglepoise lamp: tap to switch it
@@ -214,7 +216,7 @@ export default function dress(K) {
   {
     const rz = -1.25, ropeM = paint(0xd9c08a, { hatch: 0.5 });
     B.add(ropeM, new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-4.06, 2.58, rz), new THREE.Vector3(-3.99, 2.74, rz), new THREE.Vector3(-3.91, 2.62, rz)]), 10, 0.022, 6));
-    const R = grp(-3.91, 2.62, rz);                       // the hanging run pivots where it bends over the wall
+    const R = grp(-3.91, 2.62, rz); HOOK.rope = R;                       // the hanging run pivots where it bends over the wall
     const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.01, -1.0, 0.0), new THREE.Vector3(0.03, -2.2, 0.03), new THREE.Vector3(0.12, -2.5, 0.06)]);
     mesh(new THREE.TubeGeometry(curve, 30, 0.022, 6), ropeM, R);
     for (let i = 0; i < 4; i++) B.add(ropeM, new THREE.TorusGeometry(0.17 - i * 0.012, 0.025, 6, 20), -3.72, 0.025 + i * 0.045, rz + 0.04, [HPI, 0, i * 0.7]);
@@ -235,11 +237,13 @@ export default function dress(K) {
     });
     // muddy footprints from the empty frame to the rope
     decal(0.7, 3.3, (c, w, h) => {
-      c.fillStyle = 'rgba(70,50,40,0.55)';
-      for (let i = 0; i < 11; i++) {
-        const y = h - 30 - i * (h - 60) / 10, x = w / 2 + (i % 2 ? 22 : -22) + Math.sin(i * 0.6) * 16;
-        c.beginPath(); c.ellipse(x, y, 10, 17, 0.1, 0, 7); c.fill();
-        c.beginPath(); c.ellipse(x + 1, y - 26, 8, 9, 0, 0, 7); c.fill();
+      // big work-boot treads, toes pointing from the frame towards the rope (the front)
+      for (let i = 0; i < 9; i++) {
+        const y = 40 + i * (h - 90) / 8, x = w / 2 + (i % 2 ? 20 : -20) + Math.sin(i * 0.6) * 14;
+        c.fillStyle = 'rgba(70,50,40,0.6)';
+        c.beginPath(); c.roundRect(x - 12, y + 6, 24, 34, 10); c.fill();          // the sole, toe at the bottom
+        c.beginPath(); c.roundRect(x - 11, y - 14, 22, 14, 5); c.fill();          // the heel block
+        c.fillStyle = 'rgba(200,180,150,0.7)'; for (let k = 0; k < 4; k++) c.fillRect(x - 9, y + 11 + k * 7, 18, 2.5);
       }
     }, 0, 140, 660, G, -3.35, 0.022, -3.0, [-HPI, 0, 0.12]);
   }
@@ -261,7 +265,7 @@ export default function dress(K) {
     // the open one: a lid hinged at its back edge, straw and a frame corner inside
     const cx = -2.42, cz = -0.32;
     solid(cx, cz, 0.28);
-    const C = grp(cx, 0, cz); C.rotation.y = -0.25;
+    const C = grp(cx, 0, cz); C.rotation.y = -0.25; HOOK.crate = C;
     const cr = baker(THREE);
     cr.add(crate, rb(0.5, 0.42, 0.04, 0.01), 0, 0.21, 0.23); cr.add(crate, rb(0.5, 0.42, 0.04, 0.01), 0, 0.21, -0.23);
     cr.add(crate, rb(0.04, 0.42, 0.42, 0.01), -0.23, 0.21, 0); cr.add(crate, rb(0.04, 0.42, 0.42, 0.01), 0.23, 0.21, 0);
@@ -270,7 +274,7 @@ export default function dress(K) {
     const straw = baker(THREE), strawM = paint(0xe8c860);
     for (let i = 0; i < 26; i++) straw.add(strawM, new THREE.CylinderGeometry(0.006, 0.006, 0.16, 4), -0.18 + (i * 0.37) % 0.36, 0.4 + (i % 3) * 0.015, -0.18 + (i * 0.23) % 0.36, [HPI * (i % 2), i, 0.4 * (i % 3)]);
     straw.flush(C);
-    mesh(rb(0.06, 0.32, 0.3, 0.01), gold, C, 0.08, 0.45, -0.02, [0, 0.3, 0.25]);
+    HOOK.crateFrame = mesh(rb(0.06, 0.32, 0.3, 0.01), gold, C, 0.08, 0.45, -0.02, [0, 0.3, 0.25]);
     const lid = grp(0, 0.42, -0.25, C);                     // hinge along the back top edge
     mesh(rb(0.52, 0.035, 0.5, 0.01), crate, lid, 0, 0.018, 0.25);
     const puff = [0, 1, 2, 3].map(() => sprite(glowTex, 0xfff0b0, 0.12, C));
@@ -280,6 +284,7 @@ export default function dress(K) {
       const k = t - tLid;
       let a = 0;
       if (k >= 0 && k < 2.6) a = k < 0.25 ? smooth(k / 0.25) * 1.9 : k < 1.9 ? 1.9 + Math.sin((k - 0.25) * 12) * 0.08 * Math.max(0, 1 - (k - 0.25) * 2) : 1.9 * (1 - smooth((k - 1.9) / 0.5)) + (k > 2.4 ? Math.sin((k - 2.4) * 40) * 0.03 : 0);
+      if (HOOK.lidOpen) a = Math.max(a, 1.9);
       lid.rotation.x = -a;
       puff.forEach((s, i) => {
         const kk = k - 0.05 * i;
@@ -307,6 +312,7 @@ export default function dress(K) {
     for (const a of [0, HPI]) { const f = mesh(new THREE.PlaneGeometry(1.1, 0.1), fanM, fan, 0, 0, 0, [0, a, 0]); f.userData.noInk = true; }
     const halo = sprite(glowTex, 0xff4030, 0.5); halo.position.set(-3.9, AY + 0.19, AZ);
     let tBell = -99;
+    HOOK.ringAlarm = (loud = true) => { tBell = now(); if (loud) K.sfx(Array.from({ length: 10 }, (_, i) => [i % 2 ? 1180 : 940, 0.09]), 'square', 0.03); };
     tap(bell, 'ring the alarm', (sfx) => { tBell = now(); const n = []; for (let i = 0; i < 10; i++) n.push([i % 2 ? 1180 : 940, 0.09]); sfx(n, 'square', 0.03); });
     live((t) => {
       const k = t - tBell, on = k >= 0 && k < 3;
@@ -333,7 +339,8 @@ export default function dress(K) {
     const ledM = paint(0xff3a2a, { emissive: 0xff2a1a, hatch: 0, unique: true });
     mesh(new THREE.SphereGeometry(0.009, 6, 5), ledM, tilt, 0.035, -0.0, 0.18).userData.noInk = true;
     let tCam = -99;
-    tap(pan, 'wave at the security camera', (sfx) => { tCam = now(); sfx([[1760, 0.06], [1760, 0.06], [2093, 0.1]], 'square', 0.03); });
+    HOOK.cams.push(() => { tCam = now(); });
+    tap(pan, 'wave at the security camera', (sfx) => { tCam = now(); K.say(i ? 'CAM 4 saw: a rope coming down from the skylight at 3:07. Then a lot of fern.' : 'CAM 2 saw: a pair of big muddy boots at 3:07. Then a lens cap.'); sfx([[1760, 0.06], [1760, 0.06], [2093, 0.1]], 'square', 0.03); });
     // the yaw that points it at the middle of the open front (where the visitor stands)
     const look = Math.atan2(0 - (wx - s * 0.2), -0.6 - wz);
     live((t) => {
@@ -398,7 +405,7 @@ export default function dress(K) {
     mesh(new THREE.OctahedronGeometry(0.06, 0).scale(1, 1.35, 1), gemM, gem);
     const sparks = [0, 1, 2].map(() => sprite(starTex, 0xffffff, 0.08));
     let tGem = -99, gspin = 0.6;
-    tap(gem, 'admire the jewel', (sfx) => { tGem = now(); gspin = 14; sfx([[1568, 0.08], [2093, 0.08], [2637, 0.08], [3136, 0.25]], 'sine', 0.04); });
+    tap(gem, 'admire the jewel', (sfx) => { tGem = now(); K.say('Why didn’t the thief take the jewel? Too shiny: you can see it from the roof.'); gspin = 14; sfx([[1568, 0.08], [2093, 0.08], [2637, 0.08], [3136, 0.25]], 'sine', 0.04); });
     live((t, dt) => {
       const k = t - tGem;
       gspin += (0.6 - gspin) * Math.min(1, dt * 1.2);
@@ -458,7 +465,8 @@ export default function dress(K) {
     const ring = grp(0, 0, 0, S);
     mesh(new THREE.TorusGeometry(0.16, 0.008, 6, 32), paint(0x6a4a8a), ring);
     let tS = -99, sp = 0.4;
-    tap(S, 'spin the sculpture', (sfx) => { tS = now(); sp = 9; sfx([[300, 0.15], [450, 0.15], [600, 0.15], [900, 0.3]], 'sine', 0.04); });
+    let spins = 0;
+    tap(S, 'spin the sculpture', (sfx) => { tS = now(); if (++spins === 5) { K.say('The label did say please. (ALARM!)'); HOOK.ringAlarm(); HOOK.cams.forEach(f => f()); } sp = 9; sfx([[300, 0.15], [450, 0.15], [600, 0.15], [900, 0.3]], 'sine', 0.04); });
     live((t, dt) => {
       sp += (0.4 - sp) * Math.min(1, dt * 0.7);
       S.rotation.y += sp * dt;
@@ -513,6 +521,109 @@ export default function dress(K) {
     const num = mesh(new THREE.PlaneGeometry(0.055, 0.055), texMat(48, 48, (c, w, h) => { c.font = `700 40px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(n), w / 2, h / 2 + 2); }), tent, 0, 0.048, 0.033, [-0.54, 0, 0]);
     num.userData.noInk = true;
   });
+
+  // ═══ round 2: THE CASE OF THE EMPTY FRAME — a whodunit solved with your eyes ═══
+  // The clues are things in this room: three pairs of shoes (only one matches the boot
+  // prints), the wall clock that stopped when the rope swung into it, the smear on the rope
+  // and the paint tin it matches. Name the thief, then say where it's hidden: the painting
+  // flies home to its frame, and a lost page turns up in the crate where it was hidden.
+  const { games, quiz, say, page } = K;
+  const sh = baker(THREE);
+  // the guard's trainers, kicked off by his chair
+  for (const s of [-1, 1]) {
+    sh.add(paint(0xf6f2ea), rb(0.09, 0.06, 0.22, 0.03), 2.42 + s * 0.07, 0.04, -0.3, [0, 0.2 * s, 0]);
+    sh.add(paint(0xe8604c), rb(0.095, 0.02, 0.23, 0.008), 2.42 + s * 0.07, 0.01, -0.3, [0, 0.2 * s, 0]);
+  }
+  // the curator's red heels by the bench: heels leave dots, not treads
+  for (const s of [-1, 1]) {
+    const x = -2.08 + s * 0.06, z = -1.72 + s * 0.03;
+    sh.add(red, rb(0.075, 0.015, 0.19, 0.006), x, 0.055, z, [-0.4, 0.3, 0]);
+    sh.add(red, rb(0.08, 0.045, 0.07, 0.02), x + 0.02, 0.022, z + 0.07, [0, 0.3, 0]);
+    sh.add(dark, new THREE.CylinderGeometry(0.008, 0.006, 0.09, 6), x - 0.025, 0.045, z - 0.075);
+  }
+  // the window washer's work boots by the crates, still muddy
+  const mud = paint(0x5a4030, { hatch: 0.6 });
+  for (const s of [-1, 1]) {
+    const x = -3.0 + s * 0.09, z = -1.05;
+    sh.add(paint(0x8a5a2a), rb(0.12, 0.08, 0.27, 0.03), x, 0.04, z + 0.03, [0, s * 0.15, 0]);
+    sh.add(paint(0x8a5a2a), rb(0.11, 0.24, 0.12, 0.03), x, 0.18, z - 0.06, [0, s * 0.15, 0]);
+    sh.add(dark, rb(0.13, 0.025, 0.28, 0.008), x, 0.012, z + 0.03, [0, s * 0.15, 0]);
+    for (let k = 0; k < 3; k++) sh.add(mud, new THREE.SphereGeometry(0.025, 6, 5), x + (k - 1) * 0.035, 0.03, z + 0.15 - k * 0.04, null, [1.4, 0.5, 1]);
+  }
+  // three tins of paint by the bucket: only one matches the smear on the rope
+  [['GALLERY GOLD', '#e4b84f', -3.08, -1.78], ['SKYLIGHT BLUE', '#2f6ad0', -3.22, -1.58], ['VELVET RED', '#b03a30', -3.02, -1.48]].forEach(([name, col, x, z], i) => {
+    const tex = canvasTex(256, 64, (c, w, h) => {
+      c.fillStyle = '#d8dce4'; c.fillRect(0, 0, w, h); c.fillStyle = col; c.fillRect(0, 10, w, h - 20);
+      c.fillStyle = '#fff'; c.font = `700 22px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      for (const cx of [w * 0.25, w * 0.75]) c.fillText(name, cx, h / 2);
+    });
+    mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.13, 16), paint(0xffffff, { map: tex, hatch: 0.3 }), G, x, 0.065, z, [0, -0.8 + i, 0]);
+    if (i === 1) {          // the blue one's open, with a drip down the side
+      mesh(new THREE.CircleGeometry(0.062, 16), paint(0x2f6ad0, { hatch: 0 }), G, x, 0.131, z, [-HPI, 0, 0]).userData.noInk = true;
+      sh.add(paint(0xb8bec8), new THREE.CylinderGeometry(0.072, 0.072, 0.012, 16), x + 0.1, 0.006, z + 0.04);
+    } else sh.add(paint(0xb8bec8), new THREE.CylinderGeometry(0.072, 0.072, 0.012, 16), x, 0.136, z);
+  });
+  sh.flush(G);
+  // the blue smear on the rope, where the washer's paint-covered gloves grabbed it
+  mesh(new THREE.CylinderGeometry(0.027, 0.027, 0.14, 8), paint(0x2f6ad0, { hatch: 0 }), HOOK.rope, 0.012, -1.3, 0);
+  // the clock on the east wall, knocked to a stop by the swinging rope
+  {
+    const CK = grp(3.97, 2.08, -3.52); CK.rotation.y = -HPI;
+    mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.04, 24), gold, CK, 0, 0, 0.02, [HPI, 0, 0]);
+    mesh(new THREE.CircleGeometry(0.145, 24), paint(0xfbf6ea, { hatch: 0 }), CK, 0, 0, 0.042).userData.noInk = true;
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; mesh(rb(0.012, 0.03, 0.004, 0.002), dark, CK, Math.sin(a) * 0.12, Math.cos(a) * 0.12, 0.045, [0, 0, -a]).userData.noInk = true; }
+    const hand = (len, wid, ang) => { const p = grp(0, 0, 0.05, CK); p.rotation.z = -ang; mesh(rb(wid, len, 0.006, 0.002).translate(0, len / 2 - 0.01, 0), dark, p).userData.noInk = true; return p; };
+    hand(0.075, 0.016, (3 + 7 / 60) / 12 * Math.PI * 2);    // 3:07
+    hand(0.115, 0.01, 7 / 60 * Math.PI * 2);
+    mesh(new THREE.CircleGeometry(0.012, 8), red, CK, 0, 0, 0.056).userData.noInk = true;
+    decal(0.36, 0.1, (c, w, h) => { c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(2, 2, w - 4, h - 4); c.font = `700 19px ${HAND}`; c.fillStyle = '#b03a30'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('EVIDENCE · please do not wind', w / 2, h / 2 + 1); }, 0, 220, 60, CK, 0, -0.24, 0.01);
+    // and it's still slightly wobbling on its nail
+    live((t) => { CK.rotation.x = Math.sin(t * 1.7) * 0.03; });
+  }
+  // the stolen painting: rolled into the FRAGILE ART crate all along
+  const PNT = grp(0, -50, 0); PNT.visible = false;
+  {
+    const pw = 0.78, ph = 0.64;
+    mesh(new THREE.PlaneGeometry(pw, ph), paint(0xffffff, { hatch: 0, map: canvasTex(312, 256, (c, w, h) => {
+      const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#f4a98a'); g.addColorStop(0.55, '#f6d6a0'); g.addColorStop(1, '#6a8fb8'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#fff6c8'; c.beginPath(); c.arc(w * 0.68, h * 0.42, 30, 0, 7); c.fill();
+      c.fillStyle = '#4f7a6a'; c.beginPath(); c.arc(w / 2, h * 1.35, h * 0.75, 0, 7); c.fill();
+      c.fillStyle = '#e8604c'; for (const [x, s] of [[0.36, 1], [0.5, 1.3], [0.62, 0.9]]) { c.fillRect(w * x - 9 * s, h * 0.7 - 30 * s, 18 * s, 30 * s); c.beginPath(); c.moveTo(w * x - 13 * s, h * 0.7 - 30 * s); c.lineTo(w * x, h * 0.7 - 48 * s); c.lineTo(w * x + 13 * s, h * 0.7 - 30 * s); c.fill(); }
+      c.strokeStyle = 'rgba(255,255,255,0.6)'; c.lineWidth = 2; for (let i = 0; i < 40; i++) { c.beginPath(); c.moveTo((i * 37) % w, (i * 53) % (h * 0.5)); c.lineTo((i * 37) % w + 6, (i * 53) % (h * 0.5) + 2); c.stroke(); }
+      c.font = `400 14px ${SCRIPT}`; c.fillStyle = '#2a2230'; c.fillText('J.G.', w - 34, h - 10);
+    }) }), PNT).userData.noInk = true;
+    for (const s of [-1, 1]) { mesh(rb(pw + 0.06, 0.035, 0.03, 0.008), gold, PNT, 0, s * (ph / 2 + 0.015), 0); mesh(rb(0.035, ph, 0.03, 0.008), gold, PNT, s * (pw / 2 + 0.015), 0, 0); }
+  }
+  const pg = page();
+  const pgSpot = grp(0, -50, 0, HOOK.crate); pgSpot.visible = false; pgSpot.add(pg); pg.position.set(0, 0.42, 0.02); pg.rotation.y = 0.4;
+  let solved = false, tSolve = -99;
+  const from = new THREE.Vector3(-2.42, 0.5, -0.32), to = new THREE.Vector3(-3.2, 1.18, -5.352);
+  const solve = () => {
+    if (solved) return;
+    solved = true; tSolve = now();
+    PNT.visible = true; HOOK.crateFrame.visible = false;
+    K.sfx([[392, 0.12], [523, 0.12], [659, 0.12], [784, 0.12], [1046, 0.4]], 'triangle', 0.06);
+  };
+  live((t) => {
+    if (!solved) return;
+    const u = smooth((t - tSolve) / 2.6);
+    PNT.position.lerpVectors(from, to, u); PNT.position.y += Math.sin(u * Math.PI) * 1.1;
+    PNT.rotation.set(-1.2 * (1 - u), (1 - u) * 3, Math.sin(u * Math.PI * 2) * 0.2);
+    PNT.scale.setScalar(0.5 + u * 0.5);
+    if (u >= 1 && !pgSpot.visible) { pgSpot.visible = true; pgSpot.position.y = 0; HOOK.lidOpen = true; say('Case closed! The painting is home… and a lost page was tucked in the crate underneath it.'); }
+  });
+  games.replace('solve the empty frame', (m) => quiz(m.game, 'The case of the empty frame', [
+    { q: 'Clue 1. The muddy prints run from the empty frame to the rope. Three pairs of shoes are lying about the gallery. Which made the prints?', choices: ['the trainers by the guard’s desk', 'the red heels by the bench', 'the muddy boots by the crates'], answer: 2, why: 'Big chunky treads with a heel block: the work boots. Heels would leave little dots, trainers a zigzag.' },
+    { q: 'Clue 2. The rope swung into the clock on its way down and stopped it. What time does it say?', choices: ['2:45', '3:07', '4:30'], answer: 1, why: '3:07: the minute the guard’s log stops. (His tape is just snoring. He was asleep, not stealing.)' },
+    { q: 'Clue 3. There’s a smear on the rope. Which tin by the bucket matches it?', choices: ['Gallery Gold', 'Skylight Blue', 'Velvet Red'], answer: 1, why: 'Skylight Blue, the open tin with the drip. Someone was painting the skylight frame that night.' },
+    { q: 'Boots, a rope, blue paint, 3:07. Who took the painting?', choices: ['Gus, the night guard', 'Dr. Plum, the curator', 'Wes, the window washer'], answer: 2, why: 'Wes! The only one with muddy boots, a rope down from the skylight, and Skylight Blue on his gloves.' },
+    { q: 'But Wes never got it out of the building. Where did he hide it?', choices: ['in the paint bucket', 'in the crate marked FRAGILE ↑ ART ↑', 'behind the guard’s doughnuts'], answer: 1, why: 'In the crate! (Prise the lid and you can see a gold corner.) Watch the back wall…', reveal: (ok) => { if (ok) m.game.later(600, solve); } },
+  ], { intro: solved ? 'Solved already, detective: the painting is back on the wall. Play again to walk through the clues.' : 'The frame on the back wall is empty and the culprit is still in the building. Every clue is something you can see in this room: look around, then answer.',
+    end: (s, n) => solved ? `${s} of ${n}. Case closed: Wes is busted and the painting is back on the wall. The full mystery (45 paintings!) is on the big screen.` : `${s} of ${n}. Not quite solved: look round the room again. The shoes, the clock, the rope…` }));
+
+  // ── secrets and jokes ──
+  decal(0.3, 0.1, (c, w, h) => { c.fillStyle = '#ffe26a'; c.fillRect(0, 0, w, h); c.font = `700 22px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('EVIDENCE (half eaten)', w / 2, h / 2 + 1); }, 0, 200, 64, G, DX + 0.42, TOP + 0.052, DZ + 0.12, [-HPI, 0, 0]);
+  decal(0.38, 0.12, (c, w, h) => { c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, h); c.strokeStyle = INKC; c.lineWidth = 3; c.strokeRect(2, 2, w - 4, h - 4); c.font = `700 20px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('please sit (the art can’t)', w / 2, h / 2 + 1); }, 0, 240, 76, G, -1.2, 0.505, -1.6, [-HPI, 0, 0]);
 
   B.flush(G);
 }

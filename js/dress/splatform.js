@@ -57,6 +57,30 @@ export default function dress(kit) {
   // a splattered look for wooden things
   const splWood = (base) => paint(0xffffff, { map: canvasTex(128, 128, (c, w, h) => { c.fillStyle = base; c.fillRect(0, 0, w, h); for (let i = 0; i < 14; i++) blob(c, (i * 47) % w, (i * 31) % h, 3 + (i % 4) * 2, CSS[i % 6], i); }), unique: true });
   const benchWood = splWood('#a07a58');
+  const { fx, say, onExit, games, quiz, shuffle } = kit;
+  const WHITE = canvasTex(4, 4, (c) => { c.fillStyle = '#fff'; c.fillRect(0, 0, 4, 4); });
+  // a material that keeps its own colour whatever medium the room is redrawn in (it carries a map)
+  const tintable = (hex) => paint(hex, { map: WHITE, hatch: 0, unique: true });
+  const showAll = (o, v) => o.traverse(q => { q.visible = v; });      // hidden things mustn't catch taps
+
+  // ── THE MEDIUM the whole studio is drawn in: Splatform's one attribute, applied to a room ──
+  const MEDIA = [
+    ['watercolor', 'watercolour', 'saturate(0.9) brightness(1.06) blur(0.4px)'],
+    ['sketch', 'pencil', 'saturate(0.8)'],
+    ['comic', 'comic ink', 'contrast(1.15) saturate(1.35)'],
+    ['flat', 'flat vector', ''],
+    ['pixel', 'pixel art', 'contrast(1.1) saturate(1.2)'],
+    ['gouache', 'gouache', ''],
+  ];
+  const label = (n) => MEDIA.find(m => m[0] === n)?.[1] ?? n;
+  let medium = 'gouache';
+  const onMedium = [];
+  const setMedium = (name) => {
+    if (name === medium) return;
+    medium = name; fx.style(name); fx.filter(MEDIA.find(m => m[0] === name)?.[2] || '');
+    onMedium.forEach(f => f(name));
+  };
+  onExit(() => { if (medium !== 'gouache') { medium = 'gouache'; fx.style('gouache'); onMedium.forEach(f => f('gouache')); } });
 
   // ══ RIGHT: the spin-art bench (tap: squirt paint) ══
   {
@@ -92,7 +116,7 @@ export default function dress(kit) {
     const disc = new THREE.Group(); disc.position.set(mx, top + 0.12, mz); g.add(disc);
     const card = sub(disc).put(new THREE.CylinderGeometry(0.16, 0.16, 0.012, 28), [paint(0xf6eedb), paint(0xffffff, { map: tex, hatch: 0, unique: true }), paint(0xf6eedb)]);
     const bottle = new THREE.Group(); bottle.position.set(mx + 0.05, top + 0.52, mz + 0.05); g.add(bottle);   // hangs from the arm's tip
-    const BK = sub(bottle), bm = paint(0xe8604c, { unique: true });
+    const BK = sub(bottle), bm = tintable(0xe8604c);
     BK.put(new THREE.CapsuleGeometry(0.045, 0.1, 4, 10).translate(0, -0.08, 0), bm);
     BK.put(new THREE.ConeGeometry(0.02, 0.06, 8).rotateX(Math.PI).translate(0, -0.2, 0), paint(0xf6eedb));
     const drop = put(new THREE.SphereGeometry(0.022, 8, 6), bm, 0, 0, 0); drop.userData.noInk = true; drop.visible = false;
@@ -168,12 +192,21 @@ export default function dress(kit) {
     sub(wheel).put(new THREE.CylinderGeometry(0.34, 0.34, 0.02, 40).rotateX(Math.PI / 2), paint(0xf6eedb), 0, 0, 0);
     let t0 = -9;
     live((t, dt) => { const s = since(t0); disc.rotation.z -= dt * (0.15 + (s < 4 ? 9 * Math.exp(-s * 1.1) : 0)); });
-    tap(wheel, 'spin the colour wheel', (sfx) => { t0 = now(); sfx([[523, 0.08], [587, 0.08], [659, 0.08], [698, 0.08], [784, 0.08], [880, 0.08], [988, 0.08], [1047, 0.2]], 'triangle', 0.35); });
+    const taps = []; let vt0 = -9;
+    live((t) => {
+      const s = since(vt0);
+      if (s < 6) fx.filter(`hue-rotate(${Math.round(s * 240)}deg) saturate(1.6)`);
+      else if (vt0 > 0) { vt0 = -9; fx.filter(MEDIA.find(q => q[0] === medium)?.[2] || ''); }
+    });
+    tap(wheel, 'spin the colour wheel', (sfx) => {
+      taps.push(now()); while (taps.length && now() - taps[0] > 4) taps.shift();
+      if (taps.length >= 5) { taps.length = 0; vt0 = now(); say('Secret medium unlocked: VIBES. (It is not in the docs.)'); sfx([[262, 0.1], [330, 0.1], [392, 0.1], [523, 0.1], [659, 0.1], [784, 0.1], [1047, 0.4]], 'sawtooth', 0.12); }
+      t0 = now(); sfx([[523, 0.08], [587, 0.08], [659, 0.08], [698, 0.08], [784, 0.08], [880, 0.08], [988, 0.08], [1047, 0.2]], 'triangle', 0.35); });
 
     // a swatch chart: the same stroke in five media
     const sw = opaque(300, 200, (c, w, h) => {
       c.fillStyle = '#fdf8ec'; c.fillRect(0, 0, w, h);
-      c.fillStyle = INKC; c.font = `700 30px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('five media, one button', w / 2, 32);
+      c.fillStyle = INKC; c.font = `700 30px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('five media, one button', w / 2, 32); c.font = `400 13px ${HAND}`; c.fillStyle = '#8a7e8e'; c.fillText('(and zero clean shirts)', w / 2, h - 3);
       const names = ['watercolor', 'acrylic', 'charcoal', 'torn paper', 'marker'];
       names.forEach((n, i) => {
         const y = 50 + i * 29;
@@ -189,6 +222,7 @@ export default function dress(kit) {
     plane(0.8, 0.54, sw, RW - 0.025, 1.25, -4.35, [0, -Math.PI / 2, 0]);
     // a shelf of spray cans above it (tap one: psst!)
     S.box(0.24, 0.04, 0.86, wood, RW - 0.11, 1.68, -4.35, 0.01);
+    plane(0.6, 0.05, opaque(256, 24, (c, w, h) => { c.fillStyle = '#f6eedb'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `400 18px ${HAND}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('matte · gloss · satin · oops', w / 2, h / 2 + 1); }), RW - 0.235, 1.68, -4.35, [0, -Math.PI / 2, 0]);
     for (const dz of [-0.35, 0.35]) S.box(0.18, 0.1, 0.03, bark, RW - 0.08, 1.62, -4.35 + dz, 0.01, [0, 0, 0.6]);
     const sprays = [];
     for (let i = 0; i < 5; i++) {
@@ -232,17 +266,30 @@ export default function dress(kit) {
     LK.put(new THREE.CylinderGeometry(0.29, 0.29, 0.03, 28).translate(0.28, 0.015, 0), tin);
     LK.put(new THREE.CylinderGeometry(0.2, 0.2, 0.005, 20).translate(0.28, 0.032, 0), paint(0xdc6a9a));
     const pop = new THREE.Group(); pop.position.set(x, 0.5, z); g.add(pop);
-    const pb = sub(pop).put(new THREE.SphereGeometry(0.1, 12, 10), paint(0xdc6a9a)); pop.visible = false;
-    let t0 = -9;
+    const pb = sub(pop).put(new THREE.SphereGeometry(0.1, 12, 10), tintable(0xdc6a9a)); showAll(pop, false);
+    let t0 = -9, pending = false;
+    const LINES = {
+      watercolor: 'Splat! The whole studio is watercolour now. One attribute, every component.',
+      sketch: 'Splat! Pencil. Everything is a sketch, which is how most of my projects start.',
+      comic: 'KA-SPLAT! Comic ink: halftone dots and very confident outlines.',
+      flat: 'Splat! Flat vector. Very clean. Suspiciously clean, for a painter.',
+      pixel: 'Splat! Pixel art. Mind the jaggies.',
+      gouache: 'Splat! Back to gouache, the house medium.',
+    };
     live(() => {
       const s = since(t0);
+      if (pending && s > 0.55) {                 // the blob lands: the room is repainted
+        pending = false;
+        const i = MEDIA.findIndex(m => m[0] === medium), next = MEDIA[(i + 1) % MEDIA.length][0];
+        setMedium(next); say(LINES[next]);
+      }
       lid.rotation.z = s < 0.2 ? s / 0.2 * 2.2 : s < 1.8 ? 2.2 + Math.sin((s - 0.2) * 12) * 0.08 * (1.8 - s) : s < 2.1 ? 2.2 * (1 - (s - 1.8) / 0.3) : 0;
-      pop.visible = s < 1.5;
+      if (pop.visible !== s < 1.5) showAll(pop, s < 1.5);
       const u = Math.min(1, s / 1.2);
       pop.position.y = 0.5 + Math.sin(u * Math.PI) * 0.6;
       const st = 1 + Math.sin(s * 14) * 0.15 * (1 - u); pop.scale.set(1 / st, st, 1 / st);
     });
-    tap(lid, 'pop the big paint can', (sfx) => { t0 = now(); sfx([[180, 0.05], [900, 0.06], [600, 0.1], [300, 0.25]], 'sine', 0.6); });
+    tap(lid, 'splat the room in a new medium', (sfx) => { if (since(t0) < 2.1) return; t0 = now(); pending = true; sfx([[180, 0.05], [900, 0.06], [600, 0.1], [300, 0.25]], 'sine', 0.6); });
     g.add(shadow(0.38).translateX(x).translateZ(z));
   }
 
@@ -329,6 +376,7 @@ export default function dress(kit) {
     DK.box(0.5, 0.18, 0.02, paint(0xf09080), 0, 0, 0.225, 0.01);
     DK.box(0.12, 0.025, 0.03, tin, 0, 0, 0.245, 0.008);
     DK.box(0.48, 0.02, 0.4, paint(0xc07060), 0, -0.08, 0.02, 0.005);
+    DK.put(new THREE.PlaneGeometry(0.2, 0.1), opaque(160, 80, (c, w, h) => { c.fillStyle = '#fffaf0'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.font = `700 30px ${SCRIPT}`; c.textAlign = 'center'; c.fillText('2B or not 2B', w / 2, 46); c.font = `400 14px ${HAND}`; c.fillText('that is the pencil', w / 2, 68); }), 0.08, -0.038, 0.06, [-Math.PI / 2, 0, 0.2]).userData.noInk = true;
     for (let i = 0; i < 8; i++) DK.put(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 6).rotateZ(Math.PI / 2), paint(COLS[i % 6]), 0, -0.055, -0.12 + i * 0.035);
     let t0 = -9;
     live(() => { const s = since(t0); drawer.position.z = s < 0.3 ? s / 0.3 * 0.28 : s < 2.5 ? 0.28 : s < 2.8 ? 0.28 * (1 - (s - 2.5) / 0.3) : 0; });
@@ -361,6 +409,16 @@ export default function dress(kit) {
       for (const s of [-1, 1]) sub(sh).box(0.02, 0.06, 0.02, paint(COLS[(i + (s > 0 ? 1 : 3)) % 6]), s * 0.12, -0.015, 0.008, 0.005);
       sheets.push({ sh, t0: -9, i });
     });
+    // the lost page is pegged at the far end, drawn in invisible ink: it only shows in pencil
+    const pg = kit.page();
+    if (!pg.collected) {
+      const pp = line.getPoint(0.968);
+      pg.position.set(pp.x + 0.01, pp.y - 0.165, pp.z); pg.rotation.y = Math.PI / 2; g.add(pg);
+      let got = false; const poke = pg.userData.toy.poke;
+      pg.userData.toy.poke = (sfx) => { got = true; poke(sfx); say('Found it, hiding in plain pencil.'); };
+      showAll(pg, false);
+      onMedium.push((n) => { if (!got) showAll(pg, n === 'sketch'); if (!got && n === 'sketch') setTimeout(() => { if (!got && medium === 'sketch') say('Pencil shows everything. Even things pegged on washing lines…'); }, 3500); });
+    }
     let nx = 0;
     live((t) => sheets.forEach(o => {
       const s = since(o.t0);
@@ -390,14 +448,25 @@ export default function dress(kit) {
 
   // ══ back wall, upper left: a framed "medium of the day" sign ══
   {
-    const sg = opaque(300, 130, (c, w, h) => {
+    const sg = opaque(300, 130, () => {});
+    const drawSign = (name) => {
+      const c = sg.map.image.getContext('2d'), w = 300, h = 130;
       c.fillStyle = '#fdf8ec'; c.fillRect(0, 0, w, h);
       for (let i = 0; i < 5; i++) blob(c, 30 + i * 60, 108, 14, CSS[i], i);
       c.fillStyle = INKC; c.font = `400 20px ${HAND}`; c.textAlign = 'center'; c.fillText('today’s medium', w / 2, 30);
-      c.font = `700 52px ${SCRIPT}`; c.fillText('gouache', w / 2, 78);
-    });
+      c.font = `700 50px ${SCRIPT}`; c.fillText(label(name), w / 2, 78);
+      sg.map.needsUpdate = true;
+    };
+    drawSign('gouache'); onMedium.push(drawSign);
     S.box(0.84, 0.4, 0.03, wood, -3.25, 1.92, BW + 0.03, 0.01);
     plane(0.78, 0.34, sg, -3.25, 1.92, BW + 0.05);
+    // a sticky note beside it: the hunt's clue
+    const note = opaque(128, 128, (c, w, h) => {
+      c.fillStyle = '#f6e27a'; c.fillRect(0, 0, w, h);
+      c.fillStyle = INKC; c.textAlign = 'center'; c.font = `700 22px ${SCRIPT}`; c.fillText('LOST:', w / 2, 26);
+      c.font = `400 15px ${HAND}`; ['one page of a', 'guest list.', 'last seen', 'in pencil.'].forEach((l, i) => c.fillText(l, w / 2, 50 + i * 19));
+    });
+    plane(0.2, 0.2, note, -2.66, 2.02, BW + 0.05, [0, 0, -0.08]);
   }
 
 
@@ -505,6 +574,12 @@ export default function dress(kit) {
     const at = spot(-1.55, -2.95, 0.34);
     if (at) {
       const [x, z] = at; claim(x, z, 0.32);
+      // a gallery placard, on a stake behind it
+      const px = x - 0.34, pz = z - 0.3;
+      S.put(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 6), bark, px, 0.25, pz);
+      const pl = new THREE.Group(); pl.position.set(px, 0.5, pz); pl.rotation.set(-0.3, 0.5, 0); g.add(pl);
+      sub(pl).box(0.32, 0.2, 0.02, paint(0xfdf8ec), 0, 0, 0, 0.005);
+      sub(pl).put(new THREE.PlaneGeometry(0.3, 0.18), opaque(192, 112, (c, w, h) => { c.fillStyle = '#fdf8ec'; c.fillRect(0, 0, w, h); c.fillStyle = INKC; c.textAlign = 'center'; c.font = `700 20px ${HAND}`; c.fillText('“Blob, No. 7”', w / 2, 24); c.font = `400 15px ${HAND}`; ['Please do not sit', 'on the art.', '(It is a beanbag.)', '(It is also art.)'].forEach((l, i) => c.fillText(l, w / 2, 46 + i * 17)); }), 0, 0, 0.012).userData.noInk = true;
       const geo = new THREE.SphereGeometry(0.36, 28, 18), pos = geo.attributes.position, v = new THREE.Vector3();
       for (let i = 0; i < pos.count; i++) {
         v.fromBufferAttribute(pos, i);
@@ -593,15 +668,15 @@ export default function dress(kit) {
     if (at) {
       const [x, z] = at; claim(x, z, 0.2);
       S.box(0.3, 0.04, 0.4, paint(0x93abc0), x, 0.03, z, 0.01, [0.12, 0, 0]);
-      const well = plane(0.24, 0.16, paint(0x8f7ae8, { hatch: 0, unique: true }), x, 0.06, z + 0.1, [-Math.PI / 2 + 0.12, 0, 0]);
+      const well = plane(0.24, 0.16, tintable(0x8f7ae8), x, 0.06, z + 0.1, [-Math.PI / 2 + 0.12, 0, 0]);
       const stripes = [], N = 4;
       for (let k = 0; k < N; k++) {
-        const m = plane(1, 0.15, paint(COLS[k], { hatch: 0, unique: true }), x + 0.25, 0.013 + k * 0.0005, z + 0.25 - k * 0.17, [-Math.PI / 2, 0, 0]);
+        const m = plane(1, 0.15, tintable(COLS[k]), x + 0.25, 0.013 + k * 0.0005, z + 0.25 - k * 0.17, [-Math.PI / 2, 0, 0]);
         m.material.transparent = true; m.material.opacity = 0.9; m.renderOrder = 2; m.visible = false; stripes.push(m);
       }
       const roll = new THREE.Group(); g.add(roll);             // the roller's axle
       const RK = sub(roll);
-      RK.put(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 12).rotateX(Math.PI / 2), paint(0x8f7ae8, { unique: true }));
+      RK.put(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 12).rotateX(Math.PI / 2), tintable(0x8f7ae8));
       RK.put(new THREE.CylinderGeometry(0.008, 0.008, 0.2, 6).rotateX(Math.PI / 2), tin);
       const handle = new THREE.Group(); roll.add(handle);      // the handle doesn't spin with the roller
       const HK = sub(handle);
@@ -632,6 +707,24 @@ export default function dress(kit) {
       });
     }
   }
+
+  games.replace('name the medium', (m) => {
+    const keys = ['watercolor', 'sketch', 'comic', 'pixel', 'flat'], names = keys.map(label);
+    const tells = { watercolor: 'soft washes, cool shadows, a watery line', sketch: 'pencil hatching on paper', comic: 'halftone dots and bold black lines', pixel: 'chunky hard tones and jaggy edges', flat: 'clean colour and no outlines at all' };
+    const rounds = shuffle(keys).slice(0, 3).map(k => ({
+      q: 'Look at the room, not this panel: what medium is the whole studio drawn in now?',
+      show: () => setMedium(k), choices: names, answer: keys.indexOf(k),
+      why: `${label(k)[0].toUpperCase() + label(k).slice(1)}: ${tells[k]}. On a Splatform site, that's one attribute.`,
+    }));
+    rounds.push({ q: 'Back to gouache. On the washing line by the left wall, which component is drawn in gritty, smudged charcoal?', show: () => setMedium('gouache'),
+      choices: ['the button', 'the toggle', 'the card', 'the slider'], answer: 2, why: 'The card: grey grit like charcoal dust. The button is watercolour, the slider marker.' });
+    rounds.push({ q: 'Peek into the giant Splatform can by the door. What colour is the paint inside?',
+      choices: ['pink', 'blue', 'yellow', 'green'], answer: 0, why: 'Pink. The pink footprints all over the floor were a clue.' });
+    quiz(m.game, 'What medium is the room?', rounds, {
+      end: (sc, n) => `${sc} of ${n}. ${sc === n ? 'A painter’s eye. You noticed everything.' : 'Same room, five media: Splatform repaints a whole site like that.'} (Tap the giant can to do it yourself.)`,
+      onClose: () => setMedium('gouache'),
+    });
+  }, 'what medium is the room?');
 
   S.flush(g); L.flush(g, true);
 }
