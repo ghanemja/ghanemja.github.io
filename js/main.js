@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { PAL, styleTick, paint, ink } from './style.js';
 import { buildTown } from './town.js';
-import { buildInteriors, tickInteriors, dressReady } from './interiors.js';
+import { buildInteriors, tickInteriors, dressReady, WORLD, roomEvent, HUNT } from './interiors.js';
 import { createPlayer } from './player.js';
 import { person, pose, LOOKS } from './human.js';
 import { PLACES, APPS } from './apps.js';
@@ -31,7 +31,7 @@ sun.position.set(14, 22, 10);
 scene.add(hemi, sun);
 
 // ── build the world once the hand fonts are in (signs are painted with them) ──
-let town, rooms, player;
+let town, rooms, player, viviG;
 const walkers = [];
 const visited = new Set(JSON.parse(localStorage.getItem('street-visited') || '[]'));
 let zone = 'street';                       // 'street' or a place id
@@ -58,7 +58,7 @@ Promise.all([fontsReady, dressReady]).then(() => {
     scene.add(g);
     walkers.push({ g, ...w, t: Math.random() });
   }
-  const vivi = person(LOOKS.vivi);          // the director, checking on her gallery
+  const vivi = viviG = person(LOOKS.vivi);          // the director, checking on her gallery
   vivi.position.set(1.05, 0, 2.45);   // clear of the bench (she was standing in it)
   vivi.userData.turn.rotation.y = Math.PI * 0.8;
   scene.add(vivi);
@@ -77,6 +77,9 @@ Promise.all([fontsReady, dressReady]).then(() => {
   });
 
   buildHud();
+  WORLD.see = mini.see; WORLD.say = mini.say; WORLD.game = game; WORLD.blip = game.blip; WORLD.addCitizen = (look, name) => addCitizen(look, name);
+  try { for (const c of JSON.parse(localStorage.getItem(CITIZEN_KEY) || '[]').slice(-8)) addCitizen(c.look, c.name, false); } catch (e) { /* ok */ }
+  refreshPages();
   const reveal = () => $('#title').classList.remove('hide');
   if (window.__loaderDone) window.__loaderDone(reveal); else { $('#loader').classList.add('hide'); reveal(); }
   window.__street = { scene, camera, renderer, town, rooms, player, go: (x, z) => player.teleport(x, z) };
@@ -133,6 +136,7 @@ function nearestInteract() {
     }
     const L = town.doors.library;
     list.push({ x: L.x, z: L.z, r: 1.3, label: 'enter the Public Library', act: { type: 'enter', id: 'library' } });
+    if (viviG) list.push({ x: viviG.position.x, z: viviG.position.z, r: 1.2, label: 'talk to Vivi', act: { type: 'vivi' } });
   } else {
     list.push(...rooms[zone].interact);
   }
@@ -158,19 +162,22 @@ function doAct(it) {
     fadeDo(() => {
       zone = act.id;
       showRoom(act.id);
+      roomEvent(act.id, 'enter');
       const rm = rooms[act.id];
       player.setZone({ colliders: rm.colliders, bounds: rm.bounds, lookY: 1.5 });
       player.teleport(rm.spawn.x, rm.spawn.z, 0);
       markVisited(act.id);
       const n = rm.interact.filter(i => i.act.type === 'mini').length;
-      if (n) setTimeout(() => zone === act.id && !game.isOpen && mini.say(`${n === 1 ? 'A little game' : n + ' little games'} in here: walk onto a glowing ★ ring and press E.`), 700);
+      const lost = HUNT.has(act.id) ? '' : ' And somewhere in here: a lost page of Vivi’s guest list…';
+      if (n) setTimeout(() => zone === act.id && !game.isOpen && mini.say(`${n === 1 ? 'A little game' : n + ' little games'} in here: walk onto a glowing ★ ring and press E.${lost}`), 700);
       $('#hud').classList.add('hide');
       $('#way').classList.add('hide');
     });
   } else if (act.type === 'exit') {
-    const wasLib = zone === 'library';
+    const wasLib = zone === 'library', was = zone;
     fadeDo(() => {
       zone = 'street';
+      roomEvent(was, 'exit');
       showRoom(null);
       game.close(); mini.see(''); $('#say').classList.add('hide');
       player.setZone({ colliders: town.colliders, bounds: town.bounds });
@@ -182,6 +189,8 @@ function doAct(it) {
     playing = act;
     act.played?.();
     act.run(mini);
+  } else if (act.type === 'vivi') {
+    talkToVivi();
   } else if (act.type === 'card') {
     openCard(act.place);
   } else if (act.type === 'visit') {
@@ -332,6 +341,67 @@ const game = (() => {
   $('#gX').onclick = () => G.close();
   return G;
 })();
+// ── the hunt for Vivi's guest list, and the party when it's whole ──
+function refreshPages() { $('#pageCt').textContent = `${HUNT.count}/${HUNT.total}`; $('#pgBtn').classList.toggle('done', HUNT.count >= HUNT.total); }
+HUNT.onFind = (id, n) => {
+  refreshPages();
+  const left = HUNT.total - HUNT.count;
+  mini.say(left ? `Found page ${n} of Vivi’s guest list! ${left} more to find, one in every shop.` : 'That’s every page! Take the guest list back to Vivi, out on the street.');
+  if (!left) game.cheer();
+};
+function talkToVivi() {
+  const g = game.open('Vivi, the director');
+  const n = HUNT.count, T = HUNT.total;
+  if (n < T) {
+    g.text(n ? `You found ${n} of my ${T} pages! Keep looking: there’s one hidden in every shop. Try poking at things.`
+             : `Oh, thank goodness, a visitor! We were tidying up for our guest and I lost my guest list. All ${T} pages! One blew into every shop on the street. Could you find them?`);
+    g.score(`${n} / ${T} pages`);
+    g.next('I’m on it', () => g.close());
+    return;
+  }
+  g.text('My guest list, every page! Let’s see who we were tidying up for… the name at the top is… yours. You were the guest all along. SURPRISE!');
+  g.score('★ the whole list');
+  g.cheer(); party();
+  g.next('🎉 party!', () => g.close());
+}
+let partyT = -99;
+const fireworks = [];
+function party() {
+  partyT = clock.elapsedTime;
+  for (let k = 0; k < 7; k++) {
+    const N = 70, pos = new Float32Array(N * 3), vel = [];
+    for (let i = 0; i < N; i++) { const a = Math.random() * 6.28, b = Math.acos(2 * Math.random() - 1), sp = 2 + Math.random() * 1.5; vel.push([Math.sin(b) * Math.cos(a) * sp, Math.cos(b) * sp, Math.sin(b) * Math.sin(a) * sp]); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: [0xe8604c, 0xe4b84f, 0x7fb3a8, 0x8f7ae8, 0xdc6a9a][k % 5], size: 0.22, transparent: true, depthWrite: false }));
+    pts.frustumCulled = false; scene.add(pts);
+    fireworks.push({ pts, vel, t0: partyT + k * 0.9, c: new THREE.Vector3(-6 + Math.random() * 12, 6 + Math.random() * 3, -3 + Math.random() * 6), N });
+  }
+  for (const w of walkers) w.hop = Math.random() * 6;
+}
+function tickParty(t) {
+  for (let i = fireworks.length - 1; i >= 0; i--) {
+    const f = fireworks[i], a = t - f.t0, P = f.pts.geometry.attributes.position;
+    if (a < 0) { f.pts.visible = false; continue; }
+    f.pts.visible = true;
+    for (let k = 0; k < f.N; k++) { const v = f.vel[k]; P.setXYZ(k, f.c.x + v[0] * a, f.c.y + v[1] * a - 1.2 * a * a, f.c.z + v[2] * a); }
+    P.needsUpdate = true; f.pts.material.opacity = Math.max(0, 1 - a / 2.2);
+    if (a > 2.3) { if (t - partyT < 18) { f.t0 = t + Math.random() * 1.5; f.c.set(-6 + Math.random() * 12, 6 + Math.random() * 3, -3 + Math.random() * 6); } else { scene.remove(f.pts); fireworks.splice(i, 1); } }
+  }
+}
+
+// citizens made in Citizen Maker move onto the street (and stay)
+const CITIZEN_KEY = 'street-citizens';
+function addCitizen(look, name, save = true) {
+  const g = person({ folk: true, ...look });
+  const lane = Math.random() < 0.5 ? -1.95 : 1.95, x0 = -7 + Math.random() * 6, x1 = x0 + 4 + Math.random() * 5;
+  const w = { g, look, a: [x0, lane + (Math.random() - 0.5) * 0.3], b: [x1, lane + (Math.random() - 0.5) * 0.3], speed: 0.35 + Math.random() * 0.3, t: Math.random(), name };
+  g.position.set(w.a[0], 0, w.a[1]); scene.add(g); walkers.push(w);
+  if (save) {
+    try { const all = JSON.parse(localStorage.getItem(CITIZEN_KEY) || '[]'); all.push({ look, name }); localStorage.setItem(CITIZEN_KEY, JSON.stringify(all.slice(-8))); } catch (e) { /* ok */ }
+  }
+  return g;
+}
+
 const mini = {
   say(text) {
     const el = $('#say'); el.textContent = text; el.classList.remove('hide');
@@ -388,7 +458,8 @@ function pickAt(cx, cy) {
   // what it belongs to: the nearest thing you can use, if you tapped an object (not the floor)
   const list = zone === 'street'
     ? [...APPS.filter(a => town.doors[a.id]).map(a => ({ x: town.doors[a.id].x, z: town.doors[a.id].z, r: 1.0, label: `enter ${a.title}`, act: { type: 'enter', id: a.id }, reach: 2.6 })),
-       { x: town.doors.library.x, z: town.doors.library.z, r: 1.3, label: 'enter the Public Library', act: { type: 'enter', id: 'library' }, reach: 3.2 }]
+       { x: town.doors.library.x, z: town.doors.library.z, r: 1.3, label: 'enter the Public Library', act: { type: 'enter', id: 'library' }, reach: 3.2 },
+       { x: viviG.position.x, z: viviG.position.z, r: 1.2, label: 'talk to Vivi', act: { type: 'vivi' }, reach: 0.9 }]
     : rooms[zone].interact.map(it => ({ ...it, reach: it.act.type === 'exit' ? 1.0 : 1.6 }));
   let it = null, bd = 1e9;
   if (p.y > 0.04 || h.object.isSprite) {
@@ -459,14 +530,15 @@ cvs.addEventListener('pointerleave', () => hint.classList.add('hide'));
 let uiHidden = false;
 function toggleUi() {
   uiHidden = !uiHidden;
-  for (const s of ['#hud', '#nbBtn', '#bar']) $(s).classList.toggle('hide', uiHidden);
+  for (const s of ['#hud', '#nbBtn', '#pgBtn', '#bar']) $(s).classList.toggle('hide', uiHidden);
   if (uiHidden) $('#way').classList.add('hide');
 }
 
 function start() {
   $('#title').classList.add('hide');
   player.freeze(false);
-  if (!uiHidden) { $('#hud').classList.remove('hide'); $('#nbBtn').classList.remove('hide'); $('#bar').classList.remove('hide'); }
+  if (!uiHidden) { $('#hud').classList.remove('hide'); $('#nbBtn').classList.remove('hide'); $('#pgBtn').classList.remove('hide'); $('#bar').classList.remove('hide'); }
+  if (!HUNT.count) setTimeout(() => zone === 'street' && mini.say('Vivi’s waving at you from beside the bench: go and talk to her.'), 1500);
 }
 $('#startBtn').onclick = start;
 
@@ -501,19 +573,21 @@ function loop() {
     // townsfolk stroll their stretch of pavement
     for (const w of walkers) {
       const inst = w.g.userData.human;
-      if (w.still) { if (inst) pose(inst, dt, 0); continue; }
+      const hop = t - partyT < 20 && w.hop != null ? Math.abs(Math.sin(t * 6 + w.hop)) * 0.25 : 0;
+      if (w.still) { w.g.position.y = hop; if (inst) pose(inst, dt, 0); continue; }
       w.t += dt * w.speed / Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
       const ping = Math.abs(((w.t % 2) + 2) % 2 - 1);     // 0→1→0
       const k = 1 - ping;
       const x = w.a[0] + (w.b[0] - w.a[0]) * k, z = w.a[1] + (w.b[1] - w.a[1]) * k;
       const dir = (((w.t % 2) + 2) % 2) < 1 ? 1 : -1;
-      w.g.position.set(x, 0, z);
+      w.g.position.set(x, hop, z);
       w.g.userData.turn.rotation.y = Math.atan2((w.b[0] - w.a[0]) * dir, (w.b[1] - w.a[1]) * dir);
       if (inst) pose(inst, dt, 0.8);
     }
     // the prompt
     const it = $('#card').classList.contains('hide') && $('#title').classList.contains('hide') && !game.isOpen ? nearestInteract() : null;
     activeAct = it;
+    WORLD.playerPos = player.pos; WORLD.zone = zone;
     if (game.isOpen) playing?.focus?.(); else if (it?.act.type === 'mini') it.act.focus?.();
     const pr = $('#prompt');
     if (it) {
@@ -524,6 +598,7 @@ function loop() {
     tickWaypoint();
   }
   { const a = t - tapT; tapRing.material.opacity = a < 0.7 ? 0.8 * (1 - a / 0.7) : 0; tapRing.scale.setScalar(1 + a * 0.8); }
+  tickParty(t);
   tickInteriors(t);
   styleTick(t, renderer.domElement.width, renderer.domElement.height);
   renderer.render(scene, camera);
@@ -534,3 +609,5 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 loop();
+
+$('#pgBtn').onclick = () => mini.say(HUNT.count >= HUNT.total ? 'Every page found! Take the guest list to Vivi on the street.' : `Vivi lost her guest list: ${HUNT.total} pages, one hidden in every shop. You’ve found ${HUNT.count}.`);

@@ -201,9 +201,13 @@ export function recolor(m, color, style) {
   m.material = RENDER_STYLES[style].mat(b);
 }
 
-export function applyRenderStyle(root, name = 'gouache') {
+// { keepTextured }: for whole rooms — anything painted with a picture (screens, posters, signs),
+// lit-from-within (basic/additive) or instanced keeps its own material and is not re-inked
+export function applyRenderStyle(root, name = 'gouache', { keepTextured = false } = {}) {
   const R = RENDER_STYLES[name] ?? RENDER_STYLES.gouache, dead = [], meshes = [];
-  root.traverse((o) => { if (o.userData.isInk) dead.push(o); else if (o.isMesh) meshes.push(o); });
+  const keep = (o) => keepTextured && (o.isInstancedMesh || o.isSkinnedMesh || o.material?.map || o.material?.isMeshBasicMaterial || o.material?.isShaderMaterial
+    || o.material?.blending === THREE.AdditiveBlending || (o.material?.transparent && (o.material.opacity ?? 1) < 0.6) || Array.isArray(o.material));
+  root.traverse((o) => { if (o.userData.isInk) dead.push(o); else if (o.isMesh && !keep(o)) meshes.push(o); });
   for (const o of dead) o.parent?.remove(o);
   for (const m of meshes) {
     const b = baseOf(m);
