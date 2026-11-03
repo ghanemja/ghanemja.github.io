@@ -658,5 +658,124 @@ export default function dress(kit) {
     });
   }
 
+  // ══ WALK-OVER FLOOR: flat painted rugs, runners and scraps a few millimetres up — you walk
+  // straight across them, so they can go anywhere, walkways included (just not on a game ring) ══
+  let decalN = 0;
+  const decal = (w, h, draw, x, z, rot = 0, { y, px = 150 } = {}) => {
+    const cw = Math.min(512, Math.max(32, Math.round(w * px))), ch = Math.min(1024, Math.max(32, Math.round(h * px)));
+    const m = paint(0xffffff, { map: canvasTex(cw, ch, draw), hatch: 0, unique: true });
+    m.transparent = true; m.alphaTest = 0.35; m.depthWrite = false;
+    const k = decalN++;
+    const p = plane(w, h, m, x, y ?? 0.004 + (k % 12) * 0.001, z, [-Math.PI / 2, 0, rot]); p.renderOrder = 1 + k * 0.01;
+    return p;
+  };
+  const firstFree = (list, r) => list.find(([x, z]) => free(x, z, r));
+  const curl = (c, x, y, len, col, seed, lw = 3) => {          // a snipped end of yarn
+    c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.beginPath(); c.moveTo(x, y);
+    for (let i = 1; i <= 12; i++) { const t = i / 12; c.lineTo(x + Math.cos(seed + t * 5) * len * t + Math.sin(t * 9 + seed) * 6, y + Math.sin(seed * 1.3 + t * 4) * len * 0.6 * t + Math.cos(t * 11) * 5); }
+    c.stroke();
+  };
+  {
+    // a long crocheted runner up the middle, door to screen: calm cream, blush borders, shell edging
+    decal(0.8, 4.55, (c, w, h) => {
+      c.fillStyle = '#ecd7c0'; c.fillRect(8, 0, w - 16, h);
+      c.fillStyle = '#d99a9a'; c.fillRect(8, 0, 14, h); c.fillRect(w - 22, 0, 14, h);
+      c.fillStyle = '#a8b994'; c.fillRect(26, 0, 3, h); c.fillRect(w - 29, 0, 3, h);
+      c.strokeStyle = 'rgba(150,115,105,0.16)'; c.lineWidth = 1.5;
+      for (let y = 6; y < h; y += 9) for (let x = 36; x < w - 36; x += 10) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + 4, y + 5); c.lineTo(x + 8, y); c.stroke(); }
+      c.fillStyle = '#d99a9a'; for (let y = 6; y < h; y += 14) { c.beginPath(); c.arc(8, y, 7, 0, 7); c.arc(w - 8, y, 7, 0, 7); c.fill(); }
+      c.fillStyle = '#c97f86'; for (let y = 60; y < h - 40; y += 120) { c.beginPath(); c.moveTo(w / 2, y - 14); c.lineTo(w / 2 + 12, y); c.lineTo(w / 2, y + 14); c.lineTo(w / 2 - 12, y); c.fill(); }
+    }, 0, -2.08, 0, { px: 110 });
+    // a half-moon rug at the foot of the screen
+    decal(1.5, 0.75, (c, w, h) => {
+      const pal = ['#b7a3c6', '#e6d0a0', '#9fc4b0', '#e8bfbd', '#d99a9a', '#f3e2b6'];
+      for (let k = 0; k < pal.length; k++) { c.fillStyle = pal[k]; c.beginPath(); c.arc(w / 2, 0, w / 2 - 2 - k * w / 13, 0, Math.PI); c.fill(); }
+      c.strokeStyle = 'rgba(150,115,105,0.25)'; c.lineWidth = 1.5;
+      for (let k = 1; k < 6; k++) { c.beginPath(); c.arc(w / 2, 0, w / 2 - k * w / 13, 0, Math.PI); c.stroke(); }
+    }, 0, -4.82);
+    // a braided oval rag rug, right of middle
+    decal(1.35, 0.9, (c, w, h) => {
+      const pal = ['#93abc0', '#e8bfbd', '#e9dcc3', '#a8b994', '#dc9e9a', '#e9dcc3', '#93abc0'];
+      pal.forEach((col, k) => { c.fillStyle = col; c.beginPath(); c.ellipse(w / 2, h / 2, w / 2 - 2 - k * w / 16, h / 2 - 2 - k * h / 16, 0, 0, 7); c.fill(); });
+      c.strokeStyle = 'rgba(80,60,60,0.22)'; c.lineWidth = 2;
+      for (let k = 0; k < 7; k++) { c.setLineDash([6, 5]); c.beginPath(); c.ellipse(w / 2, h / 2, w / 2 - 6 - k * w / 16, h / 2 - 6 - k * h / 16, 0, 0, 7); c.stroke(); }
+      c.setLineDash([]);
+    }, 1.2, -3.35, 0.25);
+    // a round rag rug by the door, left
+    decal(1.0, 1.0, (c, w, h) => {
+      const pal = ['#9fc4b0', '#e6d0a0', '#e4b84f', '#d9b9a0', '#a8b994', '#f3e2b6'];
+      pal.forEach((col, k) => { c.fillStyle = col; c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 2 - k * w / 13, 0, 7); c.fill(); });
+      c.strokeStyle = 'rgba(80,60,60,0.2)'; c.lineWidth = 2; c.setLineDash([5, 4]);
+      for (let k = 0; k < 6; k++) { c.beginPath(); c.arc(w / 2, h / 2, w / 2 - 5 - k * w / 13, 0, 7); c.stroke(); }
+    }, -2.5, -0.45);
+    // a granny hexagon, right, by the winder
+    decal(0.9, 0.9, (c, w, h) => {
+      const pal = ['#7fb3a8', '#8f7ae8', '#e4b84f', '#dc9e9a', '#7fb3a8', '#f3e2b6'];
+      pal.forEach((col, k) => { const r = w / 2 - 2 - k * w / 14; c.fillStyle = col; c.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + Math.PI / 6; c.lineTo(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r); } c.closePath(); c.fill(); });
+    }, 2.55, -1.2, 0.2);
+    // a striped rag runner along the left wall, under the wheel and the armchair
+    decal(0.85, 2.8, (c, w, h) => {
+      const pal = ['#dc9e9a', '#e9dcc3', '#93abc0', '#e9dcc3', '#a8b994', '#f3dfa8', '#e9dcc3', '#b7a3c6'];
+      let y = 14, i = 0;
+      while (y < h - 14) { const bh = 10 + ((i * 7) % 4) * 6; c.fillStyle = pal[i % pal.length]; c.fillRect(4, y, w - 8, bh); y += bh; i++; }
+      c.strokeStyle = 'rgba(80,60,60,0.12)'; c.lineWidth = 1; for (let k = 0; k < 400; k++) { const x = 4 + (k * 37) % (w - 8), yy = 14 + (k * 53) % (h - 28); c.beginPath(); c.moveTo(x, yy); c.lineTo(x + 5, yy); c.stroke(); }
+      c.strokeStyle = '#e9dcc3'; c.lineWidth = 2; for (let x = 8; x < w - 6; x += 6) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, 14); c.moveTo(x, h - 14); c.lineTo(x, h); c.stroke(); }
+    }, -3.25, -3.0);
+    // three granny squares, dropped in a heap
+    [[1.7, -1.95, 0.3, ['#e8604c', '#f3e2b6', '#7fb3a8']], [1.95, -2.15, -0.4, ['#8f7ae8', '#f3e2b6', '#e4b84f']], [1.6, -2.3, 0.9, ['#dc9e9a', '#f3e2b6', '#93abc0']]].forEach(([x, z, r, pal]) => decal(0.42, 0.42, (c, w, h) => {
+      pal.concat(pal).forEach((col, k) => { c.strokeStyle = col; c.lineWidth = 9; c.setLineDash([10, 4]); const m = 6 + k * 9; if (m * 2 < w) c.strokeRect(m, m, w - 2 * m, h - 2 * m); });
+      c.setLineDash([]); c.fillStyle = pal[0]; c.fillRect(w / 2 - 8, h / 2 - 8, 16, 16);
+    }, x, z, r));
+    // snipped ends of yarn, everywhere a crocheter has been
+    const SN = ['#e8604c', '#e4b84f', '#7fb3a8', '#8f7ae8', '#dc9e9a', '#93abc0', '#a8b994'];
+    [[-0.75, -1.25], [0.85, -2.25], [-1.05, -4.25], [1.95, -3.95], [-0.4, -3.1], [2.0, -0.3], [-1.6, -2.0]].forEach(([x, z], i) => decal(0.55, 0.55, (c, w, h) => {
+      for (let k = 0; k < 4; k++) curl(c, 12 + ((k * 31 + i * 7) % (w - 40)), 14 + ((k * 23 + i * 11) % (h - 40)), 22 + (k % 3) * 8, SN[(k + i) % SN.length], k * 2.1 + i, 3);
+    }, x, z, i));
+    // a dropped pattern sheet (tap it: it flutters up and lands somewhere else)
+    const sheet = new THREE.Group(); sheet.position.set(0.72, 0, -1.5); sheet.rotation.y = 0.5; g.add(sheet);
+    const pm = opaque(150, 200, (c, w, h) => {
+      c.fillStyle = '#fffdf6'; c.fillRect(0, 0, w, h);
+      c.fillStyle = INKC; c.font = `700 22px ${SCRIPT}`; c.fillText('Simple Scarf', 10, 26);
+      c.font = `400 12px ${HAND}`; c.fillStyle = '#8a7e8e'; c.fillText('(easy! *)', 10, 42);
+      c.fillStyle = INKC; c.font = `400 12px ${HAND}`;
+      ['Row 1: ch 14', 'Row 2: sc ×13', 'Row 3: sc ×13', 'Row 4: hdc ×13', 'Row 5: dc ×13', 'Rows 6–200: repeat'].forEach((l, i) => c.fillText(l, 10, 64 + i * 17));
+      c.font = `400 10px ${HAND}`; c.fillStyle = '#8a7e8e'; c.fillText('* for some values of easy', 10, h - 10);
+      c.strokeStyle = 'rgba(140,90,50,0.35)'; c.lineWidth = 5; c.beginPath(); c.arc(w - 34, h - 50, 20, 0.3, 5.9); c.stroke();
+    });
+    const sm = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.37).rotateX(-Math.PI / 2), pm); sm.position.y = 0.012; sm.userData.noInk = true; sheet.add(sm);
+    const SPOTS = [[0.72, -1.5], [-0.55, -2.7], [0.3, -3.9], [-0.9, -0.6], [1.4, -2.3]];
+    const JOKES = ['“Rows 6–200: repeat.” Easy, they said.', 'The pattern says “easy”. The pattern is lying.', 'Gauge swatch: skipped. Regret: pending.', 'Somebody spilled tea on row 4. Very on-brand.', 'YarnFlow plays this one stitch by stitch, so you don’t have to squint at it.'];
+    let st0 = -9, from = [0.72, -1.5], to = [0.72, -1.5], j = 0, r0 = 0.5, r1 = 0.5;
+    live(() => {
+      const s = since(st0);
+      if (s > 1.6) return;
+      const u = Math.min(1, s / 1.5), e = u * u * (3 - 2 * u);
+      sheet.position.set(from[0] + (to[0] - from[0]) * e, Math.sin(u * Math.PI) * 0.7, from[1] + (to[1] - from[1]) * e);
+      sheet.rotation.set(Math.sin(u * Math.PI * 3) * 0.6 * (1 - u), r0 + (r1 - r0) * e + Math.sin(u * 9) * 0.4, Math.sin(u * Math.PI * 4) * 0.4 * (1 - u));
+    });
+    tap(sheet, 'pick up the dropped pattern', (sfx) => {
+      if (since(st0) < 1.6) return;
+      st0 = now(); from = [sheet.position.x, sheet.position.z]; j = (j + 1) % SPOTS.length; to = SPOTS[j]; r0 = sheet.rotation.y; r1 = r0 + 1.5 + Math.random() * 2;
+      say(JOKES[j % JOKES.length]); sfx([[880, 0.05], [660, 0.06], [990, 0.05], [740, 0.08]], 'sine', 0.15);
+    });
+    // solid bits where the floor is still free: crocheted floor cushions and a pyramid of yarn
+    const cush = firstFree([[1.85, -4.75], [-1.45, -4.85], [3.5, -2.35], [-3.5, -1.45], [1.0, -4.0]], 0.26);
+    if (cush) {
+      const [x, z] = cush; claim(x, z, 0.26);
+      [[0, 0.07, 0xb7a3c6, 0.28], [0.02, 0.19, 0xe8bfbd, 0.24], [-0.01, 0.29, 0xa8b994, 0.18]].forEach(([dx, y, col, r]) => {
+        S.put(new THREE.SphereGeometry(r, 16, 10).scale(1, 0.32, 1), paint(col, { hatch: 0.6 }), x + dx, y, z);
+        S.put(new THREE.SphereGeometry(0.03, 8, 6), paint(0xf6eedb), x + dx, y + r * 0.32, z);
+      });
+    }
+    const pyr = firstFree([[-1.45, -4.85], [1.85, -4.75], [3.55, -2.2], [-3.55, -1.5], [-0.95, -4.95]].filter(p => !cush || Math.hypot(p[0] - cush[0], p[1] - cush[1]) > 0.6), 0.24);
+    if (pyr) {
+      const [x, z] = pyr; claim(x, z, 0.24);
+      [[-0.11, 0.1, 0], [0.11, 0.1, 0], [0, 0.1, -0.18], [0, 0.27, -0.06]].forEach(([dx, y, dz], i) => {
+        S.put(new THREE.SphereGeometry(0.11, 12, 9), paint(COLS[(i * 3 + 1) % COLS.length]), x + dx, y, z + dz);
+        L.put(new THREE.TorusGeometry(0.111, 0.012, 5, 16), paint(COLS[(i * 3 + 4) % COLS.length]), x + dx, y, z + dz, [i, i * 0.6, 0]);
+      });
+    }
+  }
+
   S.flush(g); L.flush(g, true);
 }

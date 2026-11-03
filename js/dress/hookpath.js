@@ -55,6 +55,7 @@ export default function dress(kit) {
   const KEYN = ['Insert hook', 'Poke through', 'Yarn over', 'Pull up a loop', 'Yarn over', 'Pull through both'];
   const actorPos = new THREE.Vector3(-3.04, 0.16, -0.22);
   const REC = { on: true }, FX = {};
+  const cueAt = new THREE.Vector3(-2.2, 0.75, -2.5);     // where a cue sends every spotlight
 
   // ════════ 1. lighting trusses along the tops of the side walls, spotlights panning the stage ════════
   const cans = [];
@@ -87,13 +88,13 @@ export default function dress(kit) {
       const k = t - cue, f = k < 4 ? Math.min(1, k / 0.6) : Math.max(0, 1 - (k - 4) / 0.8);
       for (const c of cans) {
         T.set(c.side * 0.8 + Math.sin(t * 0.23 + c.ph) * 1.6, 0, -2.8 + Math.cos(t * 0.17 + c.ph * 1.3) * 1.4);
-        c.aim.copy(T).lerp(stage, f * f * (3 - 2 * f)).lerp(actorPos, scrub.vis);     // during a take they follow the actor
+        c.aim.copy(T).lerp(cueAt, f * f * (3 - 2 * f)).lerp(actorPos, scrub.vis);     // during a take they follow the actor
         c.yoke.lookAt(toWorld(T.copy(c.aim)));
         c.beamM.opacity = 0.07 + f * 0.13;
       }
     });
     // tapping either truss cues every spot onto the hook
-    for (const c of cans) tap(c.yoke, 'cue the spotlights', (sfx) => { cue = kit.now(); sfx([[392, 0.1], [523, 0.1], [659, 0.1], [784, 0.3]], 'triangle', 0.05); });
+    for (const c of cans) tap(c.yoke, 'cue the spotlights', (sfx) => { cue = kit.now(); cueAt.copy(stage); sfx([[392, 0.1], [523, 0.1], [659, 0.1], [784, 0.3]], 'triangle', 0.05); });
   }
 
   // ════════ 2. the keyframe timeline along the left wall, a playhead running over it ════════
@@ -523,6 +524,96 @@ export default function dress(kit) {
     { q: 'Follow the blue yarn strand out of the basket. Where does it end up?', choices: ['the hook’s swatch on its plinth', 'the camera', 'the boom mic', 'the director’s chair'], answer: 0, why: 'Up the plinth and onto the swatch: the hook’s working yarn.' },
     { q: 'Count the spotlights hanging on the two trusses.', choices: ['4', '6', '8', '12'], answer: 1, why: 'Six: three each side. Tap one and they all find the hook.' },
   ], { intro: 'A script supervisor’s job is noticing things. Every answer is somewhere on this set: go and look before you pick.', end: (s, n) => (s === n ? 'Nothing gets past you. That’s a wrap!' : `${s} of ${n}. Have another look around the set!`) }));
+
+  // ── walk-over floor art: one transparent overlay the size of the floor, painted in metres ──
+  const floorArt = (draw, px = 1536) => {
+    const hh = Math.round(px * 6 / 8);
+    const mat = texMat(px, hh, (c, w, h) => { c.lineCap = c.lineJoin = 'round'; draw(c, w, h, (x) => (x + 4) / 8 * w, (z) => (z + 5.5) / 6 * h, w / 8); });
+    mat.depthWrite = false;
+    const m = kit.flat(8, 6, mat, 0, 0.006, -2.5, [-PI / 2, 0, 0]);
+    m.renderOrder = 1; m.raycast = () => {};
+    return m;
+  };
+  // try spots for a solid floor piece; build it wherever free() still says yes
+  const solid = (cands, r, build) => { let n = 0; for (const [x, z] of cands) if (kit.free(x, z, r)) { build(x, z); claim(x, z, r * 0.9); n++; } return n; };
+
+  // ════════ 16. the floor: camera B's safe-area frame, taped cable runs, spike marks, script pages, a stencil ════════
+  floorArt((c, w, h, X, Z, s) => {
+    // camera B's frame guide: corner brackets and a crosshair, chalked on the boards
+    {
+      const x0 = X(-1.0), y0 = Z(-3.8), fw = 2.4 * s, fh = 1.6 * s, L = 70;
+      c.strokeStyle = 'rgba(246,238,219,0.85)'; c.lineWidth = 7;
+      for (const [cx, cy, dx, dy] of [[x0, y0, 1, 1], [x0 + fw, y0, -1, 1], [x0, y0 + fh, 1, -1], [x0 + fw, y0 + fh, -1, -1]]) { c.beginPath(); c.moveTo(cx, cy + dy * L); c.lineTo(cx, cy); c.lineTo(cx + dx * L, cy); c.stroke(); }
+      c.setLineDash([14, 14]); c.lineWidth = 3; c.strokeRect(x0 + 0.15 * s, y0 + 0.12 * s, fw - 0.3 * s, fh - 0.24 * s); c.setLineDash([]);
+      font(c, 24, HAND); c.fillStyle = 'rgba(246,238,219,0.85)'; c.textAlign = 'left'; c.fillText('CAM B · safe area', x0 + 12, y0 + fh + 30);
+      c.textAlign = 'right'; c.fillText('16 : 9', x0 + fw - 12, y0 + fh + 30);
+    }
+    // cables, gaffer-taped down where people walk
+    const cable = (pts) => {
+      c.strokeStyle = '#16121a'; c.lineWidth = 7; c.beginPath(); pts.forEach(([x, z], i) => (i ? c.lineTo(X(x), Z(z)) : c.moveTo(X(x), Z(z)))); c.stroke();
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, az] = pts[i - 1], [bx, bz] = pts[i], len = Math.hypot(bx - ax, bz - az), n = Math.floor(len / 0.45);
+        for (let k = 1; k <= n; k++) { const f = k / (n + 1), x = ax + (bx - ax) * f, z = az + (bz - az) * f, a = Math.atan2(bz - az, bx - ax); c.save(); c.translate(X(x), Z(z)); c.rotate(a + PI / 2); c.fillStyle = 'rgba(150,155,165,0.95)'; c.fillRect(-18, -9, 36, 18); c.restore(); }
+      }
+    };
+    cable([[3.2, -1.75], [2.75, -1.95], [2.45, -2.05]]);                      // the monitor cart to the camera
+    cable([[3.45, -1.45], [3.75, -1.1], [3.78, 0.25]]);                      // the cart to the wall box
+    cable([[-2.55, -4.85], [-2.55, -5.4]]); cable([[3.52, -4.98], [3.92, -4.98]]);
+    cable([[-3.55, -0.75], [-3.92, -0.9]]);
+    cable([[2.3, -2.1], [1.4, -2.15], [0.6, -1.9], [-0.4, -1.2], [-0.9, -0.6], [-0.9, 0.3]]);    // the camera's long run to the door
+    // spike marks: little L's of coloured tape where each piece of kit belongs
+    const spike = (x, z, col, a = 0) => { c.save(); c.translate(X(x), Z(z)); c.rotate(a); c.fillStyle = col; c.fillRect(-4, -4, 30, 8); c.fillRect(-4, -4, 8, 30); c.restore(); };
+    for (const [dx, dz, a] of [[-0.3, -0.25, 0], [0.3, -0.25, PI / 2], [-0.3, 0.25, -PI / 2], [0.3, 0.25, PI]]) spike(3.25 + dx, -0.4 + dz, '#f0862a', a);
+    for (const [dx, dz, a] of [[-0.52, -0.42, 0], [0.52, -0.42, PI / 2], [-0.52, 0.42, -PI / 2], [0.52, 0.42, PI]]) spike(-2.2 + dx, -2.5 + dz, '#7fb3a8', a);
+    for (let k = 0; k < 3; k++) { const a = k * 2.09 + 0.3; spike(-2.55 + Math.cos(a) * 0.3, -4.85 + Math.sin(a) * 0.3, '#e4b84f', a); spike(3.52 + Math.cos(a) * 0.3, -4.98 + Math.sin(a) * 0.3, '#e4b84f', a); }
+    // the talent's corner
+    c.setLineDash([16, 10]); c.strokeStyle = 'rgba(228,184,79,0.9)'; c.lineWidth = 6; c.strokeRect(X(-3.95), Z(-5.45), 0.6 * s, 0.62 * s); c.setLineDash([]);
+    font(c, 22, HAND); c.fillStyle = 'rgba(228,184,79,0.95)'; c.textAlign = 'center'; c.fillText('TALENT ONLY', X(-3.65), Z(-4.7));
+    // the stage's name, stencilled in front of the screen
+    font(c, 54); c.fillStyle = 'rgba(246,238,219,0.5)'; c.fillText('STAGE 1  ·  THE BLOCKING ROOM', X(0.1), Z(-4.55));
+    // script pages and dropped sides
+    const page = (x, z, a, lines) => { c.save(); c.translate(X(x), Z(z)); c.rotate(a); const pw = 0.21 * s, ph = 0.28 * s; c.fillStyle = '#fbf6ea'; c.fillRect(-pw / 2, -ph / 2, pw, ph); c.fillStyle = 'rgba(42,34,48,0.65)'; font(c, 11, HAND, 700); c.textAlign = 'left'; lines.forEach((l, i) => c.fillText(l, -pw / 2 + 8, -ph / 2 + 18 + i * 14)); c.restore(); };
+    page(0.65, -1.75, 0.3, ['INT. STUDIO - DAY', '', 'HOOK enters stitch 2.', 'YARN (O.S.): over!', '', 'HOOK', '(beat)', 'Under both loops.']);
+    page(-1.25, -0.55, -0.4, ['SC. 4 / TAKE 4', '', 'The loop is pulled', 'through. Slowly.', 'Dramatically.']);
+    page(2.65, -3.45, 0.7, ['NOTES', '- hook: less wobble', '- yarn: stop', '  ad-libbing', '- boom out of shot!!']);
+    // yarn snippets and a coffee ring, because every set has one
+    const R = kit.mkRng(12), cols = ['#f0862a', '#4f7fc4', '#ef8fa8', '#e4b84f'];
+    for (let k = 0; k < 9; k++) { const x = -1.4 + R() * 3.6, z = -4.2 + R() * 3.4; c.strokeStyle = cols[k % 4]; c.lineWidth = 4; c.beginPath(); for (let j = 0; j <= 12; j++) { const a = j * 0.9, px = X(x) + j * 4 + Math.cos(a) * 9, py = Z(z) + Math.sin(a) * 9; j ? c.lineTo(px, py) : c.moveTo(px, py); } c.stroke(); }
+    c.strokeStyle = 'rgba(120,80,50,0.45)'; c.lineWidth = 6; c.beginPath(); c.arc(X(-1.35), Z(-4.05), 22, 0.3, 5.9); c.stroke();
+    font(c, 18, SCRIPT); c.fillStyle = 'rgba(246,238,219,0.7)'; c.fillText('who put a coffee on the set?', X(-1.35), Z(-3.85));
+  });
+
+  // ════════ 17. HIT YOUR MARK: the gaffer X in the middle of camera B's frame ════════
+  {
+    const x = 0.2, z = -3.0;
+    const mk = new THREE.Group(); mk.position.set(x, 0, z); G.add(mk);
+    const tapeM = paint(0xf0862a, { hatch: 0 });
+    for (const a of [PI / 4, -PI / 4]) { const b = sub(mk).box(0.46, 0.008, 0.07, tapeM, 0, 0.012, 0, 0.002, [0, a, 0]); b.userData.noInk = true; }
+    const lbl = sub(mk).flat(0.3, 0.07, texMat(128, 30, (c, w, h) => { c.font = `700 22px ${HAND}`; c.fillStyle = '#f0862a'; c.textAlign = 'center'; c.fillText('your mark', w / 2, 22); }), 0, 0.012, 0.3, [-PI / 2, 0, 0]);
+    lbl.renderOrder = 2;
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(0.55, 28).rotateX(-PI / 2), new THREE.MeshBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    pool.position.y = 0.014; pool.userData.noInk = true; pool.raycast = () => {}; mk.add(pool);
+    let t0 = -99, n = 0;
+    const LINES = ['You hit your mark! The hook’s agent will be in touch.', 'Hit it again! A natural. Have you considered a career in yarn?', 'Okay, you’re upstaging the hook now.'];
+    tap(mk, 'hit your mark', (sfx) => {
+      t0 = kit.now(); cue = t0; cueAt.set(x, 0.05, z);
+      sfx([[523, 0.08], [659, 0.08], [784, 0.08], [1046, 0.2], [0, 0.1], [180, 0.05], [220, 0.05], [200, 0.05], [240, 0.05], [190, 0.05], [230, 0.08]], 'triangle', 0.05);
+      setTimeout(() => kit.say(LINES[Math.min(n++, LINES.length - 1)]), 700);
+    });
+    live((t) => { const k = t - t0; pool.material.opacity = k < 4 ? 0.4 * Math.min(1, k / 0.4) : Math.max(0, 0.4 - (k - 4) * 0.5); });
+  }
+
+  // ════════ 18. apple boxes stacked by the left wall, if there's room ════════
+  solid([[-3.55, -3.3], [2.85, -3.4]], 0.26, (x, z) => {
+    const sizes = [['FULL', 0.2], ['HALF', 0.1], ['QUARTER', 0.05], ['PANCAKE', 0.025]];
+    let y = 0;
+    sizes.forEach(([name, hgt], k) => {
+      SB(0.46 - k * 0.03, hgt, 0.3 - k * 0.02, k % 2 ? M.woodL : M.wood, x, y + hgt / 2, z, 0.006, [0, (k - 1.5) * 0.08, 0]);
+      y += hgt;
+    });
+    const lab = kit.flat(0.3, 0.07, texMat(128, 30, (c, w, h) => { c.fillStyle = '#f6eedb'; c.fillRect(0, 0, w, h); c.font = `700 18px ${HAND}`; c.fillStyle = INKC; c.textAlign = 'center'; c.fillText('APPLE BOX: FULL', w / 2, 21); }), x, 0.1, z + 0.152);
+    lab.renderOrder = 2;
+  });
 
   bake();
 }
