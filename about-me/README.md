@@ -1,9 +1,8 @@
 # About me slide
 
-A one-slide intro for Janelle Ghanem, built as a single HTML page.
+A one-slide intro for Janelle Ghanem, as a PowerPoint file.
 
-- `index.html` is the slide: a fixed 1920×1080 canvas that scales to fit the browser window. All layout and styling is inline on the elements inside `<section id="intro">`, so edit the text, positions (`left`, `top`, `width`, `height`) and rotations there.
-- `images/` holds the screenshots, the two GIFs (the Vanishing Gallery tiny planet and Doodle Libs) and the painting.
-- Speaker notes are in the `<aside>` at the end of the section; they don't show on the page.
-
-Open it locally by double-clicking `index.html`, or view it live at https://ghanemja.github.io/about-me/.
+- `About-Janelle.pptx` is the slide. Open it in PowerPoint or Keynote. The two GIFs (the Vanishing Gallery tiny planet and Doodle Libs) play in slideshow mode.
+- The tagline is editable text. The name, greeting, site link and handwritten labels are images so the lettering looks the same on any computer. Every picture can be moved, resized or swapped.
+- Speaker notes are in the notes pane.
+- `images/` holds the original screenshots, GIFs and painting if you want to swap or reuse them.
